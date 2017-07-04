@@ -12,9 +12,9 @@ let handle (cmd: Command) =
          | GetUserSubscriptions userId -> 
              let subs = db.GetCollection<Subscription>("subscriptions")
              let newSubs = db.GetCollection<NewSubscription>("newSubscriptions")
-             let! mySubs = userId |> sprintf "{userId: %O}" |> FilterDefinition.op_Implicit 
+             let! mySubs = userId |> sprintf "{userId: \"%O\"}" |> FilterDefinition.op_Implicit 
                                   |> subs.FindAsync<Subscription> |> Async.AwaitTask
-             let! myNewSubs = userId |> sprintf "{userId: %O}" |> FilterDefinition.op_Implicit 
+             let! myNewSubs = userId |> sprintf "{userId: \"%O\"}" |> FilterDefinition.op_Implicit 
                                      |> newSubs.FindAsync<NewSubscription> |> Async.AwaitTask
              let! mySubsList = mySubs.ToListAsync() |> Async.AwaitTask
              let! myNewSubsList = myNewSubs.ToListAsync() |> Async.AwaitTask
@@ -28,6 +28,12 @@ let handle (cmd: Command) =
 
 [<EntryPoint>]
 let main argv =
-    let bus = RabbitHutch.CreateBus("host=localhost")
-    bus.RespondAsync<Command, Responses>(fun x -> handle x) |> ignore
+    async {
+        let! result = handle (GetUserSubscriptions "241854720") |> Async.AwaitTask
+        printfn "Result = %O" result
+    } |> Async.RunSynchronously
+
+    // let bus = RabbitHutch.CreateBus("host=localhost")
+    // bus.RespondAsync<Command, Responses>(fun x -> handle x) |> ignore
+    // printfn "Waiting for commands..."
     0

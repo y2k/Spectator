@@ -16,7 +16,7 @@ type Subscription = {
     id: SubscriptionId
     userId: UserId
     provider: Guid
-    url: Uri
+    uri: Uri
 }
 
 type Snapshot = {
