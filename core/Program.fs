@@ -1,21 +1,21 @@
 open System
-open EasyNetQ
-open Spectator.Core
 open System.Threading.Tasks
+open EasyNetQ
 open MongoDB.Bson
 open MongoDB.Driver
+open Spectator.Core
 
 let handle (cmd: Command) = 
     async {
          let db = MongoClient("mongodb://localhost").GetDatabase("spectator")
          match cmd with 
-         | GetUserSubscriptions x -> 
+         | GetUserSubscriptions userId -> 
              let subs = db.GetCollection<Subscription>("subscriptions")
              let newSubs = db.GetCollection<NewSubscription>("newSubscriptions")
-             let! mySubs = x |> sprintf "{userId: %O}" |> FilterDefinition.op_Implicit 
-                             |> subs.FindAsync<Subscription> |> Async.AwaitTask
-             let! myNewSubs = x |> sprintf "{userId: %O}" |> FilterDefinition.op_Implicit 
-                                |> newSubs.FindAsync<NewSubscription> |> Async.AwaitTask
+             let! mySubs = userId |> sprintf "{userId: %O}" |> FilterDefinition.op_Implicit 
+                                  |> subs.FindAsync<Subscription> |> Async.AwaitTask
+             let! myNewSubs = userId |> sprintf "{userId: %O}" |> FilterDefinition.op_Implicit 
+                                     |> newSubs.FindAsync<NewSubscription> |> Async.AwaitTask
              let! mySubsList = mySubs.ToListAsync() |> Async.AwaitTask
              let! myNewSubsList = myNewSubs.ToListAsync() |> Async.AwaitTask
              return UserSubscriptions (myNewSubsList |> List.ofSeq, mySubsList |> List.ofSeq)
