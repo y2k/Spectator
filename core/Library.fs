@@ -2,48 +2,45 @@ namespace Spectator.Core
 
 open System
 
-type Requests = NewSubscriptions
+// Types
 
-type UserId = Guid
+type UserId = string
 type SubscriptionId = Guid
 
-type Snapshot = {
-    title: string
-    url: string
+type NewSubscription = {
+    userId: UserId
+    uri: Uri
 }
 
 type Subscription = {
-    url: string
-    snapshots: Snapshot list
-}
-
-type SubscriptionRequest = {
     id: SubscriptionId
+    userId: UserId
+    provider: Guid
     url: Uri
 }
 
-type SubscriptionType = Rss | WebPage
-
-type CreateSubscriptionCommand = {
-    id: SubscriptionId
-    provider: SubscriptionType
+type Snapshot = {
+    subscriptionId: Guid
+    url: Uri
 }
 
-type User = {
-    id: UserId
-    email: string
-    passcode: string
-    subscriptions: SubscriptionRequest list
-}
+// EasyNetQ Commands
+
+type Command =
+    | GetNewSubscriptions
+    | AddSubscription // TODO:
+    | AddSnapshot // TODO:
+    | AddNewSubscription of UserId * Uri
+    | GetUserSubscriptions of UserId
+
+type Responses =
+    | UserSubscriptions of NewSubscription list * Subscription list
+    | Unit
 
 module Auth =
-    let register (email: string) (seed: string) (id: Guid) =
+    let computeAuthKey (user: UserId) (seed: string) =
         let md5 = System.Security.Cryptography.MD5.Create()
-        let passcode = seed + email
-                       |> System.Text.Encoding.UTF8.GetBytes
-                       |> md5.ComputeHash
-                       |> System.Convert.ToBase64String
-        { id = id
-          email = email
-          passcode = passcode
-          subscriptions = [] }
+        seed + user
+        |> System.Text.Encoding.UTF8.GetBytes
+        |> md5.ComputeHash
+        |> System.Convert.ToBase64String
