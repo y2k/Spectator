@@ -20,7 +20,7 @@ module Domain =
             let! resp = AddNewSubscription (message.user, Uri url) 
                         |> bus.RequestAsync<Command, Responses> |> Async.AwaitTask
             return "Your subscription created"
-        | _ -> return "TODO: Help"
+        | _ -> return "Commands: ls, add <url>"
     }
 
 [<EntryPoint>]
