@@ -17,7 +17,7 @@ let handle (cmd: Command) =
                                   |> FilterDefinition.op_Implicit 
                                   |> subs.Find<Subscription>
                                   |> fun x -> "{_id: 0}"
-                                              |> ProjectionDefinition<Subscription, Subscription>.op_Implicit
+                                              |> ProjectionDefinition<_, _>.op_Implicit
                                               |> x.Project<Subscription>
                                   |> fun x -> x.ToListAsync() |> Async.AwaitTask
 
@@ -25,7 +25,7 @@ let handle (cmd: Command) =
                                      |> FilterDefinition.op_Implicit 
                                      |> newSubs.Find<NewSubscription>
                                      |> fun x -> "{_id: 0}"
-                                                 |> ProjectionDefinition<NewSubscription, NewSubscription>.op_Implicit
+                                                 |> ProjectionDefinition<_, _>.op_Implicit
                                                  |> x.Project<NewSubscription>
                                      |> fun x -> x.ToListAsync() |> Async.AwaitTask
 
