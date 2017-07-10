@@ -38,7 +38,7 @@ let handle (cmd: Command) =
     } |> Async.StartAsTask
 
 [<EntryPoint>]
-let main argv =
+let main argv = 
     let bus = RabbitHutch.CreateBus("host=localhost")
     bus.RespondAsync<Command, Responses>(fun x -> handle x) |> ignore
     printfn "Waiting for commands..."

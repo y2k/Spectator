@@ -3,6 +3,8 @@ open EasyNetQ
 open Spectator.Core
 open Spectator.Worker
 
+type Either<'a> = Ok of 'a | Error of Exception
+
 [<EntryPoint>]
 let main argv =
     // let doc = System.Xml.Linq.XDocument.Parse(System.IO.File.ReadAllText("examples/wiki_atom.xml"))
@@ -20,8 +22,8 @@ let main argv =
 
         let subs = newSubs |> List.zip (xs |> Array.toList)
                            |> List.map (fun (isRss, x) -> match isRss with
-                                                          | true  -> (x.uri, Guid("3ACF3EB5-00BE-4332-9AAA-5D2F71F603F1"))
-                                                          | false -> (x.uri, Guid("00000000-0000-0000-0000-000000000000")))
+                                                          | true  -> (x.uri, Provider.Rss)
+                                                          | false -> (x.uri, Provider.Invalid))
 
         do! CreateSubscriptions subs |> bus.PublishAsync |> Async.AwaitTask
 

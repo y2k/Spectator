@@ -6,7 +6,7 @@ open System
 
 type UserId = string
 type SubscriptionId = Guid
-type ProviderId = Guid
+type Provider = Invalid = 0 | Rss = 1
 
 type NewSubscription = {
     userId: UserId
@@ -16,7 +16,7 @@ type NewSubscription = {
 type Subscription = {
     id: SubscriptionId
     userId: UserId
-    provider: ProviderId
+    provider: Provider
     uri: Uri
 }
 
@@ -30,7 +30,7 @@ type Snapshot = {
 
 type Command =
     | GetNewSubscriptions
-    | CreateSubscriptions of (Uri * ProviderId) list
+    | CreateSubscriptions of (Uri * Provider) list
     | AddSubscription // TODO:
     | AddSnapshot // TODO:
     | AddNewSubscription of UserId * Uri
