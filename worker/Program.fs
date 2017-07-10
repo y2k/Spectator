@@ -12,17 +12,18 @@ let main argv =
     let bus = RabbitHutch.CreateBus("host=localhost")
     let rssProvider = RssNodeProvider() :> INodeProvider
     let rec doWork () = async {
-        let! newSubs = bus.RequestAsync<Requests, SubscriptionRequest list> NewSubscriptions |> Async.AwaitTask
+        let! resp = bus.RequestAsync<Command, Responses> GetNewSubscriptions |> Async.AwaitTask
+        let newSubs = match resp with | NewSubscriptions x -> x | _ -> []
         let! xs = newSubs
-                  |> List.map (fun x -> rssProvider.IsValid x.url)
+                  |> List.map (fun x -> rssProvider.IsValid x.uri)
                   |> Async.Parallel
 
-        let! _ = newSubs |> List.zip (xs |> Array.toList)
-                         |> List.map (fun (isRss, x) -> match isRss with
-                                                        | true  -> { id = x.id; provider = Rss }
-                                                        | false -> { id = x.id; provider = WebPage }
-                                                        |> bus.PublishAsync |> Async.AwaitTask)
-                         |> Async.Parallel
+        let subs = newSubs |> List.zip (xs |> Array.toList)
+                           |> List.map (fun (isRss, x) -> match isRss with
+                                                          | true  -> (x.uri, Guid("3ACF3EB5-00BE-4332-9AAA-5D2F71F603F1"))
+                                                          | false -> (x.uri, Guid("00000000-0000-0000-0000-000000000000")))
+
+        do! CreateSubscriptions subs |> bus.PublishAsync |> Async.AwaitTask
 
         do! Async.Sleep(10000)
         return! doWork ()

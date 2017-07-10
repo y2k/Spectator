@@ -15,8 +15,9 @@ module RssParser =
     let parseAtom (doc: XDocument) = 
         doc.XPathSelectElements("atom:feed//atom:entry", ns)
         |> Seq.map (fun e -> 
-            { title = e.XPathSelectElement("atom:title", ns).Value
-              url   = e.XPathSelectElement("atom:id"   , ns).Value })
+            { subscriptionId = Guid.Empty
+              title = e.XPathSelectElement("atom:title", ns).Value
+              uri  = e.XPathSelectElement("atom:id", ns).Value |> Uri })
         |> Seq.toList
     let parseDocument (doc: XDocument) =
         if doc.XPathSelectElement("//channel/item") <> null then parseRss doc

@@ -6,6 +6,7 @@ open System
 
 type UserId = string
 type SubscriptionId = Guid
+type ProviderId = Guid
 
 type NewSubscription = {
     userId: UserId
@@ -15,25 +16,28 @@ type NewSubscription = {
 type Subscription = {
     id: SubscriptionId
     userId: UserId
-    provider: Guid
+    provider: ProviderId
     uri: Uri
 }
 
 type Snapshot = {
     subscriptionId: Guid
-    url: Uri
+    title: string
+    uri: Uri
 }
 
 // EasyNetQ Commands
 
 type Command =
     | GetNewSubscriptions
+    | CreateSubscriptions of (Uri * ProviderId) list
     | AddSubscription // TODO:
     | AddSnapshot // TODO:
     | AddNewSubscription of UserId * Uri
     | GetUserSubscriptions of UserId
 
 type Responses =
+    | NewSubscriptions of NewSubscription list
     | UserSubscriptions of NewSubscription list * Subscription list
     | Unit
 
