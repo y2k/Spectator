@@ -3,8 +3,6 @@ open EasyNetQ
 open Spectator.Core
 open Spectator.Worker
 
-type Either<'a> = Ok of 'a | Error of Exception
-
 [<EntryPoint>]
 let main argv =
     // let doc = System.Xml.Linq.XDocument.Parse(System.IO.File.ReadAllText("examples/wiki_atom.xml"))
