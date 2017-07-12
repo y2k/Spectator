@@ -20,6 +20,14 @@ let createNewSubscriptions (bus: IBus) = async {
 
 let delay = Async.Sleep(10000)
 
+let loadNewSnapshot (bus: IBus) = async {
+
+    let! resp = bus.RequestAsync<Command, Responses> GetSubscriptions |> Async.AwaitTask
+    let subs = match resp with | Subscriptions xs -> xs | _ -> []
+    
+    ()
+}
+
 [<EntryPoint>]
 let main argv =
     // let doc = System.Xml.Linq.XDocument.Parse(System.IO.File.ReadAllText("examples/wiki_atom.xml"))

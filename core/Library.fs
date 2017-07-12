@@ -31,12 +31,14 @@ type Snapshot = {
 type Command =
     | GetNewSubscriptions
     | CreateSubscriptions of (Uri * Provider) list
+    | GetSubscriptions
     | AddSubscription // TODO:
     | AddSnapshot // TODO:
     | AddNewSubscription of UserId * Uri
     | GetUserSubscriptions of UserId
 
 type Responses =
+    | Subscriptions of Subscription list
     | NewSubscriptions of NewSubscription list
     | UserSubscriptions of NewSubscription list * Subscription list
     | Unit
