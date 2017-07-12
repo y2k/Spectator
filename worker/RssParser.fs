@@ -24,17 +24,17 @@ module RssParser =
         else if doc.XPathSelectElement("atom:feed//atom:entry", ns) <> null then parseAtom doc
         else []
 
-type RssNodeProvider() =
-    interface INodeProvider with
-        member this.IsValid uri = async {
-            use client = new HttpClient()
-            let! text = client.GetStringAsync(uri) |> Async.AwaitTask
-            return XDocument.Parse text |> RssParser.parseDocument |> List.isEmpty |> not
-        }
-        member this.Guid = Guid("3ACF3EB5-00BE-4332-9AAA-5D2F71F603F1")
-        member this.GetNodes uri = async {
-            use client = new HttpClient()
-            let! text = client.GetStringAsync uri |> Async.AwaitTask
-            return XDocument.Parse text |> RssParser.parseDocument
-        }
-        member this.Bind node = node
+    let IsValid (uri: Uri) = async {
+        use client = new HttpClient()
+        let! text = client.GetStringAsync(uri) |> Async.AwaitTask
+        return XDocument.Parse text |> parseDocument |> List.isEmpty |> not
+    }
+
+// type RssNodeProvider() =
+//     interface INodeProvider with
+//         member this.GetNodes uri = async {
+//             use client = new HttpClient()
+//             let! text = client.GetStringAsync uri |> Async.AwaitTask
+//             return XDocument.Parse text |> RssParser.parseDocument
+//         }
+//         member this.Bind node = node

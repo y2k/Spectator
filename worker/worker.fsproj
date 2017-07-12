@@ -4,7 +4,6 @@
     <TargetFramework>netcoreapp1.1</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Common.fs" />
     <Compile Include="RssParser.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

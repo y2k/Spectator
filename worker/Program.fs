@@ -10,12 +10,11 @@ let main argv =
     // printfn "result = %A" result
 
     let bus = RabbitHutch.CreateBus("host=localhost")
-    let rssProvider = RssNodeProvider() :> INodeProvider
     let rec doWork () = async {
         let! resp = bus.RequestAsync<Command, Responses> GetNewSubscriptions |> Async.AwaitTask
         let newSubs = match resp with | NewSubscriptions x -> x | _ -> []
         let! xs = newSubs
-                  |> List.map (fun x -> rssProvider.IsValid x.uri)
+                  |> List.map (fun x -> RssParser.IsValid x.uri)
                   |> Async.Parallel
 
         let subs = newSubs |> List.zip (xs |> Array.toList)
