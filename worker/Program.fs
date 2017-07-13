@@ -24,19 +24,21 @@ let loadNewSnapshot (bus: IBus) = async {
     let! resp = bus.RequestAsync<Command, Responses> GetSubscriptions |> Async.AwaitTask
     let subs = match resp with | Subscriptions xs -> xs | _ -> []
 
-    let rssList = subs 
-                  |> List.filter (fun x -> x.provider = Provider.Rss)
-                  |> List.map (fun x -> RssParser.getNodes x.uri)
-    
+    let! rssList = subs 
+                   |> List.filter (fun x -> x.provider = Provider.Rss)
+                   |> List.map (fun x -> async {
+                       let! snaps = RssParser.getNodes x.uri
+                       return (snaps, x)
+                   })
+                   |> Async.Parallel
+
+    let! _ = rssList |> Array.map (AddSnapshotsForSubscription >> bus.PublishAsync >> Async.AwaitTask)
+                     |> Async.Parallel
     ()
 }
 
 [<EntryPoint>]
 let main argv =
-    // let doc = System.Xml.Linq.XDocument.Parse(System.IO.File.ReadAllText("examples/wiki_atom.xml"))
-    // let result = RssParser.parseDocument doc
-    // printfn "result = %A" result
-
     let bus = RabbitHutch.CreateBus("host=localhost")
     let rec doWork () = async {
         do! createNewSubscriptions bus

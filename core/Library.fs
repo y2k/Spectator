@@ -32,6 +32,7 @@ type Command =
     | GetNewSubscriptions
     | CreateSubscriptions of (Uri * Provider) list
     | GetSubscriptions
+    | AddSnapshotsForSubscription of Snapshot list * Subscription
     | AddSubscription // TODO:
     | AddSnapshot // TODO:
     | AddNewSubscription of UserId * Uri
