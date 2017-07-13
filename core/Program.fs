@@ -34,6 +34,15 @@ let handle (cmd: Command) =
              let col = db.GetCollection<NewSubscription>("newSubscriptions")
              do! col.InsertOneAsync { userId = userId; uri = uri } |> Async.AwaitTask
              return Unit
+         | CreateSubscriptions subsWithProv ->
+             let subs = db.GetCollection<Subscription>("subscriptions")
+             let newSubs = db.GetCollection<NewSubscription>("newSubscriptions")
+             // FIXME:
+             return Unit
+         | AddSnapshotsForSubscription (snapshots, subscription) ->
+             let subs = db.GetCollection<Snapshot>("snapshots")
+             do! subs.InsertManyAsync (snapshots) |> Async.AwaitTask
+             return Unit
          | _ -> return Unit
     } |> Async.StartAsTask
 
