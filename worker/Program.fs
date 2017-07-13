@@ -7,7 +7,7 @@ let createNewSubscriptions (bus: IBus) = async {
     let! resp = bus.RequestAsync<Command, Responses> GetNewSubscriptions |> Async.AwaitTask
     let newSubs = match resp with | NewSubscriptions x -> x | _ -> []
     let! xs = newSubs
-              |> List.map (fun x -> RssParser.IsValid x.uri)
+              |> List.map (fun x -> RssParser.isValid x.uri)
               |> Async.Parallel
 
     let subs = newSubs |> List.zip (xs |> Array.toList)
@@ -21,9 +21,12 @@ let createNewSubscriptions (bus: IBus) = async {
 let delay = Async.Sleep(10000)
 
 let loadNewSnapshot (bus: IBus) = async {
-
     let! resp = bus.RequestAsync<Command, Responses> GetSubscriptions |> Async.AwaitTask
     let subs = match resp with | Subscriptions xs -> xs | _ -> []
+
+    let rssList = subs 
+                  |> List.filter (fun x -> x.provider = Provider.Rss)
+                  |> List.map (fun x -> RssParser.getNodes x.uri)
     
     ()
 }
@@ -37,7 +40,7 @@ let main argv =
     let bus = RabbitHutch.CreateBus("host=localhost")
     let rec doWork () = async {
         do! createNewSubscriptions bus
-
+        do! loadNewSnapshot bus
         do! delay
         return! doWork ()
     }

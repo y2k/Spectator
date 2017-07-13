@@ -12,6 +12,7 @@ module RssParser =
     ns.AddNamespace("atom", "http://www.w3.org/2005/Atom")
 
     let parseRss (doc: XDocument) = []
+
     let parseAtom (doc: XDocument) = 
         doc.XPathSelectElements("atom:feed//atom:entry", ns)
         |> Seq.map (fun e -> 
@@ -19,22 +20,20 @@ module RssParser =
               title = e.XPathSelectElement("atom:title", ns).Value
               uri  = e.XPathSelectElement("atom:id", ns).Value |> Uri })
         |> Seq.toList
+
     let parseDocument (doc: XDocument) =
         if doc.XPathSelectElement("//channel/item") <> null then parseRss doc
         else if doc.XPathSelectElement("atom:feed//atom:entry", ns) <> null then parseAtom doc
         else []
 
-    let IsValid (uri: Uri) = async {
+    let isValid (uri: Uri) = async {
         use client = new HttpClient()
         let! text = client.GetStringAsync(uri) |> Async.AwaitTask
         return XDocument.Parse text |> parseDocument |> List.isEmpty |> not
     }
 
-// type RssNodeProvider() =
-//     interface INodeProvider with
-//         member this.GetNodes uri = async {
-//             use client = new HttpClient()
-//             let! text = client.GetStringAsync uri |> Async.AwaitTask
-//             return XDocument.Parse text |> RssParser.parseDocument
-//         }
-//         member this.Bind node = node
+    let getNodes (uri: Uri) = async {
+        use client = new HttpClient()
+        let! text = client.GetStringAsync uri |> Async.AwaitTask
+        return XDocument.Parse text |> parseDocument
+    }
