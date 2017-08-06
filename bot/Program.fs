@@ -4,13 +4,19 @@ open Spectator.Core
 module RX = Observable
 
 module Domain =
-
     type TelegramCommand = Ls | Add of string | Unknown
+
     let parse (message : string) = 
         match message.Split(' ') |> Array.toList with
         | "ls" :: _ -> Ls
         | "add" :: url :: _ -> Add url
         | _ -> Unknown
+
+    let formatSubList (newSubs : NewSubscription list) (subs : Subscription list) = 
+        newSubs
+        |> List.map (fun x -> x.uri)
+        |> List.append (subs |> List.map (fun x -> x.uri))
+        |> List.fold (fun s x -> sprintf "%O\n- %O" s x) "Your subscriptions: "
 
     let handle (message: Bot.Message) = async {
         use bus = RabbitHutch.CreateBus("host=localhost")
@@ -18,11 +24,7 @@ module Domain =
         | Ls -> 
             let! resp = bus.RequestAsync<Command, Responses>(GetUserSubscriptions message.user) |> Async.AwaitTask
             match resp with
-            | UserSubscriptions (newSubs, subs) ->
-                return newSubs 
-                       |> List.map (fun x -> x.uri)
-                       |> List.append (subs |> List.map (fun x -> x.uri))
-                       |> List.fold (fun s x -> sprintf "%O\n- %O" s x) "Your subscriptions: "
+            | UserSubscriptions(newSubs, subs) -> return formatSubList newSubs subs
             | _ -> return "Error"
         | Add url -> 
             let! resp = AddNewSubscription (message.user, Uri url) 
