@@ -3,6 +3,8 @@ open EasyNetQ
 open Spectator.Core
 open Spectator.Worker
 
+module I = Infrastructure
+
 let createNewSubscriptions (bus: IBus) = async {
     let! resp = bus.RequestAsync<Command, Responses> GetNewSubscriptions |> Async.AwaitTask
     let newSubs = match resp with | NewSubscriptions x -> x | _ -> []
@@ -17,8 +19,6 @@ let createNewSubscriptions (bus: IBus) = async {
 
     do! CreateSubscriptions subs |> bus.PublishAsync |> Async.AwaitTask
 }
-
-let delay = Async.Sleep(10000)
 
 let loadNewSnapshot (bus: IBus) = async {
     let! resp = bus.RequestAsync<Command, Responses> GetSubscriptions |> Async.AwaitTask
@@ -38,16 +38,11 @@ let loadNewSnapshot (bus: IBus) = async {
 }
 
 [<EntryPoint>]
-let main argv =
+let main argv = 
     let bus = RabbitHutch.CreateBus("host=localhost")
-    let rec doWork () = async {
-        do! createNewSubscriptions bus
-        do! loadNewSnapshot bus
-        do! delay
-        return! doWork ()
-    }
-
-    doWork () |> ignore
-    
-    System.Threading.Thread.Sleep(-1)
+    I.doInCycle 10000 (fun _ -> 
+        async { 
+            do! createNewSubscriptions bus
+            do! loadNewSnapshot bus
+        })
     0
