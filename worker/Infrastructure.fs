@@ -1,6 +1,6 @@
 module Infrastructure
 
-let doInCycle time action = 
+let executeInLoop time action = 
     let rec doWork() = 
         async { 
             do! action()
