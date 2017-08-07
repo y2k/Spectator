@@ -33,15 +33,16 @@ module Domain =
         | Unknown -> return "Commands: ls, add <url>"
     }
 
+    let handle' token (x: Bot.Message) = 
+        async {
+            printfn "message: %O" x.text
+            let! res = handle x
+            Bot.sendToTelegramSingle token x.user (res) |> ignore
+        } |> Async.Start
+
 [<EntryPoint>]
 let main argv =
-    Bot.listerForMessages argv.[0]
-        |> RX.add (fun x -> async {
-                                printfn "message: %O" x.text
-                                let! res = Domain.handle x
-                                Bot.sendToTelegramSingle argv.[0] x.user (res) |> ignore
-                            } |> Async.Start)
-
+    Bot.listerForMessages argv.[0] |> RX.add (Domain.handle' argv.[0])
     printfn "Listening for updates..."
     Threading.Thread.Sleep(-1);
     0
