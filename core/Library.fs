@@ -3,32 +3,30 @@ namespace Spectator.Core
 open System
 
 // Types
-
 type UserId = string
 type SubscriptionId = Guid
-type Provider = Invalid = 0 | Rss = 1
 
-type NewSubscription = {
-    userId: UserId
-    uri: Uri
-}
+type Provider = 
+    | Invalid = 0
+    | Rss = 1
 
-type Subscription = {
-    id: SubscriptionId
-    userId: UserId
-    provider: Provider
-    uri: Uri
-}
+type NewSubscription = 
+    { userId : UserId
+      uri : Uri }
 
-type Snapshot = {
-    subscriptionId: Guid
-    title: string
-    uri: Uri
-}
+type Subscription = 
+    { id : SubscriptionId
+      userId : UserId
+      provider : Provider
+      uri : Uri }
+
+type Snapshot = 
+    { subscriptionId : Guid
+      title : string
+      uri : Uri }
 
 // EasyNetQ Commands
-
-type Command =
+type Command = 
     | GetNewSubscriptions
     | CreateSubscriptions of (Uri * Provider) list
     | GetSubscriptions
@@ -38,15 +36,15 @@ type Command =
     | AddNewSubscription of UserId * Uri
     | GetUserSubscriptions of UserId
 
-type Responses =
+type Responses = 
     | Subscriptions of Subscription list
     | NewSubscriptions of NewSubscription list
     | UserSubscriptions of NewSubscription list * Subscription list
     | SubscriptionCreatedSuccessfull
     | Unit
 
-module Auth =
-    let computeAuthKey (user: UserId) (seed: string) =
+module Auth = 
+    let computeAuthKey (user : UserId) (seed : string) = 
         let md5 = System.Security.Cryptography.MD5.Create()
         seed + user
         |> System.Text.Encoding.UTF8.GetBytes
