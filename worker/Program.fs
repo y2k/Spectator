@@ -38,10 +38,10 @@ let loadNewSnapshot (bus: IBus) = async {
 }
 
 [<EntryPoint>]
-let main argv =
+let main argv = 
     let bus = RabbitHutch.CreateBus("host=localhost")
-    I.executeInLoop 10000 (fun _ ->
-        async {
+    I.executeInLoop 10000 (fun _ -> 
+        async { 
             do! createNewSubscriptions bus
             do! loadNewSnapshot bus
         })
