@@ -18,24 +18,31 @@ module Domain =
         |> List.append (subs |> List.map (fun x -> x.uri))
         |> List.fold (fun s x -> sprintf "%O\n- %O" s x) "Your subscriptions: "
 
-    let responseToMessage (message: Bot.Message) = async {
+    let mqResponseToTelegramReply = function 
+        | UserSubscriptions(newSubs, subs) -> subListToMessageResponse newSubs subs
+        | SubscriptionCreatedSuccessfull -> "Your subscription created"
+        | Unit -> "Your subscription created"
+        | _ -> "Unknow error"
+
+    let handleTelegramMessage (message: Bot.Message) = async {
         use bus = RabbitHutch.CreateBus("host=localhost")
-        match parse message.text with
-        | Ls -> 
-            let! resp = bus.RequestAsync<Command, Responses>(GetUserSubscriptions message.user) |> Async.AwaitTask
-            match resp with
-            | UserSubscriptions(newSubs, subs) -> return subListToMessageResponse newSubs subs
-            | _ -> return "Error"
-        | Add url -> 
-            let! resp = AddNewSubscription (message.user, Uri url) 
-                        |> bus.RequestAsync<Command, Responses> |> Async.AwaitTask
-            return "Your subscription created"
-        | Unknown -> return "Commands: ls, add <url>"
+        let! resp = async {
+            match parse message.text with
+            | Ls -> 
+                return! bus.RequestAsync<Command, Responses>(GetUserSubscriptions message.user) 
+                        |> Async.AwaitTask
+            | Add url -> 
+                return! AddNewSubscription (message.user, Uri url) 
+                        |> bus.RequestAsync<Command, Responses> 
+                        |> Async.AwaitTask
+            | Unknown -> return Unit
+        }
+        return mqResponseToTelegramReply resp
     }
 
 [<EntryPoint>]
 let main argv =
-    Bot.repl argv.[0] Domain.responseToMessage
+    Bot.repl argv.[0] Domain.handleTelegramMessage
     printfn "Listening for updates..."
     Threading.Thread.Sleep(-1);
     0

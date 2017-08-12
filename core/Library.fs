@@ -42,6 +42,7 @@ type Responses =
     | Subscriptions of Subscription list
     | NewSubscriptions of NewSubscription list
     | UserSubscriptions of NewSubscription list * Subscription list
+    | SubscriptionCreatedSuccessfull
     | Unit
 
 module Auth =

@@ -33,7 +33,7 @@ let handle (cmd: Command) =
          | AddNewSubscription (userId, uri) -> 
              let col = db.GetCollection<NewSubscription>("newSubscriptions")
              do! col.InsertOneAsync { userId = userId; uri = uri } |> Async.AwaitTask
-             return Unit
+             return SubscriptionCreatedSuccessfull
          | CreateSubscriptions subsWithProv ->
              let subs = db.GetCollection<Subscription>("subscriptions")
              let newSubs = db.GetCollection<NewSubscription>("newSubscriptions")
