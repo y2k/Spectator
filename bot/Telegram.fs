@@ -8,7 +8,7 @@ module RX = Observable
 type Message = { text: string; user: string }
 let inline private (|?) (x: 'a) (def: 'a) = if isNull x then def else x
 
-let listerForMessages token =
+let private listerForMessages token =
     let bot = TelegramBotClient(token)
     let result = bot.OnUpdate 
                  |> RX.map (fun args -> 
@@ -18,7 +18,7 @@ let listerForMessages token =
     result
 
 type TelegramResponse = | SuccessResponse | BotBlockedResponse | UnknownErrorResponse
-let sendToTelegramSingle token (user: string) message =
+let private sendToTelegramSingle token (user: string) message =
     try
         let bot = TelegramBotClient(token)
         bot.SendTextMessageAsync(user, message, parseMode = Types.Enums.ParseMode.Html).Result |> ignore
@@ -29,3 +29,13 @@ let sendToTelegramSingle token (user: string) message =
         | :? Exceptions.ApiRequestException -> BotBlockedResponse
         | _                                 -> reraise()
     | _ -> UnknownErrorResponse
+
+let repl token handler = 
+    let handle token (x : Message) = 
+        async { 
+            printfn "message: %O" x.text
+            let! res = handler x
+            sendToTelegramSingle token x.user (res) |> ignore
+        }
+        |> Async.Start
+    listerForMessages token |> RX.add (handle token)
