@@ -10,7 +10,20 @@ module I = Infrastructure
 [<Fact>]
 let ``parse simple rss``() = 
     let xs = I.loadDocFromDisk "rss1.xml" |> P.parseDocument
-    Assert.Equal(4, xs.Length)
+    Assert.Equal(xs |> box, 
+                 [ { subscriptionId = Guid.Empty
+                     title = "Star City"
+                     uri = Uri "http://liftoff.msfc.nasa.gov/news/2003/news-starcity.asp" }
+                   { subscriptionId = Guid.Empty
+                     title = "Space Exploration"
+                     uri = Uri "http://liftoff.msfc.nasa.gov/" }
+                   { subscriptionId = Guid.Empty
+                     title = "The Engine That Does More"
+                     uri = Uri "http://liftoff.msfc.nasa.gov/news/2003/news-VASIMR.asp" }
+                   { subscriptionId = Guid.Empty
+                     title = "Astronauts' Dirty Laundry"
+                     uri = Uri "http://liftoff.msfc.nasa.gov/news/2003/news-laundry.asp" } ]
+                 |> box)
 
 [<Fact>]
 let ``parse simple atom``() = 
