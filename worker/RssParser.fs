@@ -24,7 +24,7 @@ let parseAtom (doc : XDocument) =
     |> Seq.map (fun e -> 
            { subscriptionId = Guid.Empty
              title = e.XPathSelectElement("atom:title", ns).Value
-             uri = e.XPathSelectElement("atom:id", ns).Value |> Uri })
+             uri = e.XPathSelectElement("atom:link", ns).Attribute("href" |> XName.op_Implicit).Value |> Uri })
     |> Seq.toList
 
 let parseDocument (doc : XDocument) = 
