@@ -8,6 +8,11 @@ module P = Spectator.Worker.RssParser
 module I = Infrastructure
 
 [<Fact>]
+let ``parsing wikipedia atom is success``() = 
+    let xs = I.loadDocFromDisk "wiki_atom.xml" |> P.parseDocument
+    Assert.Equal(50, xs.Length)
+    
+[<Fact>]
 let ``parse simple rss``() = 
     let xs = I.loadDocFromDisk "rss1.xml" |> P.parseDocument
     Assert.Equal(xs |> box, 
