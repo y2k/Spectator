@@ -18,59 +18,61 @@ module Async =
                     |> map Array.toList
         }
 
-let convertResponseToNewSubscriptions = 
-    function 
-    | NewSubscriptions x -> x
-    | _ -> []
+module Domain =
+    let convertResponseToNewSubscriptions = 
+        function 
+        | NewSubscriptions x -> x
+        | _ -> []
 
-let subWithFlag (x : NewSubscription) = 
-    RssParser.isValid x.uri |> Async.map (fun f -> x.uri, f)
+    let uriWithFlagsToCommand xs = 
+        xs
+        |> List.map (fun (x, f) -> 
+               match f with
+               | true -> x, Provider.Rss
+               | false -> x, Provider.Invalid)
+        |> CreateSubscriptions
 
-let uriWithFlagsToCommand xs = 
-    xs
-    |> List.map (fun (x, f) -> 
-           match f with
-           | true -> x, Provider.Rss
-           | false -> x, Provider.Invalid)
-    |> CreateSubscriptions
+    let convertResponseToSnapshots = 
+        function 
+        | Subscriptions xs -> xs
+        | _ -> []
 
-let createNewSubscriptions (bus : IBus) = 
-    I.request bus GetNewSubscriptions
-    |> Async.map convertResponseToNewSubscriptions
-    |> Async.bindAll subWithFlag
-    |> Async.map uriWithFlagsToCommand
-    |> bus.PublishAsync
-    |> Async.AwaitTask
+module Operations =
+    let private subWithFlag (x : NewSubscription) = 
+        RssParser.isValid x.uri |> Async.map (fun f -> x.uri, f)
 
-let convertResponseToSnapshots = 
-    function 
-    | Subscriptions xs -> xs
-    | _ -> []
+    let createNewSubscriptions (bus : IBus) = 
+        I.request bus GetNewSubscriptions
+        |> Async.map Domain.convertResponseToNewSubscriptions
+        |> Async.bindAll subWithFlag
+        |> Async.map Domain.uriWithFlagsToCommand
+        |> bus.PublishAsync
+        |> Async.AwaitTask
 
-let loadNewSnapshot (bus : IBus) = 
-    async { 
-        let! subs = I.request bus GetSubscriptions 
-                    |> Async.map convertResponseToSnapshots
-        let! rssList = subs
-                       |> List.filter (fun x -> x.provider = Provider.Rss)
-                       |> List.map (fun x -> async { let! snaps = RssParser.getNodes 
-                                                                      x.uri
-                                                     return (snaps, x) })
-                       |> Async.Parallel
-        do! rssList
-            |> Array.map (AddSnapshotsForSubscription
-                          >> bus.PublishAsync
-                          >> Async.AwaitTask)
-            |> Async.Parallel
-            |> Async.Ignore
-    }
+    let loadNewSnapshot (bus : IBus) = 
+        async { 
+            let! subs = I.request bus GetSubscriptions 
+                        |> Async.map Domain.convertResponseToSnapshots
+            let! rssList = subs
+                           |> List.filter (fun x -> x.provider = Provider.Rss)
+                           |> List.map (fun x -> async { let! snaps = RssParser.getNodes 
+                                                                          x.uri
+                                                         return (snaps, x) })
+                           |> Async.Parallel
+            do! rssList
+                |> Array.map (AddSnapshotsForSubscription
+                              >> bus.PublishAsync
+                              >> Async.AwaitTask)
+                |> Async.Parallel
+                |> Async.Ignore
+        }
 
 [<EntryPoint>]
 let main argv = 
     let bus = RabbitHutch.CreateBus("host=localhost")
     I.executeInLoop 10000 (fun _ -> 
         async { 
-            do! createNewSubscriptions bus
-            do! loadNewSnapshot bus
+            do! Operations.createNewSubscriptions bus
+            do! Operations.loadNewSnapshot bus
         })
     0
