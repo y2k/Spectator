@@ -30,11 +30,10 @@ let createNewSubscriptions (bus : IBus) =
     async { 
         let! newSubs = I.request bus GetNewSubscriptions 
                        |> Async.map convertResponseToSubs
-        let! xs = newSubs
-                  |> List.map subWithFlag
-                  |> Async.Parallel
-        do! xs
-            |> uriWithFlagsToCommand
+        do! newSubs
+            |> List.map subWithFlag
+            |> Async.Parallel
+            |> Async.map uriWithFlagsToCommand
             |> bus.PublishAsync
             |> Async.AwaitTask
     }
