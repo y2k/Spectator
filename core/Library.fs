@@ -1,4 +1,4 @@
-namespace Spectator.Core
+module Spectator.Core
 
 open System
 
