@@ -14,7 +14,7 @@ ns.AddNamespace("atom", "http://www.w3.org/2005/Atom")
 let parseRss (doc : XDocument) = 
     doc.XPathSelectElements "//channel/item"
     |> Seq.map (fun e -> 
-           { subscriptionId = Guid.Empty
+           { subscriptionId = e.XPathSelectElement("guid").Value
              title = e.XPathSelectElement("title").Value
              uri = e.XPathSelectElement("link").Value |> Uri })
     |> Seq.toList
@@ -22,7 +22,7 @@ let parseRss (doc : XDocument) =
 let parseAtom (doc : XDocument) = 
     doc.XPathSelectElements("atom:feed//atom:entry", ns)
     |> Seq.map (fun e -> 
-           { subscriptionId = Guid.Empty
+           { subscriptionId = e.XPathSelectElement("atom:id", ns).Value
              title = e.XPathSelectElement("atom:title", ns).Value
              uri = e.XPathSelectElement("atom:link", ns).Attribute("href" |> XName.op_Implicit).Value |> Uri })
     |> Seq.toList

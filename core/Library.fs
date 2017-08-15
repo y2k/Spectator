@@ -21,7 +21,7 @@ type Subscription =
       uri : Uri }
 
 type Snapshot = 
-    { subscriptionId : Guid
+    { subscriptionId : string
       title : string
       uri : Uri }
 
