@@ -55,19 +55,19 @@ module Operations =
         subs |> List.filter (fun x -> x.provider = Provider.Rss)
     
     let snapshotsToCommands rssList = 
-        rssList |> Array.map AddSnapshotsForSubscription
+        rssList |> List.map AddSnapshotsForSubscription
     
     let private getNodesWithSubscription (x : Subscription) = 
         RssParser.getNodes x.uri |> Async.map (fun snaps -> snaps, x)
 
     let loadNewSnapshot (bus : IBus) = 
         async { 
-            let! rssList = I.request bus GetSubscriptions
-                           |> Async.map (Domain.convertResponseToSnapshots >> filterRssSubs)
-                           |> Async.map (List.map getNodesWithSubscription)
-                           |> Async.bind Async.Parallel
+            let! rssList =
+                I.request bus GetSubscriptions
+                |> Async.map (Domain.convertResponseToSnapshots >> filterRssSubs)
+                |> Async.bindAll getNodesWithSubscription
             do! snapshotsToCommands rssList
-                |> Array.map (bus.PublishAsync >> Async.AwaitTask)
+                |> List.map (bus.PublishAsync >> Async.AwaitTask)
                 |> Async.Parallel
                 |> Async.Ignore
         }
