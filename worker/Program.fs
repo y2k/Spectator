@@ -5,6 +5,10 @@ open Spectator.Worker
 
 module I = Infrastructure
 
+module Async = 
+    let map f xa = async { let! x = xa
+                           return f x }
+
 let tryCreateRssSubscriptions (newSubs : NewSubscription list) xs = 
     newSubs
     |> List.zip (xs |> Array.toList)
@@ -20,9 +24,9 @@ let convertResponseToSubs =
 
 let createNewSubscriptions (bus : IBus) = 
     async { 
-        let! resp = bus.RequestAsync<Command, Responses> GetNewSubscriptions 
-                    |> Async.AwaitTask
-        let newSubs = convertResponseToSubs resp
+        let! newSubs = bus.RequestAsync<Command, Responses> GetNewSubscriptions
+                       |> Async.AwaitTask
+                       |> Async.map convertResponseToSubs
         let! xs = newSubs
                   |> List.map (fun x -> RssParser.isValid x.uri)
                   |> Async.Parallel
@@ -39,9 +43,9 @@ let convertResponseToSnapshots =
 
 let loadNewSnapshot (bus : IBus) = 
     async { 
-        let! resp = bus.RequestAsync<Command, Responses> GetSubscriptions 
+        let! subs = bus.RequestAsync<Command, Responses> GetSubscriptions
                     |> Async.AwaitTask
-        let subs = convertResponseToSnapshots resp
+                    |> Async.map convertResponseToSnapshots
         let! rssList = subs
                        |> List.filter (fun x -> x.provider = Provider.Rss)
                        |> List.map (fun x -> async { let! snaps = RssParser.getNodes 

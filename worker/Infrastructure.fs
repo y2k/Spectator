@@ -1,5 +1,7 @@
 module Infrastructure
 
+let TODO _ = raise (System.NotImplementedException())
+
 let executeInLoop time action = 
     let rec doWork() = 
         async { 
