@@ -6,6 +6,7 @@ open System.Xml
 open System.Xml.Linq
 open System.Xml.XPath
 open Spectator.Core
+open Spectator
 
 let private ns = XmlNamespaceManager(NameTable())
 ns.AddNamespace("media", "http://search.yahoo.com/mrss/")
@@ -32,14 +33,17 @@ let parseDocument (doc : XDocument) =
     else if doc.XPathSelectElement("atom:feed//atom:entry", ns) <> null then parseAtom doc
     else []
 
-let isValid (uri: Uri) = async {
+let isValid (uri : Uri) = 
     use client = new HttpClient()
-    let! text = client.GetStringAsync uri |> Async.AwaitTask
-    return XDocument.Parse text |> parseDocument |> List.isEmpty |> not
-}
+    client.GetStringAsync uri
+    |> Async.AwaitTask
+    |> Async.map (XDocument.Parse
+                  >> parseDocument
+                  >> List.isEmpty
+                  >> not)
 
-let getNodes (uri: Uri) = async {
+let getNodes (uri : Uri) = 
     use client = new HttpClient()
-    let! text = client.GetStringAsync uri |> Async.AwaitTask
-    return XDocument.Parse text |> parseDocument
-}
+    client.GetStringAsync uri
+    |> Async.AwaitTask
+    |> Async.map (XDocument.Parse >> parseDocument)
