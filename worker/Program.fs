@@ -9,28 +9,32 @@ module Async =
     let map f xa = async { let! x = xa
                            return f x }
 
-let tryCreateRssSubscriptions (newSubs : NewSubscription list) xs = 
-    newSubs
-    |> List.zip (xs |> Array.toList)
-    |> List.map (fun (isRss, x) -> 
-           match isRss with
-           | true -> (x.uri, Provider.Rss)
-           | false -> (x.uri, Provider.Invalid))
-
 let convertResponseToSubs = 
     function 
     | NewSubscriptions x -> x
     | _ -> []
+
+let subWithFlag (x : NewSubscription) = async { let! f = RssParser.isValid x.uri
+                                                return x.uri, f }
+
+let uriWithFlagsToCommand xs = 
+    xs
+    |> Array.map (fun (x, f) -> 
+           match f with
+           | true -> x, Provider.Rss
+           | false -> x, Provider.Invalid)
+    |> Array.toList
+    |> CreateSubscriptions
 
 let createNewSubscriptions (bus : IBus) = 
     async { 
         let! newSubs = I.request bus GetNewSubscriptions 
                        |> Async.map convertResponseToSubs
         let! xs = newSubs
-                  |> List.map (fun x -> RssParser.isValid x.uri)
+                  |> List.map subWithFlag
                   |> Async.Parallel
-        do! tryCreateRssSubscriptions newSubs xs
-            |> CreateSubscriptions
+        do! xs
+            |> uriWithFlagsToCommand
             |> bus.PublishAsync
             |> Async.AwaitTask
     }
