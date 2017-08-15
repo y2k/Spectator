@@ -57,7 +57,7 @@ module Operations =
     let snapshotsToCommands rssList = 
         rssList |> Array.map AddSnapshotsForSubscription
     
-    let getNodesWithSubscription (x : Subscription) = 
+    let private getNodesWithSubscription (x : Subscription) = 
         RssParser.getNodes x.uri |> Async.map (fun snaps -> snaps, x)
 
     let loadNewSnapshot (bus : IBus) = 
