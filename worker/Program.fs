@@ -13,14 +13,16 @@ let tryCreateRssSubscriptions (newSubs : NewSubscription list) xs =
            | true -> (x.uri, Provider.Rss)
            | false -> (x.uri, Provider.Invalid))
 
+let convertResponseToSubs = 
+    function 
+    | NewSubscriptions x -> x
+    | _ -> []
+
 let createNewSubscriptions (bus : IBus) = 
     async { 
         let! resp = bus.RequestAsync<Command, Responses> GetNewSubscriptions 
                     |> Async.AwaitTask
-        let newSubs = 
-            match resp with
-            | NewSubscriptions x -> x
-            | _ -> []
+        let newSubs = convertResponseToSubs resp
         let! xs = newSubs
                   |> List.map (fun x -> RssParser.isValid x.uri)
                   |> Async.Parallel
