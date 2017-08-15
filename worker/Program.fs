@@ -53,8 +53,7 @@ module Operations =
         |> Async.map Domain.convertResponseToNewSubscriptions
         |> Async.bindAll subWithFlag
         |> Async.map Domain.uriWithFlagsToCommand
-        |> bus.PublishAsync
-        |> Async.AwaitTask
+        |> Async.bind (I.publish bus)
     
     let private getNodesWithSubscription (x : Subscription) = 
         RssParser.getNodes x.uri |> Async.map (fun snaps -> snaps, x)
@@ -64,7 +63,7 @@ module Operations =
         |> Async.map Domain.convertResponseToRssSubscriptions
         |> Async.bindAll getNodesWithSubscription
         |> Async.map Domain.snapshotsToCommands
-        |> Async.bindAll (bus.PublishAsync >> Async.AwaitTask)
+        |> Async.bindAll (I.publish bus)
         |> Async.Ignore
 
 [<EntryPoint>]
