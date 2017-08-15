@@ -8,6 +8,7 @@ module I = Infrastructure
 module Async = 
     let map f xa = async { let! x = xa
                            return f x }
+
     let bind f xa = async { let! x = xa
                             return! f x }
     
@@ -34,10 +35,14 @@ module Domain =
                | false -> x, Provider.Invalid)
         |> CreateSubscriptions
     
-    let convertResponseToSnapshots = 
-        function 
+    let convertResponseToRssSubscriptions r = 
+        match r with
         | Subscriptions xs -> xs
         | _ -> []
+        |> List.filter (fun x -> x.provider = Provider.Rss)
+    
+    let snapshotsToCommands rssList = 
+        rssList |> List.map AddSnapshotsForSubscription
 
 module Operations = 
     let private subWithFlag (x : NewSubscription) = 
@@ -51,26 +56,16 @@ module Operations =
         |> bus.PublishAsync
         |> Async.AwaitTask
     
-    let filterRssSubs subs = 
-        subs |> List.filter (fun x -> x.provider = Provider.Rss)
-    
-    let snapshotsToCommands rssList = 
-        rssList |> List.map AddSnapshotsForSubscription
-    
     let private getNodesWithSubscription (x : Subscription) = 
         RssParser.getNodes x.uri |> Async.map (fun snaps -> snaps, x)
-
+    
     let loadNewSnapshot (bus : IBus) = 
-        async { 
-            let! rssList =
-                I.request bus GetSubscriptions
-                |> Async.map (Domain.convertResponseToSnapshots >> filterRssSubs)
-                |> Async.bindAll getNodesWithSubscription
-            do! snapshotsToCommands rssList
-                |> List.map (bus.PublishAsync >> Async.AwaitTask)
-                |> Async.Parallel
-                |> Async.Ignore
-        }
+        I.request bus GetSubscriptions
+        |> Async.map Domain.convertResponseToRssSubscriptions
+        |> Async.bindAll getNodesWithSubscription
+        |> Async.map Domain.snapshotsToCommands
+        |> Async.bindAll (bus.PublishAsync >> Async.AwaitTask)
+        |> Async.Ignore
 
 [<EntryPoint>]
 let main argv = 
