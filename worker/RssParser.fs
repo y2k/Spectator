@@ -22,7 +22,8 @@ let parseRss (doc : XDocument) =
 
 let parseAtom (doc : XDocument) = 
     doc.XPathSelectElements("atom:feed//atom:entry", ns)
-    |> Seq.map (fun e -> 
+    |> Seq.map 
+           (fun e -> 
            { subscriptionId = e.XPathSelectElement("atom:id", ns).Value
              title = e.XPathSelectElement("atom:title", ns).Value
              uri = e.XPathSelectElement("atom:link", ns).Attribute("href" |> XName.op_Implicit).Value |> Uri })
