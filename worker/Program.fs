@@ -8,35 +8,39 @@ module I = Infrastructure
 module Async = 
     let map f xa = async { let! x = xa
                            return f x }
+    
+    let bindAll (f : 'a -> Async<'b>) (xsa : Async<'a list>) : Async<'b list> = 
+        async { 
+            let! xs = xsa
+            return! xs
+                    |> List.map f
+                    |> Async.Parallel
+                    |> map Array.toList
+        }
 
-let convertResponseToSubs = 
+let convertResponseToNewSubscriptions = 
     function 
     | NewSubscriptions x -> x
     | _ -> []
 
-let subWithFlag (x : NewSubscription) = async { let! f = RssParser.isValid x.uri
-                                                return x.uri, f }
+let subWithFlag (x : NewSubscription) = 
+    RssParser.isValid x.uri |> Async.map (fun f -> x.uri, f)
 
 let uriWithFlagsToCommand xs = 
     xs
-    |> Array.map (fun (x, f) -> 
+    |> List.map (fun (x, f) -> 
            match f with
            | true -> x, Provider.Rss
            | false -> x, Provider.Invalid)
-    |> Array.toList
     |> CreateSubscriptions
 
 let createNewSubscriptions (bus : IBus) = 
-    async { 
-        let! newSubs = I.request bus GetNewSubscriptions 
-                       |> Async.map convertResponseToSubs
-        do! newSubs
-            |> List.map subWithFlag
-            |> Async.Parallel
-            |> Async.map uriWithFlagsToCommand
-            |> bus.PublishAsync
-            |> Async.AwaitTask
-    }
+    I.request bus GetNewSubscriptions
+    |> Async.map convertResponseToNewSubscriptions
+    |> Async.bindAll subWithFlag
+    |> Async.map uriWithFlagsToCommand
+    |> bus.PublishAsync
+    |> Async.AwaitTask
 
 let convertResponseToSnapshots = 
     function 
