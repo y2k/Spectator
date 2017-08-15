@@ -8,7 +8,6 @@ module I = Infrastructure
 module Async = 
     let map f xa = async { let! x = xa
                            return f x }
-
     let bind f xa = async { let! x = xa
                             return! f x }
     
