@@ -24,8 +24,7 @@ let convertResponseToSubs =
 
 let createNewSubscriptions (bus : IBus) = 
     async { 
-        let! newSubs = bus.RequestAsync<Command, Responses> GetNewSubscriptions
-                       |> Async.AwaitTask
+        let! newSubs = I.request bus GetNewSubscriptions 
                        |> Async.map convertResponseToSubs
         let! xs = newSubs
                   |> List.map (fun x -> RssParser.isValid x.uri)
@@ -43,8 +42,7 @@ let convertResponseToSnapshots =
 
 let loadNewSnapshot (bus : IBus) = 
     async { 
-        let! subs = bus.RequestAsync<Command, Responses> GetSubscriptions
-                    |> Async.AwaitTask
+        let! subs = I.request bus GetSubscriptions 
                     |> Async.map convertResponseToSnapshots
         let! rssList = subs
                        |> List.filter (fun x -> x.provider = Provider.Rss)
