@@ -1,24 +1,10 @@
 ﻿open System
 open EasyNetQ
+open Spectator
 open Spectator.Core
 open Spectator.Worker
 
-module I = Infrastructure
-
-module Async = 
-    let map f xa = async { let! x = xa
-                           return f x }
-    let bind f xa = async { let! x = xa
-                            return! f x }
-    
-    let bindAll (f : 'a -> Async<'b>) (xsa : Async<'a list>) : Async<'b list> = 
-        async { 
-            let! xs = xsa
-            return! xs
-                    |> List.map f
-                    |> Async.Parallel
-                    |> map Array.toList
-        }
+module I = Spectator.Infrastructure
 
 module Domain = 
     let convertResponseToNewSubscriptions = 
@@ -48,21 +34,21 @@ module Operations =
         RssParser.isValid x.uri |> Async.map (fun f -> x.uri, f)
     
     let createNewSubscriptions (bus : IBus) = 
-        I.request bus GetNewSubscriptions
+        Bus.request bus GetNewSubscriptions
         |> Async.map Domain.convertResponseToNewSubscriptions
         |> Async.bindAll subWithFlag
         |> Async.map Domain.uriWithFlagsToCommand
-        |> Async.bind (I.publish bus)
+        |> Async.bind (Bus.publish bus)
     
     let private getNodesWithSubscription (x : Subscription) = 
         RssParser.getNodes x.uri |> Async.map (fun snaps -> snaps, x)
     
     let loadNewSnapshot (bus : IBus) = 
-        I.request bus GetSubscriptions
+        Bus.request bus GetSubscriptions
         |> Async.map Domain.convertResponseToRssSubscriptions
         |> Async.bindAll getNodesWithSubscription
         |> Async.map Domain.snapshotsToCommands
-        |> Async.bindAll (I.publish bus)
+        |> Async.bindAll (Bus.publish bus)
         |> Async.Ignore
 
 [<EntryPoint>]
