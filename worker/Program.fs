@@ -32,26 +32,28 @@ let createNewSubscriptions (bus : IBus) =
             |> Async.AwaitTask
     }
 
+let convertResponseToSnapshots = 
+    function 
+    | Subscriptions xs -> xs
+    | _ -> []
+
 let loadNewSnapshot (bus : IBus) = 
     async { 
         let! resp = bus.RequestAsync<Command, Responses> GetSubscriptions 
                     |> Async.AwaitTask
-        let subs = 
-            match resp with
-            | Subscriptions xs -> xs
-            | _ -> []
+        let subs = convertResponseToSnapshots resp
         let! rssList = subs
                        |> List.filter (fun x -> x.provider = Provider.Rss)
                        |> List.map (fun x -> async { let! snaps = RssParser.getNodes 
                                                                       x.uri
                                                      return (snaps, x) })
                        |> Async.Parallel
-        let! _ = rssList
-                 |> Array.map (AddSnapshotsForSubscription
-                               >> bus.PublishAsync
-                               >> Async.AwaitTask)
-                 |> Async.Parallel
-        ()
+        do! rssList
+            |> Array.map (AddSnapshotsForSubscription
+                          >> bus.PublishAsync
+                          >> Async.AwaitTask)
+            |> Async.Parallel
+            |> Async.Ignore
     }
 
 [<EntryPoint>]
