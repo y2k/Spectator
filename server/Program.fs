@@ -5,6 +5,8 @@ open MongoDB.Bson
 open MongoDB.Driver
 open Spectator.Core
 
+module M = Spectator.Infrastructure.MongoDb
+
 module Repository = 
     let getUserSubscriptions (db : IMongoDatabase) userId = 
         let subs = db.GetCollection<Subscription>("subscriptions")
@@ -12,22 +14,10 @@ module Repository =
         async { 
             let! mySubs = userId
                           |> sprintf "{userId: \"%s\"}"
-                          |> FilterDefinition.op_Implicit
-                          |> subs.Find<Subscription>
-                          |> fun x -> 
-                              "{_id: 0}"
-                              |> ProjectionDefinition<_, _>.op_Implicit
-                              |> x.Project<Subscription>
-                          |> fun x -> x.ToListAsync() |> Async.AwaitTask
+                          |> M.findWithoutId subs
             let! myNewSubs = userId
                              |> sprintf "{userId: \"%s\"}"
-                             |> FilterDefinition.op_Implicit
-                             |> newSubs.Find<NewSubscription>
-                             |> fun x -> 
-                                 "{_id: 0}"
-                                 |> ProjectionDefinition<_, _>.op_Implicit
-                                 |> x.Project<NewSubscription>
-                             |> fun x -> x.ToListAsync() |> Async.AwaitTask
+                             |> M.findWithoutId newSubs
             return UserSubscriptions
                        (myNewSubs |> List.ofSeq, mySubs |> List.ofSeq)
         }
