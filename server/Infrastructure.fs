@@ -14,12 +14,19 @@ module Async =
                               return f (r1, r2) }
     let map f a = async { let! r = a
                           return f r }
+    let replaceWith x a = async { let! _ = a
+                                  return x }
 
 module MongoDb = 
     open MongoDB.Bson
     open MongoDB.Driver
     
-    let findWithoutId (collection : IMongoCollection<'a>) (filter : string) = 
+    let insert (x : 'a) (collection : IMongoCollection<'a>) = 
+        collection.InsertOneAsync x |> Async.AwaitTask
+    let insertMany (x : 'a list) (collection : IMongoCollection<'a>) = 
+        collection.InsertManyAsync(x) |> Async.AwaitTask
+    
+    let findWithoutId (filter : string) (collection : IMongoCollection<'a>) = 
         filter
         |> FilterDefinition.op_Implicit
         |> collection.Find<'a>

@@ -12,23 +12,18 @@ module Bus = Spectator.Infrastructure.Bus
 module Repository = 
     let getUserSubscriptions (db : IMongoDatabase) userId = 
         let mySubs = 
-            sprintf "{userId: \"%s\"}" userId 
-            |> DB.findWithoutId 
-                   (db.GetCollection<Subscription>("subscriptions"))
+            db.GetCollection<Subscription>("subscriptions") 
+            |> DB.findWithoutId (sprintf "{userId: \"%s\"}" userId)
         let myNewSubs = 
-            sprintf "{userId: \"%s\"}" userId 
-            |> DB.findWithoutId 
-                   (db.GetCollection<NewSubscription>("newSubscriptions"))
+            db.GetCollection<NewSubscription>("newSubscriptions") 
+            |> DB.findWithoutId (sprintf "{userId: \"%s\"}" userId)
         Async.zip myNewSubs mySubs UserSubscriptions
     
     let addNewSubscription (db : IMongoDatabase) userId uri = 
-        async { 
-            let col = db.GetCollection<NewSubscription>("newSubscriptions")
-            do! col.InsertOneAsync { userId = userId
-                                     uri = uri }
-                |> Async.AwaitTask
-            return SubscriptionCreatedSuccessfull
-        }
+        db.GetCollection<NewSubscription>("newSubscriptions")
+        |> DB.insert { userId = userId
+                       uri = uri }
+        |> Async.replaceWith SubscriptionCreatedSuccessfull
     
     let createSubscriptions (db : IMongoDatabase) = 
         async { 
@@ -39,11 +34,9 @@ module Repository =
         }
     
     let addSnapshotsForSubscription (db : IMongoDatabase) snapshots = 
-        async { 
-            let subs = db.GetCollection<Snapshot>("snapshots")
-            do! subs.InsertManyAsync(snapshots) |> Async.AwaitTask
-            return Unit
-        }
+        db.GetCollection<Snapshot>("snapshots")
+        |> DB.insertMany snapshots
+        |> Async.replaceWith Unit
 
 let executeCommand db cmd = 
     match cmd with
