@@ -15,16 +15,20 @@ let ``parsing wikipedia atom is success``() =
 [<Fact>]
 let ``parse simple rss``() = 
     let xs = I.loadDocFromDisk "rss1.xml" |> P.parseDocument
-    Assert.Equal([ { subscriptionId = "http://liftoff.msfc.nasa.gov/2003/06/03.html#item573"
+    Assert.Equal([ { subscriptionId = Guid.Empty
+                     id = "http://liftoff.msfc.nasa.gov/2003/06/03.html#item573"
                      title = "Star City"
                      uri = Uri "http://liftoff.msfc.nasa.gov/news/2003/news-starcity.asp" }
-                   { subscriptionId = "http://liftoff.msfc.nasa.gov/2003/05/30.html#item572"
+                   { subscriptionId = Guid.Empty
+                     id = "http://liftoff.msfc.nasa.gov/2003/05/30.html#item572"
                      title = "Space Exploration"
                      uri = Uri "http://liftoff.msfc.nasa.gov/" }
-                   { subscriptionId = "http://liftoff.msfc.nasa.gov/2003/05/27.html#item571"
+                   { subscriptionId = Guid.Empty
+                     id = "http://liftoff.msfc.nasa.gov/2003/05/27.html#item571"
                      title = "The Engine That Does More"
                      uri = Uri "http://liftoff.msfc.nasa.gov/news/2003/news-VASIMR.asp" }
-                   { subscriptionId = "http://liftoff.msfc.nasa.gov/2003/05/20.html#item570"
+                   { subscriptionId = Guid.Empty
+                     id = "http://liftoff.msfc.nasa.gov/2003/05/20.html#item570"
                      title = "Astronauts' Dirty Laundry"
                      uri = Uri "http://liftoff.msfc.nasa.gov/news/2003/news-laundry.asp" } ]
                  |> box,
@@ -33,7 +37,8 @@ let ``parse simple rss``() =
 [<Fact>]
 let ``parse simple atom``() = 
     let xs = I.loadDocFromDisk "atom1.xml" |> P.parseDocument
-    Assert.Equal([ { subscriptionId = "urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa6a"
+    Assert.Equal([ { subscriptionId = Guid.Empty
+                     id = "urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa6a"
                      title = "Фотографии из Африки"
                      uri = Uri("http://example.org/2003/12/13/atom03") } ]
                  |> box,
