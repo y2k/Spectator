@@ -5,22 +5,22 @@ open MongoDB.Bson
 open MongoDB.Driver
 open Spectator.Core
 
-module M = Spectator.Infrastructure.MongoDb
+module Async = Spectator.Infrastructure.Async
+module DB = Spectator.Infrastructure.MongoDb
 
 module Repository = 
     let getUserSubscriptions (db : IMongoDatabase) userId = 
-        let subs = db.GetCollection<Subscription>("subscriptions")
-        let newSubs = db.GetCollection<NewSubscription>("newSubscriptions")
-        async { 
-            let! mySubs = userId
-                          |> sprintf "{userId: \"%s\"}"
-                          |> M.findWithoutId subs
-            let! myNewSubs = userId
-                             |> sprintf "{userId: \"%s\"}"
-                             |> M.findWithoutId newSubs
-            return UserSubscriptions
-                       (myNewSubs |> List.ofSeq, mySubs |> List.ofSeq)
-        }
+        let mySubs = 
+            userId
+            |> sprintf "{userId: \"%s\"}"
+            |> DB.findWithoutId 
+                   (db.GetCollection<Subscription>("subscriptions"))
+        let myNewSubs = 
+            userId
+            |> sprintf "{userId: \"%s\"}"
+            |> DB.findWithoutId 
+                   (db.GetCollection<NewSubscription>("newSubscriptions"))
+        Async.zip myNewSubs mySubs UserSubscriptions
     
     let addNewSubscription (db : IMongoDatabase) userId uri = 
         async { 
