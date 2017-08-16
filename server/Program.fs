@@ -5,7 +5,7 @@ open MongoDB.Bson
 open MongoDB.Driver
 open Spectator.Core
 
-let handle (cmd : Command) = 
+let executeCommand cmd = 
     async { 
         let db = MongoClient("mongodb://localhost").GetDatabase("spectator")
         match cmd with
@@ -54,6 +54,6 @@ let handle (cmd : Command) =
 [<EntryPoint>]
 let main argv = 
     let bus = RabbitHutch.CreateBus("host=localhost")
-    bus.RespondAsync<Command, Responses>(fun x -> handle x) |> ignore
+    bus.RespondAsync<Command, Responses>(fun x -> executeCommand x) |> ignore
     printfn "Waiting for commands..."
     0
