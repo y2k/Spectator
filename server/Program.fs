@@ -11,13 +11,11 @@ module DB = Spectator.Infrastructure.MongoDb
 module Repository = 
     let getUserSubscriptions (db : IMongoDatabase) userId = 
         let mySubs = 
-            userId
-            |> sprintf "{userId: \"%s\"}"
+            sprintf "{userId: \"%s\"}" userId 
             |> DB.findWithoutId 
                    (db.GetCollection<Subscription>("subscriptions"))
         let myNewSubs = 
-            userId
-            |> sprintf "{userId: \"%s\"}"
+            sprintf "{userId: \"%s\"}" userId 
             |> DB.findWithoutId 
                    (db.GetCollection<NewSubscription>("newSubscriptions"))
         Async.zip myNewSubs mySubs UserSubscriptions
