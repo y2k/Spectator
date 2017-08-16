@@ -2,3 +2,7 @@ tests/bin
 tests/obj
 core/bin
 core/obj
+bot/bin
+bot/obj
+server/bin
+server/obj
