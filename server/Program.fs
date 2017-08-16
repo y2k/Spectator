@@ -56,25 +56,21 @@ module Repository =
             return Unit
         }
 
-let executeCommand cmd = 
-    async { 
-        let db = MongoClient("mongodb://localhost").GetDatabase("spectator")
-        match cmd with
-        | GetUserSubscriptions userId -> 
-            return! Repository.getUserSubscriptions db userId
-        | AddNewSubscription(userId, uri) -> 
-            return! Repository.addNewSubscription db userId uri
-        | CreateSubscriptions subsWithProv -> 
-            return! Repository.createSubscriptions db
-        | AddSnapshotsForSubscription(snapshots, subscription) -> 
-            return! Repository.addSnapshotsForSubscription db snapshots
-        | _ -> return Unit
-    }
-    |> Async.StartAsTask
+let executeCommand db cmd = 
+    match cmd with
+    | GetUserSubscriptions userId -> Repository.getUserSubscriptions db userId
+    | AddNewSubscription(userId, uri) -> 
+        Repository.addNewSubscription db userId uri
+    | CreateSubscriptions subsWithProv -> Repository.createSubscriptions db
+    | AddSnapshotsForSubscription(snapshots, subscription) -> 
+        Repository.addSnapshotsForSubscription db snapshots
+    | _ -> Unit |> async.Return
 
 [<EntryPoint>]
 let main argv = 
+    let db = MongoClient("mongodb://localhost").GetDatabase("spectator")
     let bus = RabbitHutch.CreateBus("host=localhost")
-    bus.RespondAsync<Command, Responses>(fun x -> executeCommand x) |> ignore
+    bus.RespondAsync<Command, Responses>
+        (fun x -> executeCommand db x |> Async.StartAsTask) |> ignore
     printfn "Waiting for commands..."
     0
