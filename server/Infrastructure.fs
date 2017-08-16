@@ -1,5 +1,13 @@
 namespace Spectator.Infrastructure
 
+module Bus = 
+    open EasyNetQ
+    open Spectator.Core
+    
+    let respondCommandAsync (bus : IBus) f = 
+        bus.RespondAsync<Command, Responses>(fun x -> f x |> Async.StartAsTask) 
+        |> ignore
+
 module Async = 
     let zip a1 a2 f = async { let! r1 = a1
                               let! r2 = a2
@@ -7,7 +15,7 @@ module Async =
     let map f a = async { let! r = a
                           return f r }
 
-module DB
+module MongoDb = 
     open MongoDB.Bson
     open MongoDB.Driver
     
@@ -21,5 +29,3 @@ module DB
             |> x.Project<'a>
             |> fun x -> x.ToListAsync() |> Async.AwaitTask
         |> Async.map List.ofSeq
-    
-    let todo() = ()

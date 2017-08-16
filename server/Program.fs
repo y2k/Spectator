@@ -7,6 +7,7 @@ open Spectator.Core
 
 module Async = Spectator.Infrastructure.Async
 module DB = Spectator.Infrastructure.MongoDb
+module Bus = Spectator.Infrastructure.Bus
 
 module Repository = 
     let getUserSubscriptions (db : IMongoDatabase) userId = 
@@ -58,7 +59,6 @@ let executeCommand db cmd =
 let main argv = 
     let db = MongoClient("mongodb://localhost").GetDatabase("spectator")
     let bus = RabbitHutch.CreateBus("host=localhost")
-    bus.RespondAsync<Command, Responses>
-        (fun x -> executeCommand db x |> Async.StartAsTask) |> ignore
+    Bus.respondCommandAsync bus (executeCommand db)
     printfn "Waiting for commands..."
     0
