@@ -3,6 +3,8 @@ open EasyNetQ
 open Spectator.Core
 module RX = Observable
 
+let flip f a b = f b a
+
 module Domain =
     type TelegramCommand = Ls | Add of string | Unknown
 
@@ -21,7 +23,7 @@ module Domain =
     let mqResponseToTelegramReply = function 
         | UserSubscriptions(newSubs, subs) -> subListToMessageResponse newSubs subs
         | SubscriptionCreatedSuccessfull -> "Your subscription created"
-        | Unit -> "Your subscription created"
+        | NotCalledStub -> "Show help" // TODO:
         | _ -> "Unknow error"
 
     let handleTelegramMessage (message: Bot.Message) = async {
@@ -35,14 +37,15 @@ module Domain =
                 return! AddNewSubscription (message.user, Uri url) 
                         |> bus.RequestAsync<Command, Responses> 
                         |> Async.AwaitTask
-            | Unknown -> return Unit
+            | Unknown -> return NotCalledStub
         }
         return mqResponseToTelegramReply resp
     }
 
 [<EntryPoint>]
-let main argv =
-    Bot.repl argv.[0] Domain.handleTelegramMessage
+let main _ =
+    Environment.GetEnvironmentVariable "TELEGRAM_TOKEN"
+    |> flip Bot.repl Domain.handleTelegramMessage
     printfn "Listening for updates..."
-    Threading.Thread.Sleep(-1);
+    Threading.Thread.Sleep -1
     0

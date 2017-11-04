@@ -2,7 +2,6 @@ module Bot
 
 open System
 open Telegram.Bot
-open Spectator.Core
 module RX = Observable
 
 type Message = { text: string; user: string }

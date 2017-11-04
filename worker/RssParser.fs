@@ -34,9 +34,7 @@ let parseAtom (doc : XDocument) =
     |> Seq.toList
 
 let parseDocument (doc : XDocument) = 
-    if doc.XPathSelectElement("//channel/item") <> null then parseRss doc
-    else if doc.XPathSelectElement("atom:feed//atom:entry", ns) <> null then parseAtom doc
-    else []
+    parseRss doc @ parseAtom doc
 
 let isValid (uri : Uri) = 
     use client = new HttpClient()
