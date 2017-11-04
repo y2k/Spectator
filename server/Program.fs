@@ -1,7 +1,4 @@
-open System
-open System.Threading.Tasks
 open EasyNetQ
-open MongoDB.Bson
 open MongoDB.Driver
 open Spectator.Core
 
@@ -49,9 +46,9 @@ let executeCommand db cmd =
     | _ -> Unit |> async.Return
 
 [<EntryPoint>]
-let main argv = 
+let main _ = 
+    printfn "Server started..."
     let db = MongoClient("mongodb://localhost").GetDatabase("spectator")
-    let bus = RabbitHutch.CreateBus("host=localhost")
+    let bus = RabbitHutch.CreateBus("host=localhost;timeout=60")
     Bus.respondCommandAsync bus (executeCommand db)
-    printfn "Waiting for commands..."
     0

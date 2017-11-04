@@ -18,7 +18,6 @@ module Async =
                                   return x }
 
 module MongoDb = 
-    open MongoDB.Bson
     open MongoDB.Driver
     
     let insert (x : 'a) (collection : IMongoCollection<'a>) = 

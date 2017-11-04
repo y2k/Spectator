@@ -1,5 +1,4 @@
-﻿open System
-open EasyNetQ
+﻿open EasyNetQ
 open Spectator
 open Spectator.Core
 open Spectator.Worker
@@ -52,7 +51,8 @@ module Operations =
         |> Async.Ignore
 
 [<EntryPoint>]
-let main argv = 
+let main _ = 
+    printfn "Start worker..."
     let bus = RabbitHutch.CreateBus("host=localhost")
     I.executeInLoop 10000 (fun _ -> 
         async { 

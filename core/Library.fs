@@ -43,6 +43,7 @@ type Responses =
     | UserSubscriptions of NewSubscription list * Subscription list
     | SubscriptionCreatedSuccessfull
     | Unit
+    | NotCalledStub
 
 module Auth = 
     let computeAuthKey (user : UserId) (seed : string) = 
