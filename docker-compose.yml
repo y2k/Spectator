@@ -1,0 +1,12 @@
+version: '3'
+services:
+  mongodb:
+    image: mongo:3.4-jessie
+    ports:
+    - "27017:27017"
+  rabbitmq:
+    image: rabbitmq:3.6
+    environment:
+    - POSTGRES_USER=test
+    ports:
+    - "5672:5672"

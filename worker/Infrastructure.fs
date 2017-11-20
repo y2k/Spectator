@@ -33,5 +33,4 @@ module Infrastructure =
                 do! Async.Sleep time
                 return! doWork()
             }
-        doWork() |> ignore
-        System.Threading.Thread.Sleep(-1)
+        doWork() |> Async.RunSynchronously
