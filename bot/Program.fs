@@ -16,9 +16,9 @@ module Domain =
 
     let subListToMessageResponse (newSubs : NewSubscription list) (subs : Subscription list) = 
         newSubs
-        |> List.map (fun x -> x.uri)
-        |> List.append (subs |> List.map (fun x -> x.uri))
-        |> List.fold (fun s x -> sprintf "%O\n- %O" s x) "Your subscriptions: "
+        |> List.map (fun x -> sprintf "(Waiting) %O" x.uri)
+        |> List.append (subs |> List.map (fun x -> string x.uri))
+        |> List.fold (fun s x -> sprintf "%s\n- %s" s x) "Your subscriptions: "
 
     let mqResponseToTelegramReply = function 
         | UserSubscriptions(newSubs, subs) -> subListToMessageResponse newSubs subs
