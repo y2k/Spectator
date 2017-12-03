@@ -1,5 +1,21 @@
 module Spectator.Core
 
+module Async = 
+    let lift = async.Return
+    let bind f p = 
+        async {
+            let! x = p
+            return! f x
+        }
+    let map f p = 
+        async {
+            let! x = p
+            return f x
+        }
+
+module Utils =
+    let flip f a b = f b a
+
 open System
 
 // Types

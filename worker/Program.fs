@@ -53,7 +53,7 @@ module Operations =
 [<EntryPoint>]
 let main _ = 
     printfn "Start worker..."
-    let bus = RabbitHutch.CreateBus("host=localhost")
+    let bus = RabbitHutch.CreateBus("host=localhost;timeout=60")
     I.executeInLoop 10000 (fun _ -> 
         async { 
             do! Operations.createNewSubscriptions bus

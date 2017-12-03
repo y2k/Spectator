@@ -1,51 +1,49 @@
 ﻿open System
 open EasyNetQ
 open Spectator.Core
+open Spectator.Core.Utils
+
 module RX = Observable
 
-let flip f a b = f b a
+type TelegramCommand = Ls | Add of string | Unknown
+
+module Bus =
+    let request<'a, 'b when 'a : not struct and 'b : not struct> (bus: IBus) (msg: 'a): Async<'b> =
+        bus.RequestAsync<'a, 'b>(msg)
+        |> Async.AwaitTask
 
 module Domain =
-    type TelegramCommand = Ls | Add of string | Unknown
-
     let parse (message : string) = 
         match message.Split(' ') |> Array.toList with
-        | "ls" :: _ -> Ls
-        | "add" :: url :: _ -> Add url
+        | "/ls" :: _ -> Ls
+        | "/add" :: url :: _ -> Add url
         | _ -> Unknown
 
     let subListToMessageResponse (newSubs : NewSubscription list) (subs : Subscription list) = 
         newSubs
         |> List.map (fun x -> sprintf "(Waiting) %O" x.uri)
         |> List.append (subs |> List.map (fun x -> string x.uri))
-        |> List.fold (fun s x -> sprintf "%s\n- %s" s x) "Your subscriptions: "
+        |> List.fold (sprintf "%s\n- %s") "Your subscriptions: "
 
     let mqResponseToTelegramReply = function 
         | UserSubscriptions(newSubs, subs) -> subListToMessageResponse newSubs subs
         | SubscriptionCreatedSuccessfull -> "Your subscription created"
-        | NotCalledStub -> "Show help" // TODO:
+        | NotCalledStub -> "/ls - show your subscriptions\n/add <url> - add new subscription"
         | _ -> "Unknow error"
 
-    let handleTelegramMessage (message: Bot.Message) = async {
-        use bus = RabbitHutch.CreateBus("host=localhost")
-        let! resp = async {
-            match parse message.text with
-            | Ls -> 
-                return! bus.RequestAsync<Command, Responses>(GetUserSubscriptions message.user) 
-                        |> Async.AwaitTask
-            | Add url -> 
-                return! AddNewSubscription (message.user, Uri url) 
-                        |> bus.RequestAsync<Command, Responses> 
-                        |> Async.AwaitTask
-            | Unknown -> return NotCalledStub
-        }
-        return mqResponseToTelegramReply resp
-    }
+module Services =
+    let handleTelegramMessage (bus: IBus) (message: Bot.Message) = 
+        match Domain.parse message.text with
+        | Ls -> Bus.request bus <| GetUserSubscriptions message.user
+        | Add url -> Bus.request bus <| AddNewSubscription (message.user, Uri url) 
+        | Unknown -> Async.lift NotCalledStub
+        |> Async.map Domain.mqResponseToTelegramReply
 
 [<EntryPoint>]
 let main _ =
+    use bus = RabbitHutch.CreateBus("host=localhost")
     Environment.GetEnvironmentVariable "TELEGRAM_TOKEN"
-    |> flip Bot.repl Domain.handleTelegramMessage
+    |> flip Bot.repl (Services.handleTelegramMessage bus)
     printfn "Listening for updates..."
     Threading.Thread.Sleep -1
     0

@@ -17,7 +17,7 @@ module Async =
 
 module Bus = 
     open EasyNetQ
-    open Spectator.Core
+    open Core
     
     let publish (bus : IBus) command = 
         bus.PublishAsync<Command> command |> Async.AwaitTask
