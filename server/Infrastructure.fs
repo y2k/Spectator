@@ -8,15 +8,6 @@ module Bus =
         bus.RespondAsync<Command, Responses>(fun x -> f x |> Async.StartAsTask) 
         |> ignore
 
-module Async = 
-    let zip a1 a2 f = async { let! r1 = a1
-                              let! r2 = a2
-                              return f (r1, r2) }
-    let map f a = async { let! r = a
-                          return f r }
-    let replaceWith x a = async { let! _ = a
-                                  return x }
-
 module MongoDb = 
     open MongoDB.Driver
     

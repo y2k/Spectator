@@ -2,15 +2,39 @@ module Spectator.Core
 
 module Async = 
     let lift = async.Return
-    let bind f p = 
+    let bind f a = 
         async {
-            let! x = p
+            let! x = a
             return! f x
         }
-    let map f p = 
+    let map f a = 
         async {
-            let! x = p
+            let! x = a
             return f x
+        }
+    let bindAll (f : 'a -> Async<'b>) (xsa : Async<'a list>) : Async<'b list> = 
+        async { 
+            let! xs = xsa
+            return! xs
+                    |> List.map f
+                    |> Async.Parallel
+                    |> map Array.toList
+        }
+    let zip a1 a2 f = 
+        async { 
+            let! r1 = a1
+            let! r2 = a2
+            return f (r1, r2) 
+        }
+    let replaceWith x a = 
+        async { 
+            let! _ = a
+            return x 
+        }
+    let next a2 a = 
+        async { 
+            let! _ = a
+            return! a2
         }
 
 module Utils =

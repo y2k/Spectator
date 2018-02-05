@@ -6,8 +6,7 @@ open Spectator.Worker
 module I = Spectator.Infrastructure
 
 module Domain = 
-    let convertResponseToNewSubscriptions = 
-        function 
+    let convertResponseToNewSubscriptions = function 
         | NewSubscriptions x -> x
         | _ -> []
     
@@ -54,9 +53,7 @@ module Operations =
 let main _ = 
     printfn "Start worker..."
     let bus = RabbitHutch.CreateBus("host=localhost;timeout=60")
-    I.executeInLoop 10000 (fun _ -> 
-        async { 
-            do! Operations.createNewSubscriptions bus
-            do! Operations.loadNewSnapshot bus
-        })
+    Operations.createNewSubscriptions bus
+    |> Async.next (Operations.loadNewSnapshot bus)
+    |> I.executeInLoop 10000
     0

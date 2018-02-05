@@ -6,7 +6,6 @@ open System.Xml
 open System.Xml.Linq
 open System.Xml.XPath
 open Spectator.Core
-open Spectator
 
 let private ns = XmlNamespaceManager(NameTable())
 ns.AddNamespace("media", "http://search.yahoo.com/mrss/")

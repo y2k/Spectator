@@ -2,7 +2,6 @@ open EasyNetQ
 open MongoDB.Driver
 open Spectator.Core
 
-module Async = Spectator.Infrastructure.Async
 module DB = Spectator.Infrastructure.MongoDb
 module Bus = Spectator.Infrastructure.Bus
 

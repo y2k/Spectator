@@ -1,20 +1,5 @@
 namespace Spectator
 
-module Async = 
-    let map f xa = async { let! x = xa
-                           return f x }
-    let bind f xa = async { let! x = xa
-                            return! f x }
-    
-    let bindAll (f : 'a -> Async<'b>) (xsa : Async<'a list>) : Async<'b list> = 
-        async { 
-            let! xs = xsa
-            return! xs
-                    |> List.map f
-                    |> Async.Parallel
-                    |> map Array.toList
-        }
-
 module Bus = 
     open EasyNetQ
     open Core
@@ -29,8 +14,8 @@ module Infrastructure =
     let executeInLoop time action = 
         let rec doWork() = 
             async { 
-                do! action()
+                do! action
                 do! Async.Sleep time
-                return! doWork()
+                do! doWork()
             }
         doWork() |> Async.RunSynchronously
