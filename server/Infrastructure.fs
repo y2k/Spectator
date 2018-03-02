@@ -1,14 +1,16 @@
 namespace Spectator.Infrastructure
 
 module Bus = 
+    open System
     open EasyNetQ
     open Spectator.Core
     
     let respondCommandAsync (bus : IBus) f = 
-        bus.RespondAsync<Command, Responses>(fun x -> f x |> Async.StartAsTask) 
+        bus.RespondAsync<Command, Responses>(Func<_,_>(f >> Async.StartAsTask))
         |> ignore
 
 module MongoDb = 
+    open Spectator.Core
     open MongoDB.Driver
     
     let insert (x : 'a) (collection : IMongoCollection<'a>) = 
