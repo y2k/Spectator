@@ -2,39 +2,35 @@ module Bot
 
 open System
 open Telegram.Bot
-module RX = Observable
+open Telegram.Bot.Types
+open Spectator.Core
 
-type Message = { text: string; user: string }
+type Message = { text: String; user: String }
+type TelegramResponse = SuccessResponse | BotBlockedResponse | UnknownErrorResponse
 let inline private (|?) (x: 'a) (def: 'a) = if isNull x then def else x
 
 let private listerForMessages token =
     let bot = TelegramBotClient(token)
     let result = bot.OnUpdate 
-                 |> RX.map (fun args -> 
-                     let x = args.Update
-                     { text = x.Message.Text |? ""; user = string x.Message.From.Id })
+                 |> Observable.map (fun args -> 
+                     { text = args.Update.Message.Text |? ""; 
+                       user = string args.Update.Message.From.Id })
     bot.StartReceiving()
     result
 
-type TelegramResponse = | SuccessResponse | BotBlockedResponse | UnknownErrorResponse
-let private sendToTelegramSingle token (user: string) message =
-    try
-        let bot = TelegramBotClient(token)
-        bot.SendTextMessageAsync(user, message, parseMode = Types.Enums.ParseMode.Html).Result |> ignore
-        SuccessResponse
-    with
-    | :? AggregateException as ae -> 
-        match ae.InnerException with
-        | :? Exceptions.ApiRequestException -> BotBlockedResponse
-        | _                                 -> reraise()
-    | _ -> UnknownErrorResponse
+let private sendToTelegramSingle token (user: String) message =
+    TelegramBotClient(token)
+        .SendTextMessageAsync(ChatId.op_Implicit user, message, parseMode = Enums.ParseMode.Html) 
+    |> (Async.AwaitTask >> Async.Catch)
+    |> Async.map (
+        function
+        | Choice1Of2 _ -> SuccessResponse
+        | Choice2Of2 (:? AggregateException as ae) when (ae.InnerException :? Exceptions.ApiRequestException) -> BotBlockedResponse
+        | Choice2Of2 _ -> UnknownErrorResponse)
 
 let repl token handler = 
-    let handle token (x : Message) = 
-        async { 
-            printfn "message: %O" x.text
-            let! res = handler x
-            sendToTelegramSingle token x.user (res) |> ignore
-        }
-        |> Async.Start
-    listerForMessages token |> RX.add (handle token)
+    let handle token (message: Message) = 
+        handler message
+        |> Async.bind (sendToTelegramSingle token message.user)
+        |> (Async.Ignore >> Async.Start)
+    listerForMessages token |> Observable.add (handle token)
