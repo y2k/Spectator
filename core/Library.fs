@@ -1,5 +1,7 @@
 module Spectator.Core
 
+open System
+
 module Async = 
     let lift = async.Return
     let bind f a = 
@@ -11,6 +13,16 @@ module Async =
         async {
             let! x = a
             return f x
+        }
+    let map2 f a = 
+        async {
+            let! (a1, a2) = a
+            return f a1 a2
+        }
+    let map3 f a = 
+        async {
+            let! (a1, a2, a3) = a
+            return f a1 a2 a3
         }
     let bindAll (f : 'a -> Async<'b>) (xsa : Async<'a list>) : Async<'b list> = 
         async { 
@@ -40,7 +52,8 @@ module Async =
 module Utils =
     let flip f a b = f b a
 
-open System
+module String =
+    let split (x : String) (separator : Char) = x.Split(separator) |> Array.toList
 
 // Types
 type UserId = string
@@ -69,21 +82,21 @@ type Snapshot =
 // EasyNetQ Commands
 type Command = 
     | GetNewSubscriptions
-    | CreateSubscriptions of (Uri * Provider) list
+    | CreateSubscription of UserId * Uri * Provider
     | GetSubscriptions
     | AddSnapshotsForSubscription of Snapshot list * Subscription
     | AddSubscription // TODO:
     | AddSnapshot // TODO:
     | AddNewSubscription of UserId * Uri
     | GetUserSubscriptions of UserId
+    | Ping
 
 type Responses = 
     | Subscriptions of Subscription list
     | NewSubscriptions of NewSubscription list
     | UserSubscriptions of NewSubscription list * Subscription list
     | SubscriptionCreatedSuccessfull
-    | Unit
-    | NotCalledStub
+    | EmptyResponse
 
 module Auth = 
     let computeAuthKey (user : UserId) (seed : string) = 

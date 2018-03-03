@@ -1,6 +1,7 @@
 open EasyNetQ
 open MongoDB.Driver
 open Spectator.Core
+open System
 
 module DB = Spectator.Infrastructure.MongoDb
 module Bus = Spectator.Infrastructure.Bus
@@ -17,37 +18,43 @@ module Repository =
     
     let addNewSubscription (db : IMongoDatabase) userId uri = 
         db.GetCollection<NewSubscription>("newSubscriptions")
-        |> DB.insert { userId = userId
-                       uri = uri }
+        |> DB.insert { userId = userId; uri = uri }
         |> Async.replaceWith SubscriptionCreatedSuccessfull
-    
-    let createSubscriptions (db : IMongoDatabase) = 
+
+    let createSubscription (db : IMongoDatabase) userId uri provider = 
         async { 
-            let subs = db.GetCollection<Subscription>("subscriptions")
             let newSubs = db.GetCollection<NewSubscription>("newSubscriptions")
-            // FIXME:
-            return Unit
+            do! (sprintf "{uri: \"%O\", userId: \"%s\"}" uri userId)
+                |> FilterDefinition.op_Implicit
+                |> newSubs.DeleteManyAsync
+                |> (Async.AwaitTask >> Async.Ignore)
+
+            let subs = db.GetCollection<Subscription>("subscriptions")
+            do! DB.insert { id = Guid.NewGuid(); userId = userId; provider = provider; uri = uri } subs
+
+            return EmptyResponse
         }
     
     let addSnapshotsForSubscription (db : IMongoDatabase) snapshots = 
         db.GetCollection<Snapshot>("snapshots")
         |> DB.insertMany snapshots
-        |> Async.replaceWith Unit
+        |> Async.replaceWith EmptyResponse
 
-let executeCommand db cmd = 
-    match cmd with
-    | GetUserSubscriptions userId -> Repository.getUserSubscriptions db userId
-    | AddNewSubscription(userId, uri) -> 
-        Repository.addNewSubscription db userId uri
-    | CreateSubscriptions subsWithProv -> Repository.createSubscriptions db
-    | AddSnapshotsForSubscription(snapshots, subscription) -> 
-        Repository.addSnapshotsForSubscription db snapshots
-    | _ -> Unit |> async.Return
+module Services =
+    let executeCommand db cmd = 
+        match cmd with
+        | GetUserSubscriptions userId -> Repository.getUserSubscriptions db userId
+        | AddNewSubscription(userId, uri) -> 
+            Repository.addNewSubscription db userId uri
+        | CreateSubscription (userId, uri, provider) -> Repository.createSubscription db userId uri provider
+        | AddSnapshotsForSubscription(snapshots, subscription) -> 
+            Repository.addSnapshotsForSubscription db snapshots
+        | _ -> EmptyResponse |> Async.lift
 
 [<EntryPoint>]
 let main _ = 
     printfn "Server started..."
     let db = MongoClient("mongodb://localhost").GetDatabase("spectator")
     let bus = RabbitHutch.CreateBus("host=localhost;timeout=60")
-    Bus.respondCommandAsync bus (executeCommand db)
+    Bus.respondCommandAsync bus (Services.executeCommand db)
     0

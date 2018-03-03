@@ -8,7 +8,6 @@ module Bus =
         bus.PublishAsync<Command> command |> Async.AwaitTask
     let request (bus : IBus) command = 
         bus.RequestAsync<Command, Responses> command |> Async.AwaitTask
-    let TODO _ = raise (System.NotImplementedException())
 
 module Infrastructure = 
     let executeInLoop time action = 
