@@ -8,8 +8,8 @@
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="EasyNetQ" Version="2.3.1" />
-    <PackageReference Include="Telegram.Bot" Version="13.4.0" />
+    <PackageReference Include="EasyNetQ" Version="2.3.3" />
+    <PackageReference Include="Telegram.Bot" Version="14.4.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\core\core.fsproj" />
