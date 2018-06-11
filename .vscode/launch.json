@@ -1,17 +1,31 @@
 {
     "version": "0.2.0",
+    "compounds": [
+        {
+            "name": "Bot + Server",
+            "configurations": [ "run Server", "run Bot" ]
+        }
+    ],
     "configurations": [
         {
-            "name": "run BOT",
+            "name": "run Server",
             "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "build",
+            "program": "${workspaceRoot}/server/bin/Debug/netcoreapp2.0/server.dll",
+            "args": [],
+            "cwd": "${workspaceRoot}",
+            "stopAtEntry": false,
+            "console": "internalConsole"
+        },
+        {
+            "name": "run Bot",
+            "type": "coreclr",
+            "request": "launch",
             "program": "${workspaceFolder}/bot/bin/Debug/netcoreapp2.0/bot.dll",
             "args": [],
             "cwd": "${workspaceFolder}",
-            "console": "internalConsole",
             "stopAtEntry": false,
-            "internalConsoleOptions": "openOnSessionStart"
+            "console": "internalConsole",
         },
         {
             "name": "run Worker",

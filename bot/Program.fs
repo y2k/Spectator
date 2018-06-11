@@ -29,6 +29,7 @@ module Domain =
 
 module Services =
     let handleTelegramMessage bus message = 
+        printfn "handleTelegramMessage | %O" message
         Domain.parse message
         |> Bus.request bus
         |> Async.map Domain.responeToMessage
@@ -36,8 +37,5 @@ module Services =
 [<EntryPoint>]
 let main _ =
     use bus = RabbitHutch.CreateBus("host=localhost")
-    Environment.GetEnvironmentVariable "TELEGRAM_TOKEN"
-    |> flip Bot.repl (Services.handleTelegramMessage bus)
-    printfn "Listening for updates..."
-    Threading.Thread.Sleep -1
+    Bot.repl (Services.handleTelegramMessage bus)
     0
