@@ -4,6 +4,10 @@
         {
             "name": "Bot + Server",
             "configurations": [ "run Server", "run Bot" ]
+        },
+        {
+            "name": "Worker + Server",
+            "configurations": [ "run Server", "run Worker" ]
         }
     ],
     "configurations": [

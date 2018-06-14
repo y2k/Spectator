@@ -27,19 +27,21 @@ module Domain =
         List.map AddSnapshotsForSubscription
 
 module Operations = 
+    open AsyncOperators
+
     let private subWithFlag (x : NewSubscription) = 
         RssParser.isValid x.uri 
-        |> Async.map (fun f -> x.userId, x.uri, f)
+        ==> fun f -> x.userId, x.uri, f
 
     let createNewSubscription (bus : IBus) newScription = 
         newScription
         |> subWithFlag
         |> Async.map3 Domain.uriWithFlagsToCommand
-        |> Async.bind (Bus.publish bus)
+        >>= Bus.publish bus
     
     let createNewSubscriptions (bus : IBus) = 
         Bus.request bus GetNewSubscriptions
-        |> Async.map Domain.convertResponseToNewSubscriptions
+        ==> Domain.convertResponseToNewSubscriptions
         |> Async.bindAll (createNewSubscription bus)
         |> Async.Ignore
     
@@ -48,9 +50,9 @@ module Operations =
     
     let loadNewSnapshot (bus : IBus) = 
         Bus.request bus GetSubscriptions
-        |> Async.map Domain.convertResponseToRssSubscriptions
+        ==> Domain.convertResponseToRssSubscriptions
         |> Async.bindAll getNodesWithSubscription
-        |> Async.map Domain.snapshotsToCommands
+        ==> Domain.snapshotsToCommands
         |> Async.bindAll (Bus.publish bus)
         |> Async.Ignore
 
