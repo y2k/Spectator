@@ -4,7 +4,7 @@ open System
 
 module AsyncOperators =
     let inline (>>=) ma fm = async.Bind(ma, fm)
-    let inline (==>) ma f = 
+    let inline (>>-) ma f = 
         async {
             let! a = ma
             return f a

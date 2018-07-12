@@ -24,7 +24,7 @@ module Repository =
     let createSubscription (db : IMongoDatabase) userId uri provider = 
         async { 
             let newSubs = db.GetCollection<NewSubscription>("newSubscriptions")
-            do! (sprintf "{uri: \"%O\", userId: \"%s\"}" uri userId)
+            do! sprintf "{uri: \"%O\", userId: \"%s\"}" uri userId
                 |> FilterDefinition.op_Implicit
                 |> newSubs.DeleteManyAsync
                 |> (Async.AwaitTask >> Async.Ignore)

@@ -1,7 +1,6 @@
 ﻿open System
 open EasyNetQ
 open Spectator.Core
-open Spectator.Core.Utils
 
 module Bus =
     let request (bus: IBus) command =

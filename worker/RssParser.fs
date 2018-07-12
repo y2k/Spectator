@@ -39,7 +39,7 @@ module Parser =
     let isValid = getNodes >> List.isEmpty >> not
 
 let isValid (uri : Uri) = 
-    uri |> Http.download ==> Parser.isValid
+    uri |> Http.download >>- Parser.isValid
 
 let getNodes (uri : Uri) = 
-    uri |> Http.download ==> Parser.getNodes
+    uri |> Http.download >>- Parser.getNodes
