@@ -3,8 +3,10 @@ module Infrastructure
 open System.IO
 open System.Xml.Linq
 
+let loadFromDisk =
+    sprintf "../../../examples/%s" >> File.ReadAllText
+
 let loadDocFromDisk name = 
     name
-    |> sprintf "../../../examples/%s"
-    |> File.ReadAllText
+    |> loadFromDisk
     |> XDocument.Parse

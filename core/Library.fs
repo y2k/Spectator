@@ -2,6 +2,21 @@ module Spectator.Core
 
 open System
 
+module AsyncOperators =
+    let inline (>>=) ma fm = async.Bind(ma, fm)
+    let inline (>>-) ma f = 
+        async {
+            let! a = ma
+            return f a
+        }
+    let inline (>=>) mfa mfb =
+        fun a ->
+            async {
+                let! b = mfa a
+                let! c = mfb b
+                return c
+            }
+
 module Async = 
     let lift = async.Return
     let bind f a = 
@@ -47,6 +62,14 @@ module Async =
         async { 
             let! _ = a
             return! a2
+        }
+
+module Http =
+    open System.Net.Http
+    let download (uri : Uri) =
+        async {
+            use client = new HttpClient()
+            return! client.GetStringAsync uri |> Async.AwaitTask
         }
 
 module Utils =

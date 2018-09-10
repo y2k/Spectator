@@ -1,21 +1,18 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp2.1</TargetFramework>
   </PropertyGroup>
-
-  <ItemGroup>
-    <Compile Include="Infrastructure.fs" />
-    <Compile Include="RssParser.fs" />
-    <Compile Include="Program.fs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="EasyNetQ" Version="2.3.3" />
-  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\core\core.fsproj" />
   </ItemGroup>
-
+  <ItemGroup>
+    <Compile Include="Infrastructure.fs" />
+    <Compile Include="RssParser.fs" />
+    <Compile Include="TelegramParser.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="EasyNetQ" Version="2.3.3" />
+  </ItemGroup>
 </Project>
