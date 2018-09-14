@@ -33,13 +33,13 @@ module Operations =
         RssParser.isValid x.uri 
         >>- fun isValid -> x.userId, x.uri, isValid
 
-    let createNewSubscription (bus : IBus) newScription = 
+    let createNewSubscription bus newScription = 
         newScription
         |> subWithFlag
         |> Async.map3 Domain.uriWithFlagsToCommand
         >>= Bus.publish bus
     
-    let createNewSubscriptions (bus : IBus) = 
+    let createNewSubscriptions bus = 
         Bus.request bus GetNewSubscriptions
         >>- Domain.convertResponseToNewSubscriptions
         |> Async.bindAll (createNewSubscription bus)
@@ -49,7 +49,7 @@ module Operations =
         RssParser.getNodes x.uri 
         >>- fun snaps -> snaps, x
     
-    let loadNewSnapshot (bus : IBus) = 
+    let loadNewSnapshot bus = 
         Bus.request bus GetSubscriptions
         >>- Domain.convertResponseToRssSubscriptions
         |> Async.bindAll getNodesWithSubscription
