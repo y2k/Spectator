@@ -5,7 +5,6 @@ open System.Xml
 open System.Xml.Linq
 open System.Xml.XPath
 open Spectator.Core
-open AsyncOperators
 
 module Parser =
     let private ns = XmlNamespaceManager(NameTable())

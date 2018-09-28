@@ -27,8 +27,6 @@ module Domain =
         List.map AddSnapshotsForSubscription
 
 module Operations = 
-    open AsyncOperators
-
     let private subWithFlag (x : NewSubscription) = 
         RssParser.isValid x.uri 
         >>- fun isValid -> x.userId, x.uri, isValid

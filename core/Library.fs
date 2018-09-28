@@ -2,33 +2,24 @@ module Spectator.Core
 
 open System
 
-module AsyncOperators =
+[<AutoOpen>]
+module Operators =
     let inline (>>=) ma fm = async.Bind(ma, fm)
     let inline (>>-) ma f = 
         async {
             let! a = ma
             return f a
         }
-    let inline (>=>) mfa mfb =
-        fun a ->
-            async {
-                let! b = mfa a
-                let! c = mfb b
-                return c
-            }
+    let inline (>=>) mfa mfb a =
+        async {
+            let! b = mfa a
+            let! c = mfb b
+            return c
+        }
+    let flip f a b = f b a
 
 module Async = 
     let lift = async.Return
-    let bind f a = 
-        async {
-            let! x = a
-            return! f x
-        }
-    let map f a = 
-        async {
-            let! x = a
-            return f x
-        }
     let map2 f a = 
         async {
             let! (a1, a2) = a
@@ -45,7 +36,7 @@ module Async =
             return! xs
                     |> List.map f
                     |> Async.Parallel
-                    |> map Array.toList
+                    >>- Array.toList
         }
     let zip a1 a2 f = 
         async { 
@@ -71,9 +62,6 @@ module Http =
             use client = new HttpClient()
             return! client.GetStringAsync uri |> Async.AwaitTask
         }
-
-module Utils =
-    let flip f a b = f b a
 
 module String =
     let split (x : String) (separator : Char) = x.Split(separator) |> Array.toList

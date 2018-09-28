@@ -33,16 +33,15 @@ let private sendToTelegramSingle (user: String) message =
     let bot = makeClient ()
     bot.SendTextMessageAsync(ChatId.op_Implicit user, message, parseMode = Enums.ParseMode.Html) 
     |> (Async.AwaitTask >> Async.Catch)
-    |> Async.map (
-        function
+    >>- function
         | Choice1Of2 _ -> SuccessResponse
         | Choice2Of2 (:? AggregateException as ae) when (ae.InnerException :? Exceptions.ApiRequestException) -> BotBlockedResponse
-        | Choice2Of2 _ -> UnknownErrorResponse)
+        | Choice2Of2 _ -> UnknownErrorResponse
 
 let repl handler = 
     let handle (message: Message) = 
         handler message
-        |> Async.bind (sendToTelegramSingle message.user)
+        >>= sendToTelegramSingle message.user
         |> (Async.Ignore >> Async.Start)
     listerForMessages () |> Observable.add handle
     printfn "Listening for updates..."

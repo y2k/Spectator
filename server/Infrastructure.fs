@@ -27,4 +27,4 @@ module MongoDb =
             |> ProjectionDefinition<_, _>.op_Implicit
             |> x.Project<'a>
             |> fun x -> x.ToListAsync() |> Async.AwaitTask
-        |> Async.map List.ofSeq
+        >>- List.ofSeq

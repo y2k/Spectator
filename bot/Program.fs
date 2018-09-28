@@ -31,7 +31,7 @@ module Services =
         printfn "handleTelegramMessage | %O" message
         Domain.parse message
         |> Bus.request bus
-        |> Async.map Domain.responeToMessage
+        >>- Domain.responeToMessage
 
 [<EntryPoint>]
 let main _ =
