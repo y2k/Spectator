@@ -16,7 +16,7 @@ module Operators =
             let! c = mfb b
             return c
         }
-    let flip f a b = f b a
+    let inline flip f a b = f b a
 
 module Async = 
     let lift = async.Return
