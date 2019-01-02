@@ -17,6 +17,8 @@ module Operators =
             return c
         }
     let inline flip f a b = f b a
+    let inline curry f a b = f (a, b)
+    let inline uncurry f (a, b) = f a b
 
 module Async = 
     let lift = async.Return
@@ -92,22 +94,30 @@ type Snapshot =
 
 // EasyNetQ Commands
 type Command = 
-    | GetNewSubscriptions
-    | CreateSubscription of UserId * Uri * Provider
-    | GetSubscriptions
-    | AddSnapshotsForSubscription of Snapshot list * Subscription
+    | [<Obsolete>] GetNewSubscriptions
+    | [<Obsolete>] CreateSubscription of UserId * Uri * Provider
+    | [<Obsolete>] GetSubscriptions
+    | [<Obsolete>] AddSnapshotsForSubscription of Snapshot list * Subscription
     | AddSubscription // TODO:
     | AddSnapshot // TODO:
-    | AddNewSubscription of UserId * Uri
-    | GetUserSubscriptions of UserId
+    | [<Obsolete>] AddNewSubscription of UserId * Uri
+    | [<Obsolete>] GetUserSubscriptions of UserId
     | Ping
 
+    | AddSnapshotsForSubscription' of Snapshot list * Subscription * AsyncReplyChannel<unit>
+    | GetSubscriptions' of AsyncReplyChannel<Subscription list>
+    | CreateSubscription' of UserId * Uri * Provider * AsyncReplyChannel<unit>
+    | GetNewSubscriptions' of AsyncReplyChannel<NewSubscription list>
+    | GetUserSubscriptions' of UserId * AsyncReplyChannel<NewSubscription list * Subscription list>
+    | AddNewSubscription' of UserId * Uri * AsyncReplyChannel<unit>
+
+[<Obsolete>] 
 type Responses = 
-    | Subscriptions of Subscription list
-    | NewSubscriptions of NewSubscription list
-    | UserSubscriptions of NewSubscription list * Subscription list
-    | SubscriptionCreatedSuccessfull
-    | EmptyResponse
+    | [<Obsolete>] Subscriptions of Subscription list
+    | [<Obsolete>] NewSubscriptions of NewSubscription list
+    | [<Obsolete>] UserSubscriptions of NewSubscription list * Subscription list
+    | [<Obsolete>] SubscriptionCreatedSuccessfull
+    | [<Obsolete>] EmptyResponse
 
 module Auth = 
     let computeAuthKey (user : UserId) (seed : string) = 
@@ -116,3 +126,7 @@ module Auth =
         |> System.Text.Encoding.UTF8.GetBytes
         |> md5.ComputeHash
         |> System.Convert.ToBase64String
+
+module Bus =
+    let reply (bus' : MailboxProcessor<Command>) f =
+        bus'.PostAndAsyncReply (fun x -> f x)

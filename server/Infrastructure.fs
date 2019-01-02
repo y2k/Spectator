@@ -1,4 +1,4 @@
-namespace Spectator.Infrastructure
+namespace Spectator.Server.Infrastructure
 
 module Bus = 
     open System

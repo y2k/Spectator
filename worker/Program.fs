@@ -1,65 +1,43 @@
-﻿open EasyNetQ
+﻿module Spectator.Worker.App
+
+open EasyNetQ
 open Spectator
 open Spectator.Core
 open Spectator.Worker
 
-module I = Spectator.Infrastructure
+module I = Spectator.Worker.Infrastructure
 
-module Domain = 
-    let convertResponseToNewSubscriptions = 
-        function 
-        | NewSubscriptions x -> x
-        | _ -> []
-
-    let uriWithFlagsToCommand userId uri isRss = 
+module Domain =
+    let uriWithFlagsToCommand' userId uri isRss =
         match isRss with
         | true -> userId, uri, Provider.Rss
         | false -> userId, uri, Provider.Invalid
-        |> CreateSubscription
-    
-    let convertResponseToRssSubscriptions = 
-        function
-        | Subscriptions xs -> xs
-        | _ -> []
-        >> List.filter (fun x -> x.provider = Provider.Rss)
+        |> fun (userId, uri, p) r -> CreateSubscription'(userId, uri, p, r)
 
-    let snapshotsToCommands = 
-        List.map AddSnapshotsForSubscription
+module Operations =
+    let private subWithFlag (x : NewSubscription) = RssParser.isValid x.uri >>- fun isValid -> x.userId, x.uri, isValid
 
-module Operations = 
-    let private subWithFlag (x : NewSubscription) = 
-        RssParser.isValid x.uri 
-        >>- fun isValid -> x.userId, x.uri, isValid
-
-    let createNewSubscription bus newScription = 
+    let createNewSubscription' bus newScription =
         newScription
         |> subWithFlag
-        |> Async.map3 Domain.uriWithFlagsToCommand
-        >>= Bus.publish bus
-    
-    let createNewSubscriptions bus = 
-        Bus.request bus GetNewSubscriptions
-        >>- Domain.convertResponseToNewSubscriptions
-        |> Async.bindAll (createNewSubscription bus)
-        >>- ignore
-    
-    let private getNodesWithSubscription (x : Subscription) = 
-        RssParser.getNodes x.uri 
-        >>- fun snaps -> snaps, x
-    
-    let loadNewSnapshot bus = 
-        Bus.request bus GetSubscriptions
-        >>- Domain.convertResponseToRssSubscriptions
+        |> Async.map3 Domain.uriWithFlagsToCommand'
+        >>= Bus.reply bus
+
+    let createNewSubscriptions' bus = Bus.reply bus GetNewSubscriptions' |> Async.bindAll (createNewSubscription' bus)
+    let private getNodesWithSubscription (x : Subscription) = RssParser.getNodes x.uri >>- fun snaps -> snaps, x
+
+    let loadNewSnapshot' bus =
+        Bus.reply bus GetSubscriptions' >>- List.filter (fun x -> x.provider = Provider.Rss)
         |> Async.bindAll getNodesWithSubscription
-        >>- Domain.snapshotsToCommands
-        |> Async.bindAll (Bus.publish bus)
-        |> Async.Ignore
+        >>- List.map (fun (snapshots, subId) r -> AddSnapshotsForSubscription'(snapshots, subId, r))
+        |> Async.bindAll (Bus.reply bus)
+        >>- ignore
+
+let start bus =
+    printfn "Start worker..."
+    Operations.createNewSubscriptions' bus
+    |> Async.next (Operations.loadNewSnapshot' bus)
+    |> I.executeInLoop 10000
 
 [<EntryPoint>]
-let main _ = 
-    printfn "Start worker..."
-    let bus = RabbitHutch.CreateBus("host=localhost;timeout=60")
-    Operations.createNewSubscriptions bus
-    |> Async.next (Operations.loadNewSnapshot bus)
-    |> I.executeInLoop 10000
-    0
+let main _ = failwith "TODO"

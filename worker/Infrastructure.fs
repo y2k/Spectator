@@ -1,5 +1,8 @@
-namespace Spectator
+namespace Spectator.Worker
 
+open Spectator
+
+[<System.Obsolete>]
 module Bus = 
     open EasyNetQ
     open Core

@@ -1,40 +1,42 @@
-﻿open System
+﻿module Spectator.Bot.App
+
+open System
 open EasyNetQ
 open Spectator.Core
 
-module Bus =
-    let request (bus: IBus) command =
-        bus.RequestAsync<Command, Responses>(command)
-        |> Async.AwaitTask
+type Cmd =
+    | GetUserSubscriptionsCmd of UserId
+    | PingCmd
+    | AddNewSubscriptionCmd of UserId * Uri
 
 module Domain =
-    let parse (message : Bot.Message) = 
+    let parse' (message : Bot.Message) =
         match String.split message.text ' ' with
-        | "/ls"  :: _        -> GetUserSubscriptions message.user
-        | "/add" :: url :: _ -> AddNewSubscription (message.user, Uri url) 
-        | _                  -> Ping
+        | "/ls" :: _ -> GetUserSubscriptionsCmd message.user
+        | "/add" :: url :: _ -> AddNewSubscriptionCmd(message.user, Uri url)
+        | _ -> PingCmd
 
-    let private subListToMessageResponse (newSubs : NewSubscription list) (subs : Subscription list) = 
+    let subListToMessageResponse (newSubs : NewSubscription list) (subs : Subscription list) =
         newSubs
         |> List.map (fun x -> sprintf "(Waiting) %O" x.uri)
         |> List.append (subs |> List.map (fun x -> string x.uri))
         |> List.fold (sprintf "%s\n- %s") "Your subscriptions: "
 
-    let responeToMessage = function 
-        | UserSubscriptions(newSubs, subs) -> subListToMessageResponse newSubs subs
-        | SubscriptionCreatedSuccessfull -> "Your subscription created"
-        | EmptyResponse -> "/ls - show your subscriptions\n/add [url] - add new subscription"
-        | _ -> "Unknow error"
-
 module Services =
-    let handleTelegramMessage bus message = 
-        printfn "handleTelegramMessage | %O" message
-        Domain.parse message
-        |> Bus.request bus
-        >>- Domain.responeToMessage
+    let handleTelegramMessage' bus message =
+        async {
+            printfn "handleTelegramMessage | %O" message
+            match Domain.parse' message with
+            | GetUserSubscriptionsCmd userId ->
+                return! Bus.reply bus (fun x -> GetUserSubscriptions'(userId, x))
+                        >>- uncurry Domain.subListToMessageResponse
+            | AddNewSubscriptionCmd(userId, uri) ->
+                return! Bus.reply bus (fun x -> AddNewSubscription'(userId, uri, x))
+                        >>- (fun _ -> "Your subscription created")
+            | PingCmd -> return "/ls - show your subscriptions\n/add [url] - add new subscription"
+        }
+
+let start bus = Bot.repl (Services.handleTelegramMessage' bus)
 
 [<EntryPoint>]
-let main _ =
-    use bus = RabbitHutch.CreateBus("host=localhost")
-    Bot.repl (Services.handleTelegramMessage bus)
-    0
+let main _ = failwith "TODO"
