@@ -1,12 +1,11 @@
 module Spectator.Server.App
 
+open System
 open EasyNetQ
 open MongoDB.Driver
 open Spectator.Core
-open System
 
 module DB = Spectator.Server.Infrastructure.MongoDb
-module Bus = Spectator.Server.Infrastructure.Bus
 
 module Repository =
     let getUserSubscriptions' (db : IMongoDatabase) userId =
@@ -66,6 +65,4 @@ let start() : MailboxProcessor<Command> =
         loop())
 
 [<EntryPoint>]
-let main _ =
-    failwith "TODO"
-    0
+let main _ = failwith "TODO"

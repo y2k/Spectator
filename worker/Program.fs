@@ -34,10 +34,12 @@ module Operations =
         >>- ignore
 
 let start bus =
-    printfn "Start worker..."
-    Operations.createNewSubscriptions' bus
-    |> Async.next (Operations.loadNewSnapshot' bus)
-    |> I.executeInLoop 10000
+    async {
+        printfn "Start worker..."
+        Operations.createNewSubscriptions' bus
+        |> Async.next (Operations.loadNewSnapshot' bus)
+        |> I.executeInLoop 10000
+    }
 
 [<EntryPoint>]
 let main _ = failwith "TODO"

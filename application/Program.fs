@@ -1,15 +1,8 @@
 ﻿open System
-open EasyNetQ
-open Spectator.Core
-open Spectator.Bot
-
-module W = Spectator.Worker.App
-module B = Spectator.Bot.App
-module S = Spectator.Server.App
 
 [<EntryPoint>]
 let main _ =
-    let inbox = S.start ()
-    W.start inbox
-    B.start inbox
+    let inbox = Spectator.Server.App.start()
+    Spectator.Worker.App.start inbox |> Async.Start
+    Spectator.Bot.App.start inbox |> Async.Start
     0

@@ -36,7 +36,7 @@ module Services =
             | PingCmd -> return "/ls - show your subscriptions\n/add [url] - add new subscription"
         }
 
-let start bus = Bot.repl (Services.handleTelegramMessage' bus)
+let start bus = async { Bot.repl (Services.handleTelegramMessage' bus) }
 
 [<EntryPoint>]
 let main _ = failwith "TODO"
