@@ -7,21 +7,21 @@ open Spectator.Core
 
 module DB = Spectator.Server.Infrastructure.MongoDb
 
-module Repository =
-    let getUserSubscriptions' (db : IMongoDatabase) userId =
-        let mySubs =
-            db.GetCollection<Subscription>("subscriptions") |> DB.findWithoutId (sprintf "{userId: \"%s\"}" userId)
-        let myNewSubs =
-            db.GetCollection<NewSubscription>("newSubscriptions")
-            |> DB.findWithoutId (sprintf "{userId: \"%s\"}" userId)
-        Async.zip myNewSubs mySubs id
+let SubscriptionsDb = "subscriptions"
+let NewSubscriptionsDb = "newSubscriptions"
 
-    let addNewSubscription' (db : IMongoDatabase) userId uri =
-        db.GetCollection<NewSubscription>("newSubscriptions")
+module Repository =
+    let getSubscriptions (db : IMongoDatabase) userId =
+        db.GetCollection<Subscription>(SubscriptionsDb) |> DB.findWithoutId (sprintf "{userId: \"%s\"}" userId)
+    let getNewSubscriptions (db : IMongoDatabase) userId =
+        db.GetCollection<NewSubscription>(NewSubscriptionsDb) |> DB.findWithoutId (sprintf "{userId: \"%s\"}" userId)
+
+    let addNewSubscription (db : IMongoDatabase) userId uri =
+        db.GetCollection<NewSubscription>(NewSubscriptionsDb)
         |> DB.insert { userId = userId
                        uri = uri }
 
-    let createSubscription' (db : IMongoDatabase) userId uri provider =
+    let createSubscription (db : IMongoDatabase) userId uri provider =
         async {
             let newSubs = db.GetCollection<NewSubscription>("newSubscriptions")
             do! sprintf "{uri: \"%O\", userId: \"%s\"}" uri userId
@@ -35,7 +35,7 @@ module Repository =
                             uri = uri } subs
         }
 
-    let addSnapshotsForSubscription' (db : IMongoDatabase) snapshots =
+    let addSnapshotsForSubscription (db : IMongoDatabase) snapshots =
         db.GetCollection<Snapshot>("snapshots") |> DB.insertMany snapshots
 
 let start() : MailboxProcessor<Command> =
@@ -46,18 +46,21 @@ let start() : MailboxProcessor<Command> =
             async {
                 let! cmd = inbox.Receive()
                 match cmd with
-                | AddSnapshotsForSubscription'(snapshots, _, r) ->
-                    do! Repository.addSnapshotsForSubscription' db snapshots
+                | AddSnapshotsForSubscription(snapshots, _, r) ->
+                    do! Repository.addSnapshotsForSubscription db snapshots
                     r.Reply()
-                | GetSubscriptions' _ -> failwith "TODO"
-                | CreateSubscription'(userId, uri, provider, r) ->
-                    do! Repository.createSubscription' db userId uri provider
+                | GetAllSubscriptions r -> let! subs = DB.findWithoutId'<Subscription> db SubscriptionsDb
+                                           r.Reply subs
+                | CreateSubscription(userId, uri, provider, r) ->
+                    do! Repository.createSubscription db userId uri provider
                     r.Reply()
-                | GetNewSubscriptions' _ -> failwith "TODO"
-                | GetUserSubscriptions'(userId, r) -> let! xs = Repository.getUserSubscriptions' db userId
-                                                      r.Reply xs
-                | AddNewSubscription'(userId, uri, r) ->
-                    do! Repository.addNewSubscription' db userId uri
+                | GetAllNewSubscriptions r -> let! subs = DB.findWithoutId'<NewSubscription> db NewSubscriptionsDb
+                                              r.Reply subs
+                | GetUserSubscriptions(userId, r) -> let! mySubs = Repository.getSubscriptions db userId
+                                                     let! myNewSubs = Repository.getNewSubscriptions db userId
+                                                     r.Reply(myNewSubs, mySubs)
+                | AddNewSubscription(userId, uri, r) ->
+                    do! Repository.addNewSubscription db userId uri
                     r.Reply()
                 | _ -> ()
                 do! loop()

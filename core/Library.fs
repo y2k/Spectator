@@ -94,30 +94,15 @@ type Snapshot =
 
 // EasyNetQ Commands
 type Command = 
-    | [<Obsolete>] GetNewSubscriptions
-    | [<Obsolete>] CreateSubscription of UserId * Uri * Provider
-    | [<Obsolete>] GetSubscriptions
-    | [<Obsolete>] AddSnapshotsForSubscription of Snapshot list * Subscription
     | AddSubscription // TODO:
     | AddSnapshot // TODO:
-    | [<Obsolete>] AddNewSubscription of UserId * Uri
-    | [<Obsolete>] GetUserSubscriptions of UserId
     | Ping
-
-    | AddSnapshotsForSubscription' of Snapshot list * Subscription * AsyncReplyChannel<unit>
-    | GetSubscriptions' of AsyncReplyChannel<Subscription list>
-    | CreateSubscription' of UserId * Uri * Provider * AsyncReplyChannel<unit>
-    | GetNewSubscriptions' of AsyncReplyChannel<NewSubscription list>
-    | GetUserSubscriptions' of UserId * AsyncReplyChannel<NewSubscription list * Subscription list>
-    | AddNewSubscription' of UserId * Uri * AsyncReplyChannel<unit>
-
-[<Obsolete>] 
-type Responses = 
-    | [<Obsolete>] Subscriptions of Subscription list
-    | [<Obsolete>] NewSubscriptions of NewSubscription list
-    | [<Obsolete>] UserSubscriptions of NewSubscription list * Subscription list
-    | [<Obsolete>] SubscriptionCreatedSuccessfull
-    | [<Obsolete>] EmptyResponse
+    | AddSnapshotsForSubscription of Snapshot list * Subscription * AsyncReplyChannel<unit>
+    | GetAllSubscriptions of AsyncReplyChannel<Subscription list>
+    | CreateSubscription of UserId * Uri * Provider * AsyncReplyChannel<unit>
+    | GetAllNewSubscriptions of AsyncReplyChannel<NewSubscription list>
+    | GetUserSubscriptions of UserId * AsyncReplyChannel<NewSubscription list * Subscription list>
+    | AddNewSubscription of UserId * Uri * AsyncReplyChannel<unit>
 
 module Auth = 
     let computeAuthKey (user : UserId) (seed : string) = 

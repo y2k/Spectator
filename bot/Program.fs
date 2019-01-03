@@ -28,10 +28,10 @@ module Services =
             printfn "handleTelegramMessage | %O" message
             match Domain.parse' message with
             | GetUserSubscriptionsCmd userId ->
-                return! Bus.reply bus (fun x -> GetUserSubscriptions'(userId, x))
+                return! Bus.reply bus (fun x -> GetUserSubscriptions(userId, x))
                         >>- uncurry Domain.subListToMessageResponse
             | AddNewSubscriptionCmd(userId, uri) ->
-                return! Bus.reply bus (fun x -> AddNewSubscription'(userId, uri, x))
+                return! Bus.reply bus (fun x -> AddNewSubscription(userId, uri, x))
                         >>- (fun _ -> "Your subscription created")
             | PingCmd -> return "/ls - show your subscriptions\n/add [url] - add new subscription"
         }
