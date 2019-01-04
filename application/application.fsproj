@@ -10,8 +10,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\core\core.fsproj" />
-    <ProjectReference Include="..\server\server.fsproj" />
     <ProjectReference Include="..\bot\bot.fsproj" />
     <ProjectReference Include="..\worker\worker.fsproj" />
   </ItemGroup>

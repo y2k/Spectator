@@ -5,6 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\core\core.fsproj" />
+    <ProjectReference Include="..\server\server.fsproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Infrastructure.fs" />

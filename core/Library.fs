@@ -19,6 +19,7 @@ module Operators =
     let inline flip f a b = f b a
     let inline curry f a b = f (a, b)
     let inline uncurry f (a, b) = f a b
+    let inline always a _ = a
 
 module Async = 
     let lift = async.Return

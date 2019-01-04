@@ -1,10 +1,8 @@
 ﻿module Spectator.Worker.App
 
-open EasyNetQ
-open Spectator
 open Spectator.Core
-open Spectator.Worker
 
+module R = Spectator.Server.App.Repository
 module I = Spectator.Worker.Infrastructure
 
 module Domain =
@@ -12,32 +10,30 @@ module Domain =
         match isRss with
         | true -> userId, uri, Provider.Rss
         | false -> userId, uri, Provider.Invalid
-        |> fun (userId, uri, p) r -> CreateSubscription(userId, uri, p, r)
 
-module Operations =
+module Services =
     let private subWithFlag (x : NewSubscription) = RssParser.isValid x.uri >>- fun isValid -> x.userId, x.uri, isValid
 
-    let createNewSubscription' bus newScription =
+    let createNewSubscription db newScription =
         newScription
         |> subWithFlag
         |> Async.map3 Domain.uriWithFlagsToCommand'
-        >>= Bus.reply bus
+        >>= fun (userId, uri, p) -> R.createSubscription db userId uri p
 
-    let createNewSubscriptions' bus = Bus.reply bus GetAllNewSubscriptions |> Async.bindAll (createNewSubscription' bus)
+    let createNewSubscriptions db = R.getNewSubscriptions' db |> Async.bindAll (createNewSubscription db)
     let private getNodesWithSubscription (x : Subscription) = RssParser.getNodes x.uri >>- fun snaps -> snaps, x
 
-    let loadNewSnapshot' bus =
-        Bus.reply bus GetAllSubscriptions >>- List.filter (fun x -> x.provider = Provider.Rss)
+    let loadNewSnapshot db =
+        R.getSubscriptions' db >>- List.filter (fun x -> x.provider = Provider.Rss)
         |> Async.bindAll getNodesWithSubscription
-        >>- List.map (fun (snapshots, subId) r -> AddSnapshotsForSubscription(snapshots, subId, r))
-        |> Async.bindAll (Bus.reply bus)
+        |> Async.bindAll (fun (snapshots, subId) -> R.addSnapshotsForSubscription db snapshots)
         >>- ignore
 
-let start bus =
+let start db =
     async {
         printfn "Start worker..."
-        Operations.createNewSubscriptions' bus
-        |> Async.next (Operations.loadNewSnapshot' bus)
+        Services.createNewSubscriptions db
+        |> Async.next (Services.loadNewSnapshot db)
         |> I.executeInLoop 10000
     }
 

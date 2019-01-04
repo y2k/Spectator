@@ -1,20 +1,21 @@
 ﻿module Spectator.Bot.App
 
 open System
-open EasyNetQ
 open Spectator.Core
+
+module R = Spectator.Server.App.Repository
 
 type Cmd =
     | GetUserSubscriptionsCmd of UserId
-    | PingCmd
+    | UnknownCmd
     | AddNewSubscriptionCmd of UserId * Uri
 
 module Domain =
-    let parse' (message : Bot.Message) =
+    let parse (message : Bot.Message) =
         match String.split message.text ' ' with
         | "/ls" :: _ -> GetUserSubscriptionsCmd message.user
         | "/add" :: url :: _ -> AddNewSubscriptionCmd(message.user, Uri url)
-        | _ -> PingCmd
+        | _ -> UnknownCmd
 
     let subListToMessageResponse (newSubs : NewSubscription list) (subs : Subscription list) =
         newSubs
@@ -23,20 +24,19 @@ module Domain =
         |> List.fold (sprintf "%s\n- %s") "Your subscriptions: "
 
 module Services =
-    let handleTelegramMessage' bus message =
+    let handleTelegramMessage' db message =
         async {
-            printfn "handleTelegramMessage | %O" message
-            match Domain.parse' message with
-            | GetUserSubscriptionsCmd userId ->
-                return! Bus.reply bus (fun x -> GetUserSubscriptions(userId, x))
-                        >>- uncurry Domain.subListToMessageResponse
+            match Domain.parse message with
+            | GetUserSubscriptionsCmd userId -> let! mySubs = R.getSubscriptions db userId
+                                                let! myNewSubs = R.getNewSubscriptions db userId
+                                                return Domain.subListToMessageResponse myNewSubs mySubs
             | AddNewSubscriptionCmd(userId, uri) ->
-                return! Bus.reply bus (fun x -> AddNewSubscription(userId, uri, x))
-                        >>- (fun _ -> "Your subscription created")
-            | PingCmd -> return "/ls - show your subscriptions\n/add [url] - add new subscription"
+                do! R.addNewSubscription db userId uri
+                return "Your subscription created"
+            | UnknownCmd -> return "/ls - show your subscriptions\n/add [url] - add new subscription"
         }
 
-let start bus = async { Bot.repl (Services.handleTelegramMessage' bus) }
+let start db = async { Bot.repl (Services.handleTelegramMessage' db) }
 
 [<EntryPoint>]
 let main _ = failwith "TODO"

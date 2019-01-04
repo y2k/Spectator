@@ -1,8 +1,8 @@
-﻿open System
+﻿open MongoDB.Driver
 
 [<EntryPoint>]
 let main _ =
-    let inbox = Spectator.Server.App.start()
-    Spectator.Worker.App.start inbox |> Async.Start
-    Spectator.Bot.App.start inbox |> Async.Start
+    let db = MongoClient("mongodb://localhost").GetDatabase("spectator")
+    Spectator.Worker.App.start db |> Async.Start
+    Spectator.Bot.App.start db |> Async.Start
     0
