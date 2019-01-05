@@ -7,12 +7,16 @@ module Repository =
 
     module DB = Spectator.Server.Infrastructure.MongoDb
 
-    let private SubscriptionsDb = "subscriptions"
-    let private NewSubscriptionsDb = "newSubscriptions"
+    let SubscriptionsDb = "subscriptions"
+    let NewSubscriptionsDb = "newSubscriptions"
+
     let getSubscriptions' db = DB.findWithoutId'<Subscription> db SubscriptionsDb
+
     let getNewSubscriptions' db = DB.findWithoutId'<NewSubscription> db NewSubscriptionsDb
+
     let getSubscriptions (db : IMongoDatabase) userId =
         db.GetCollection<Subscription>(SubscriptionsDb) |> DB.findWithoutId (sprintf "{userId: \"%s\"}" userId)
+
     let getNewSubscriptions (db : IMongoDatabase) userId =
         db.GetCollection<NewSubscription>(NewSubscriptionsDb) |> DB.findWithoutId (sprintf "{userId: \"%s\"}" userId)
 
