@@ -58,3 +58,5 @@ let private test chatName =
         |> Seq.toList
         |> fun xs -> printfn "History [%i]:\n%A" xs.Length xs
     }
+
+let isValid _ = async.Return false

@@ -4,62 +4,49 @@ open System
 
 [<AutoOpen>]
 module Operators =
+    let inline ( *> ) ma mb = async { let! _ = ma
+                                      return! mb }
     let inline (>>=) ma fm = async.Bind(ma, fm)
-    let inline (>>-) ma f = 
-        async {
-            let! a = ma
-            return f a
-        }
+    let inline (>>-) ma f = async { let! a = ma
+                                    return f a }
     let inline (>=>) mfa mfb a =
-        async {
-            let! b = mfa a
-            let! c = mfb b
-            return c
-        }
+        async { let! b = mfa a
+                let! c = mfb b
+                return c }
     let inline flip f a b = f b a
     let inline curry f a b = f (a, b)
     let inline uncurry f (a, b) = f a b
+    let inline uncurry' f (a, b, c) = f a b c
     let inline always a _ = a
 
-module Async = 
+module Async =
     let lift = async.Return
-    let map2 f a = 
+    let map2 f a = async { let! (a1, a2) = a
+                           return f a1 a2 }
+    let map3 f a = async { let! (a1, a2, a3) = a
+                           return f a1 a2 a3 }
+
+    let bindAll (f : 'a -> Async<'b>) (xsa : Async<'a list>) : Async<'b list> =
         async {
-            let! (a1, a2) = a
-            return f a1 a2
-        }
-    let map3 f a = 
-        async {
-            let! (a1, a2, a3) = a
-            return f a1 a2 a3
-        }
-    let bindAll (f : 'a -> Async<'b>) (xsa : Async<'a list>) : Async<'b list> = 
-        async { 
             let! xs = xsa
             return! xs
                     |> List.map f
                     |> Async.Parallel
                     >>- Array.toList
         }
-    let zip a1 a2 f = 
-        async { 
-            let! r1 = a1
-            let! r2 = a2
-            return f (r1, r2) 
-        }
-    let replaceWith x a = 
-        async { 
-            let! _ = a
-            return x 
-        }
-    let next a2 a = 
-        async { 
-            let! _ = a
-            return! a2
-        }
+
+    let zip a1 a2 f =
+        async { let! r1 = a1
+                let! r2 = a2
+                return f (r1, r2) }
+    let replaceWith x a = async { let! _ = a
+                                  return x }
+    let next a2 a = async { let! _ = a
+                            return! a2 }
 
 module Http =
     open System.Net.Http
+
     let download (uri : Uri) =
         async {
             use client = new HttpClient()
@@ -71,30 +58,32 @@ module String =
 
 // Types
 type UserId = string
+
 type SubscriptionId = Guid
 
-type Provider = 
+type Provider =
     | Invalid = 0
     | Rss = 1
+    | Telegram = 2
 
-type NewSubscription = 
+type NewSubscription =
     { userId : UserId
       uri : Uri }
 
-type Subscription = 
+type Subscription =
     { id : SubscriptionId
       userId : UserId
       provider : Provider
       uri : Uri }
 
-type Snapshot = 
+type Snapshot =
     { subscriptionId : SubscriptionId
       id : string
       title : string
       uri : Uri }
 
 // EasyNetQ Commands
-type Command = 
+type Command =
     | AddSubscription // TODO:
     | AddSnapshot // TODO:
     | Ping
@@ -105,8 +94,8 @@ type Command =
     | GetUserSubscriptions of UserId * AsyncReplyChannel<NewSubscription list * Subscription list>
     | AddNewSubscription of UserId * Uri * AsyncReplyChannel<unit>
 
-module Auth = 
-    let computeAuthKey (user : UserId) (seed : string) = 
+module Auth =
+    let computeAuthKey (user : UserId) (seed : string) =
         let md5 = System.Security.Cryptography.MD5.Create()
         seed + user
         |> System.Text.Encoding.UTF8.GetBytes
@@ -114,5 +103,4 @@ module Auth =
         |> System.Convert.ToBase64String
 
 module Bus =
-    let reply (bus' : MailboxProcessor<Command>) f =
-        bus'.PostAndAsyncReply (fun x -> f x)
+    let reply (bus' : MailboxProcessor<Command>) f = bus'.PostAndAsyncReply(fun x -> f x)
