@@ -10,4 +10,4 @@ module Infrastructure =
                 do! Async.Sleep time
                 do! doWork()
             }
-        doWork() |> Async.RunSynchronously
+        doWork()

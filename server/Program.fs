@@ -7,6 +7,7 @@ module Repository =
 
     module DB = Spectator.Server.Infrastructure.MongoDb
 
+    let SnapshotsDb = "snapshots"
     let SubscriptionsDb = "subscriptions"
     let NewSubscriptionsDb = "newSubscriptions"
 
