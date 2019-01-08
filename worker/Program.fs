@@ -54,8 +54,7 @@ type MongoDbEffects<'a> =
     | ChangeDbEffect of (CollectionName * BsonDocument) list * (CollectionName * MongoDbFilter) list * (unit -> 'a)
 
 type SyncEffects =
-    | ProviderIsValidEffect of Provider * Uri * (bool -> SyncEffects)
-    | ProviderIsValidEffect' of (Provider * Uri) list * (bool list -> SyncEffects)
+    | ProviderIsValidEffect of (Provider * Uri) list * (bool list -> SyncEffects)
     | LoadSnapshotsEff of (Provider * Uri) list * (Snapshot list list -> SyncEffects)
     | MongoDbEffects of MongoDbEffects<SyncEffects>
     | NoneEffect
@@ -79,29 +78,35 @@ module Domain =
 
     let syncSnapshots = MongoDbEffects <| ReadEffect([ R.SubscriptionsDb, null ], loadSnapshots)
 
-    let saveSub p (sub : NewSubscription) isValid =
-        if isValid then
-            let x =
-                { id = System.Guid.NewGuid() // FIXME:
-                  userId = sub.userId
-                  provider = p
-                  uri = sub.uri }
-
-            let del = R.NewSubscriptionsDb, (sprintf "{uri: \"%O\"}" sub.uri)
-            let wr = R.SubscriptionsDb, BsonDocument.Create x
-            MongoDbEffects <| ChangeDbEffect([ wr ], [ del ], always NoneEffect)
-        else NoneEffect
+    let toSubscription (requests : (Provider * Uri) list) (results : bool list) (newSub : NewSubscription) =
+        let provider =
+            requests
+            |> List.zip results
+            |> List.tryPick (fun (suc, (p, uri)) ->
+                   if uri = newSub.uri && suc then Some p
+                   else None)
+        { id = System.Guid.NewGuid() // FIXME:
+          userId = newSub.userId
+          provider = provider |> Option.defaultValue Provider.Invalid
+          uri = newSub.uri }
 
     let saveSubs newSubs requests results =
-        failwith "???"
+        let ws =
+            newSubs
+            |> List.map (toSubscription requests results)
+            |> List.map (fun x -> R.SubscriptionsDb, BsonDocument.Create x)
+
+        let del = newSubs |> List.map (fun x -> R.NewSubscriptionsDb, sprintf "{uri: \"%O\"}" x.uri)
+        MongoDbEffects <| ChangeDbEffect(ws, del, always NoneEffect)
 
     let convertToRssSub (xs : BsonDocument list list) =
         let newSubs = xs.[0] |> List.map BsonSerializer.Deserialize<NewSubscription>
+
         let requests =
             newSubs
             |> List.map (fun x -> x.uri)
             |> List.allPairs [ Provider.Rss; Provider.Telegram ]
-        ProviderIsValidEffect' (requests, saveSubs newSubs requests)
+        ProviderIsValidEffect(requests, saveSubs newSubs requests)
 
     let syncSubscriptions = MongoDbEffects <| ReadEffect([ R.NewSubscriptionsDb, null ], convertToRssSub)
 
@@ -140,7 +145,7 @@ module Services =
     let rec executeEff db eff =
         async {
             match eff with
-            | ProviderIsValidEffect(_, _, _) -> failwith "???"
+            | ProviderIsValidEffect _ -> failwith "???"
             | LoadSnapshotsEff _ -> failwith "???"
             | MongoDbEffects dbEff -> do! MongoDBService.executeEffects db dbEff >>= executeEff db
             | NoneEffect -> ()
