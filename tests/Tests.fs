@@ -8,12 +8,12 @@ module P = Spectator.Worker.RssParser
 module I = Infrastructure
 
 [<Fact>]
-let ``parsing wikipedia atom is success``() = 
+let ``parsing wikipedia atom is success``() =
     let xs = I.loadFromDisk "wiki_atom.xml" |> P.Parser.getNodes
     Assert.Equal(50, xs.Length)
-    
+
 [<Fact>]
-let ``parse simple rss``() = 
+let ``parse simple rss``() =
     let xs = I.loadFromDisk "rss1.xml" |> P.Parser.getNodes
     Assert.Equal([ { subscriptionId = Guid.Empty
                      id = "http://liftoff.msfc.nasa.gov/2003/06/03.html#item573"
@@ -31,15 +31,13 @@ let ``parse simple rss``() =
                      id = "http://liftoff.msfc.nasa.gov/2003/05/20.html#item570"
                      title = "Astronauts' Dirty Laundry"
                      uri = Uri "http://liftoff.msfc.nasa.gov/news/2003/news-laundry.asp" } ]
-                 |> box,
-                 xs |> box)
+                 |> box, xs |> box)
 
 [<Fact>]
-let ``parse simple atom``() = 
+let ``parse simple atom``() =
     let xs = I.loadFromDisk "atom1.xml" |> P.Parser.getNodes
     Assert.Equal([ { subscriptionId = Guid.Empty
                      id = "urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa6a"
                      title = "Фотографии из Африки"
                      uri = Uri("http://example.org/2003/12/13/atom03") } ]
-                 |> box,
-                 xs |> box)
+                 |> box, xs |> box)
