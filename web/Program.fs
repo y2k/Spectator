@@ -5,12 +5,12 @@ open Suave.Swagger.FunnyDsl
 open Spectator.Core
 
 [<CLIMutable>]
-type TimeResult = { items : Snapshot [] }
+type TimeResult =
+    { items : Snapshot [] }
 
-let snapshots = 
-    MODEL { items = [||] }
+let snapshots = MODEL { items = [||] }
 
-let api = 
+let api =
     swagger {
         for route in getting (simpleUrl "/snapshots" |> thenReturns snapshots) do
             yield route |> addResponse 200 "Featured snapshots" (Some typeof<TimeResult>)
@@ -18,6 +18,6 @@ let api =
     }
 
 [<EntryPoint>]
-let main _ = 
+let main _ =
     startWebServer defaultConfig api.App
     0

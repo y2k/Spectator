@@ -11,6 +11,7 @@ type Cmd =
     | AddNewSubscriptionCmd of UserId * Uri
 
 type CollectionName = string
+
 type MongoDbFilter = string
 
 type MongoDbEffect =

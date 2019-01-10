@@ -30,6 +30,7 @@ let private makeClient() : TelegramBotClient =
     TelegramBotClient(token)
 #endif
 
+
 let private listerForMessages() =
     let bot = makeClient()
 
