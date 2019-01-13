@@ -12,43 +12,6 @@ type CollectionName = string
 
 type MongoDbFilter = string
 
-module Service' =
-    open MongoDB.Bson
-    open MongoDB.Bson.Serialization
-
-    type Msg =
-        | InitMsg
-        | NewSubLoadedMsg of BsonDocument list list
-        | IsValidResultMsg of NewSubscription * bool
-        | EmptyMsg
-
-    type Cmd =
-        | ReadCmd of (CollectionName * MongoDbFilter) list * (BsonDocument list list -> Msg)
-        | ProviderIsValidCmd of Provider * string * (bool -> Msg)
-        | ActionDbCmd of (string * obj) list * (string * string) list * Msg
-        | EmptyCmd
-
-    let handle =
-        function
-        | InitMsg -> ReadCmd([ R.NewSubscriptionsDb, null ], NewSubLoadedMsg)
-        | NewSubLoadedMsg xs ->
-            let subs = xs.[0] |> List.map BsonSerializer.Deserialize<NewSubscription>
-            let sub = subs.[0]
-            ProviderIsValidCmd(Provider.Rss, string sub.uri, curry IsValidResultMsg sub)
-        | IsValidResultMsg(sub, isValid) ->
-            if isValid then
-                let x =
-                    { id = System.Guid.NewGuid() // FIXME:
-                      userId = sub.userId
-                      provider = Provider.Rss
-                      uri = sub.uri }
-
-                let save = [ R.SubscriptionsDb, x :> obj ]
-                let delete = [ R.NewSubscriptionsDb, (sprintf "{uri: \"%O\"}" (failwith "???")) ]
-                ActionDbCmd(save, delete, EmptyMsg)
-            else failwith "???"
-        | EmptyMsg -> EmptyCmd
-
 type MongoDbEffects<'a> =
     | ReadEffect of (CollectionName * MongoDbFilter) list * (BsonDocument list list -> 'a)
     | ChangeDbEffect of (CollectionName * BsonDocument) list * (CollectionName * MongoDbFilter) list * (unit -> 'a)
