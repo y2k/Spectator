@@ -56,3 +56,5 @@ let private test chatName =
     }
 
 let isValid _ = async.Return false
+
+let getNodes _ = async.Return []

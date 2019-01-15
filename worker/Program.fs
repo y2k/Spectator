@@ -108,8 +108,24 @@ module Services =
     let rec executeEff db eff =
         async {
             match eff with
-            | ProviderIsValidEffect _ -> failwith "???"
-            | LoadSnapshotsEff _ -> failwith "???"
+            | ProviderIsValidEffect(ps, f) ->
+                do! ps
+                    |> List.map (fun (p, url) ->
+                           match p with
+                           | Provider.Rss -> RssParser.isValid url
+                           | Provider.Telegram -> TelegramParser.isValid url
+                           | _ -> failwithf "%O" p)
+                    |> Async.Parallel
+                    >>= (List.ofArray >> f >> executeEff db)
+            | LoadSnapshotsEff(ps, f) ->
+                do! ps
+                    |> List.map (fun (p, url) ->
+                           match p with
+                           | Provider.Rss -> RssParser.getNodes url
+                           | Provider.Telegram -> TelegramParser.getNodes url
+                           | _ -> failwithf "%O" p)
+                    |> Async.Parallel
+                    >>= (List.ofArray >> f >> executeEff db)
             | MongoDbEffects dbEff -> do! MongoDBService.executeEffects db dbEff >>= executeEff db
             | NoneEffect -> ()
         }
