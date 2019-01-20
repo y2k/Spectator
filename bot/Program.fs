@@ -15,7 +15,7 @@ type CollectionName = string
 type MongoDbFilter = string
 
 type MongoDbEffect =
-    | WriteDb of CollectionName * value : obj
+    | WriteDb of CollectionName * value : MongoDB.Bson.BsonDocument
     | ReadDb of (CollectionName * MongoDbFilter) list
 
 module Domain =
@@ -45,8 +45,9 @@ module Domain =
                 subListToMessageResponse myNewSubs mySubs
         | AddNewSubscriptionCmd(userId, uri) ->
             WriteDb(R.NewSubscriptionsDb,
-                    { userId = userId
-                      uri = uri }), fun _ -> "Your subscription created"
+                    { id = Guid.NewGuid()
+                      userId = userId
+                      uri = uri }.ToBsonDocument()), fun _ -> "Your subscription created"
         | UnknownCmd -> ReadDb [], fun _ -> "/ls - show your subscriptions\n/add [url] - add new subscription"
 
 module Services =
@@ -54,8 +55,8 @@ module Services =
     open MongoDB.Driver
     open MongoDB.Bson
 
-    let readList (x : IFindFluent<BsonDocument, BsonDocument>) =
-        x.Project(ProjectionDefinition<_, _>.op_Implicit "{_id: 0}").ToListAsync()
+    let private readList (x : IFindFluent<BsonDocument, BsonDocument>) =
+        x.Project(ProjectionDefinition<_, _>.op_Implicit "{}").ToListAsync()
         |> Async.AwaitTask
         >>- Seq.toList
 

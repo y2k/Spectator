@@ -19,7 +19,8 @@ module Repository =
 
     let addNewSubscription (db : IMongoDatabase) userId uri =
         db.GetCollection<NewSubscription>(NewSubscriptionsDb)
-        |> DB.insert { userId = userId
+        |> DB.insert { id = Guid.NewGuid()
+                       userId = userId
                        uri = uri }
 
     let createSubscription (db : IMongoDatabase) userId uri provider =

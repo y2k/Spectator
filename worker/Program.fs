@@ -14,7 +14,7 @@ type MongoDbFilter = string
 
 type MongoDbEffects<'a> =
     | ReadEffect of (CollectionName * MongoDbFilter) list * (BsonDocument list list -> 'a)
-    | ChangeDbEffect of (CollectionName * obj) list * (CollectionName * MongoDbFilter) list * (unit -> 'a)
+    | ChangeDbEffect of (CollectionName * BsonDocument) list * (CollectionName * MongoDbFilter) list * (unit -> 'a)
 
 type SyncEffects =
     | ProviderIsValidEffect of (Provider * Uri) list * (bool list -> SyncEffects)
@@ -23,13 +23,14 @@ type SyncEffects =
     | NoneEffect
 
 module Domain =
+    open MongoDB.Bson
     open MongoDB.Bson.Serialization
 
     let saveSnapshots (subs : Subscription list) (snaps : Snapshot list list) =
         subs
         |> List.zip snaps
         |> List.collect (fun (sn, s) -> sn |> List.map (fun c -> { c with subscriptionId = s.id }))
-        |> List.map (fun x -> R.SnapshotsDb, box x)
+        |> List.map (fun x -> R.SnapshotsDb, x.ToBsonDocument())
         |> fun xs -> ChangeDbEffect(xs, [], always NoneEffect)
         |> MongoDbEffects
 
@@ -57,7 +58,7 @@ module Domain =
         let ws =
             newSubs
             |> List.map (toSubscription requests results)
-            |> List.map (fun x -> R.SubscriptionsDb, box x)
+            |> List.map (fun x -> R.SubscriptionsDb, x.ToBsonDocument())
 
         let del = newSubs |> List.map (fun x -> R.NewSubscriptionsDb, sprintf "{uri: \"%O\"}" x.uri)
         MongoDbEffects <| ChangeDbEffect(ws, del, always NoneEffect)
@@ -79,18 +80,20 @@ module MongoDBService =
     open MongoDB.Bson
     open MongoDB.Bson.Serialization
 
-    let private delete (db : IMongoDatabase) colName (filter : MongoDbFilter) = 
+    let private delete (db : IMongoDatabase) colName (filter : MongoDbFilter) =
         async {
             let col = db.GetCollection colName
-            do! col.DeleteManyAsync (FilterDefinition.op_Implicit filter)
-                |> Async.AwaitTask |> Async.Ignore
+            do! col.DeleteManyAsync(FilterDefinition.op_Implicit filter)
+                |> Async.AwaitTask
+                |> Async.Ignore
         }
 
+    let private readList (x : IFindFluent<BsonDocument, BsonDocument>) =
+        x.Project(ProjectionDefinition<_, _>.op_Implicit "{}").ToListAsync()
+        |> Async.AwaitTask
+        >>- Seq.toList
+
     let rec executeEffects (db : IMongoDatabase) (eff : MongoDbEffects<'a>) =
-        let readList (x : IFindFluent<BsonDocument, BsonDocument>) =
-            x.Project(ProjectionDefinition<_, _>.op_Implicit "{_id: 0}").ToListAsync()
-            |> Async.AwaitTask
-            >>- Seq.toList
         async {
             match eff with
             | ReadEffect(readers, callback) ->

@@ -69,7 +69,8 @@ type Provider =
     | Telegram = 2
 
 type NewSubscription =
-    { userId : UserId
+    { id : SubscriptionId
+      userId : UserId
       uri : Uri }
 
 type Subscription =
