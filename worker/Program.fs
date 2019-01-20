@@ -14,7 +14,7 @@ type MongoDbFilter = string
 
 type MongoDbEffects<'a> =
     | ReadEffect of (CollectionName * MongoDbFilter) list * (BsonDocument list list -> 'a)
-    | ChangeDbEffect of (CollectionName * BsonDocument) list * (CollectionName * MongoDbFilter) list * (unit -> 'a)
+    | ChangeDbEffect of (CollectionName * obj) list * (CollectionName * MongoDbFilter) list * (unit -> 'a)
 
 type SyncEffects =
     | ProviderIsValidEffect of (Provider * Uri) list * (bool list -> SyncEffects)
@@ -29,7 +29,7 @@ module Domain =
         subs
         |> List.zip snaps
         |> List.collect (fun (sn, s) -> sn |> List.map (fun c -> { c with subscriptionId = s.id }))
-        |> List.map (fun x -> R.SnapshotsDb, BsonDocument.Create x)
+        |> List.map (fun x -> R.SnapshotsDb, box x)
         |> fun xs -> ChangeDbEffect(xs, [], always NoneEffect)
         |> MongoDbEffects
 
@@ -41,7 +41,7 @@ module Domain =
 
     let syncSnapshots = MongoDbEffects <| ReadEffect([ R.SubscriptionsDb, null ], loadSnapshots)
 
-    let toSubscription (requests : (Provider * Uri) list) (results : bool list) (newSub : NewSubscription) =
+    let private toSubscription (requests : (Provider * Uri) list) (results : bool list) (newSub : NewSubscription) =
         let provider =
             requests
             |> List.zip results
@@ -57,7 +57,7 @@ module Domain =
         let ws =
             newSubs
             |> List.map (toSubscription requests results)
-            |> List.map (fun x -> R.SubscriptionsDb, BsonDocument.Create x)
+            |> List.map (fun x -> R.SubscriptionsDb, box x)
 
         let del = newSubs |> List.map (fun x -> R.NewSubscriptionsDb, sprintf "{uri: \"%O\"}" x.uri)
         MongoDbEffects <| ChangeDbEffect(ws, del, always NoneEffect)
@@ -79,6 +79,13 @@ module MongoDBService =
     open MongoDB.Bson
     open MongoDB.Bson.Serialization
 
+    let private delete (db : IMongoDatabase) colName (filter : MongoDbFilter) = 
+        async {
+            let col = db.GetCollection colName
+            do! col.DeleteManyAsync (FilterDefinition.op_Implicit filter)
+                |> Async.AwaitTask |> Async.Ignore
+        }
+
     let rec executeEffects (db : IMongoDatabase) (eff : MongoDbEffects<'a>) =
         let readList (x : IFindFluent<BsonDocument, BsonDocument>) =
             x.Project(ProjectionDefinition<_, _>.op_Implicit "{_id: 0}").ToListAsync()
@@ -88,17 +95,25 @@ module MongoDBService =
             match eff with
             | ReadEffect(readers, callback) ->
                 let! xs = readers
-                          |> List.map (fun (collection, filter) ->
+                          |> List.map (fun (collection, f) ->
                                  let col = db.GetCollection<BsonDocument> collection
+
+                                 let filter =
+                                     if String.IsNullOrEmpty f then "{}"
+                                     else f
                                  col.Find(FilterDefinition.op_Implicit filter) |> readList)
                           |> Async.Parallel
                           >>- List.ofArray
                 return callback xs
-            | ChangeDbEffect(ws, _, callback) ->
+            | ChangeDbEffect(ws, dels, callback) ->
                 do! ws
                     |> List.map (fun (collection, value) ->
                            let col = db.GetCollection collection
                            col.InsertOneAsync value |> Async.AwaitTask)
+                    |> Async.Parallel
+                    |> Async.Ignore
+                do! dels
+                    |> List.map (uncurry (delete db))
                     |> Async.Parallel
                     |> Async.Ignore
                 return callback()
@@ -116,7 +131,9 @@ module Services =
                            | Provider.Telegram -> TelegramParser.isValid url
                            | _ -> failwithf "%O" p)
                     |> Async.Parallel
-                    >>= (List.ofArray >> f >> executeEff db)
+                    >>= (List.ofArray
+                         >> f
+                         >> executeEff db)
             | LoadSnapshotsEff(ps, f) ->
                 do! ps
                     |> List.map (fun (p, url) ->
@@ -125,7 +142,9 @@ module Services =
                            | Provider.Telegram -> TelegramParser.getNodes url
                            | _ -> failwithf "%O" p)
                     |> Async.Parallel
-                    >>= (List.ofArray >> f >> executeEff db)
+                    >>= (List.ofArray
+                         >> f
+                         >> executeEff db)
             | MongoDbEffects dbEff -> do! MongoDBService.executeEffects db dbEff >>= executeEff db
             | NoneEffect -> ()
         }
