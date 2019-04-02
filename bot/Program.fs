@@ -1,7 +1,7 @@
 ﻿module Spectator.Bot.App
 
-open System
 open Spectator.Core
+open System
 
 module R = Spectator.Server.App.Repository
 
@@ -47,13 +47,13 @@ module Domain =
             WriteDb(R.NewSubscriptionsDb,
                     { id = Guid.NewGuid()
                       userId = userId
-                      uri = uri }.ToBsonDocument()), fun _ -> "Your subscription created"
+                      uri = uri } .ToBsonDocument()), fun _ -> "Your subscription created"
         | UnknownCmd -> ReadDb [], fun _ -> "/ls - show your subscriptions\n/add [url] - add new subscription"
 
 module Services =
     open MongoDB
-    open MongoDB.Driver
     open MongoDB.Bson
+    open MongoDB.Driver
 
     let private readList (x : IFindFluent<BsonDocument, BsonDocument>) =
         x.Project(ProjectionDefinition<_, _>.op_Implicit "{}").ToListAsync()

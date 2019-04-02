@@ -1,15 +1,13 @@
 ﻿module Spectator.Worker.App
 
-open System
 open Spectator.Core
+open System
 
 module R = Spectator.Server.App.Repository
 module I = Spectator.Worker.Infrastructure
 
 type BsonDocument = MongoDB.Bson.BsonDocument
-
 type CollectionName = string
-
 type MongoDbFilter = string
 
 type MongoDbEffects<'a> =
@@ -50,6 +48,8 @@ module Domain =
                    if uri = newSub.uri && suc then Some p
                    else None)
         { id = System.Guid.NewGuid() // FIXME:
+
+
           userId = newSub.userId
           provider = provider |> Option.defaultValue Provider.Invalid
           uri = newSub.uri }
@@ -74,11 +74,11 @@ module Domain =
 
     let syncSubscriptions = MongoDbEffects <| ReadEffect([ R.NewSubscriptionsDb, null ], convertToRssSub)
 
-module MongoDBService =
+module MongoInterpretator =
     open MongoDB
-    open MongoDB.Driver
     open MongoDB.Bson
     open MongoDB.Bson.Serialization
+    open MongoDB.Driver
 
     let private delete (db : IMongoDatabase) colName (filter : MongoDbFilter) =
         async {
@@ -122,7 +122,7 @@ module MongoDBService =
                 return callback()
         }
 
-module Services =
+module Interpretator =
     let rec executeEff db eff =
         async {
             match eff with
@@ -148,13 +148,13 @@ module Services =
                     >>= (List.ofArray
                          >> f
                          >> executeEff db)
-            | MongoDbEffects dbEff -> do! MongoDBService.executeEffects db dbEff >>= executeEff db
+            | MongoDbEffects dbEff -> do! MongoInterpretator.executeEffects db dbEff >>= executeEff db
             | NoneEffect -> ()
         }
 
 let start db =
     printfn "Start synchronizer..."
-    Services.executeEff db Domain.syncSubscriptions *> Services.executeEff db Domain.syncSnapshots
+    Interpretator.executeEff db Domain.syncSubscriptions *> Interpretator.executeEff db Domain.syncSnapshots
     |> I.executeInLoop 10000
 
 [<EntryPoint>]

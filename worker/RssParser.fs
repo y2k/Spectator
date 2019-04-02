@@ -1,10 +1,10 @@
 module Spectator.Worker.RssParser
 
+open Spectator.Core
 open System
 open System.Xml
 open System.Xml.Linq
 open System.Xml.XPath
-open Spectator.Core
 
 module Parser =
     let private ns = XmlNamespaceManager(NameTable())
