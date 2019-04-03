@@ -24,7 +24,7 @@ module Domain =
     open MongoDB.Bson
     open MongoDB.Bson.Serialization
 
-    let saveSnapshots (subs : Subscription list) (snaps : Snapshot list list) =
+    let saveSnapshots (subs : Subscription list) (snaps : Snapshot list list) : SyncEffects =
         subs
         |> List.zip snaps
         |> List.collect (fun (sn, s) -> sn |> List.map (fun c -> { c with subscriptionId = s.id }))
@@ -32,13 +32,14 @@ module Domain =
         |> fun xs -> ChangeDbEffect(xs, [], always NoneEffect)
         |> MongoDbEffects
 
-    let loadSnapshots (bsonSubs : BsonDocument list list) =
+    let loadSnapshots (bsonSubs : BsonDocument list list) : SyncEffects =
         let subs = bsonSubs.[0] |> List.map BsonSerializer.Deserialize<Subscription>
         subs
         |> List.map (fun x -> x.provider, x.uri)
         |> flip (curry LoadSnapshotsEff) (saveSnapshots subs)
 
-    let syncSnapshots = MongoDbEffects <| ReadEffect([ R.SubscriptionsDb, null ], loadSnapshots)
+    let syncSnapshots : SyncEffects = 
+        MongoDbEffects <| ReadEffect([ R.SubscriptionsDb, null ], loadSnapshots)
 
     let private toSubscription (requests : (Provider * Uri) list) (results : bool list) (newSub : NewSubscription) =
         let provider =
@@ -48,13 +49,11 @@ module Domain =
                    if uri = newSub.uri && suc then Some p
                    else None)
         { id = System.Guid.NewGuid() // FIXME:
-
-
           userId = newSub.userId
           provider = provider |> Option.defaultValue Provider.Invalid
           uri = newSub.uri }
 
-    let saveSubs newSubs requests results =
+    let saveSubs newSubs requests results : SyncEffects =
         let ws =
             newSubs
             |> List.map (toSubscription requests results)
@@ -63,7 +62,7 @@ module Domain =
         let del = newSubs |> List.map (fun x -> R.NewSubscriptionsDb, sprintf "{uri: \"%O\"}" x.uri)
         MongoDbEffects <| ChangeDbEffect(ws, del, always NoneEffect)
 
-    let convertToRssSub (xs : BsonDocument list list) =
+    let convertToRssSub (xs : BsonDocument list list) : SyncEffects =
         let newSubs = xs.[0] |> List.map BsonSerializer.Deserialize<NewSubscription>
 
         let requests =
@@ -72,7 +71,8 @@ module Domain =
             |> List.allPairs [ Provider.Rss; Provider.Telegram ]
         ProviderIsValidEffect(requests, saveSubs newSubs requests)
 
-    let syncSubscriptions = MongoDbEffects <| ReadEffect([ R.NewSubscriptionsDb, null ], convertToRssSub)
+    let syncSubscriptions : SyncEffects = 
+        MongoDbEffects <| ReadEffect([ R.NewSubscriptionsDb, null ], convertToRssSub)
 
 module MongoInterpretator =
     open MongoDB
