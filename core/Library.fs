@@ -18,6 +18,7 @@ module Operators =
     let inline uncurry f (a, b) = f a b
     let inline uncurry' f (a, b, c) = f a b c
     let inline always a _ = a
+    let inline (^) f a = f a
 
 module Async =
     let lift = async.Return
@@ -85,18 +86,6 @@ type Snapshot =
       title : string
       uri : Uri }
 
-// EasyNetQ Commands
-type Command =
-    | AddSubscription // TODO:
-    | AddSnapshot // TODO:
-    | Ping
-    | AddSnapshotsForSubscription of Snapshot list * Subscription * AsyncReplyChannel<unit>
-    | GetAllSubscriptions of AsyncReplyChannel<Subscription list>
-    | CreateSubscription of UserId * Uri * Provider * AsyncReplyChannel<unit>
-    | GetAllNewSubscriptions of AsyncReplyChannel<NewSubscription list>
-    | GetUserSubscriptions of UserId * AsyncReplyChannel<NewSubscription list * Subscription list>
-    | AddNewSubscription of UserId * Uri * AsyncReplyChannel<unit>
-
 module Auth =
     let computeAuthKey (user : UserId) (seed : string) =
         let md5 = System.Security.Cryptography.MD5.Create()
@@ -105,5 +94,7 @@ module Auth =
         |> md5.ComputeHash
         |> System.Convert.ToBase64String
 
-module Bus =
-    let reply (bus' : MailboxProcessor<Command>) f = bus'.PostAndAsyncReply(fun x -> f x)
+module MongoCollections =
+    let SnapshotsDb = "snapshots"
+    let SubscriptionsDb = "subscriptions"
+    let NewSubscriptionsDb = "newSubscriptions"

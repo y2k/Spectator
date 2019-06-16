@@ -2,160 +2,125 @@
 
 open Spectator.Core
 open System
+module R = Spectator.Core.MongoCollections
 
-module R = Spectator.Server.App.Repository
-module I = Spectator.Worker.Infrastructure
+type CoEffectDb = {
+    subscriptions : Subscription list
+    newSubscriptions : NewSubscription list
+ }
 
-type BsonDocument = MongoDB.Bson.BsonDocument
-type CollectionName = string
-type MongoDbFilter = string
-
-type MongoDbEffects<'a> =
-    | ReadEffect of (CollectionName * MongoDbFilter) list * (BsonDocument list list -> 'a)
-    | ChangeDbEffect of (CollectionName * BsonDocument) list * (CollectionName * MongoDbFilter) list * (unit -> 'a)
-
-type SyncEffects =
-    | ProviderIsValidEffect of (Provider * Uri) list * (bool list -> SyncEffects)
-    | LoadSnapshotsEff of (Provider * Uri) list * (Snapshot list list -> SyncEffects)
-    | MongoDbEffects of MongoDbEffects<SyncEffects>
-    | NoneEffect
-
-module Domain =
+module private Domain =
     open MongoDB.Bson
-    open MongoDB.Bson.Serialization
 
-    let saveSnapshots (subs : Subscription list) (snaps : Snapshot list list) : SyncEffects =
-        subs
+    let saveSnapshots (db : CoEffectDb) (snaps : Snapshot list list) =
+        db.subscriptions
         |> List.zip snaps
         |> List.collect (fun (sn, s) -> sn |> List.map (fun c -> { c with subscriptionId = s.id }))
         |> List.map (fun x -> R.SnapshotsDb, x.ToBsonDocument())
-        |> fun xs -> ChangeDbEffect(xs, [], always NoneEffect)
-        |> MongoDbEffects
 
-    let loadSnapshots (bsonSubs : BsonDocument list list) : SyncEffects =
-        let subs = bsonSubs.[0] |> List.map BsonSerializer.Deserialize<Subscription>
-        subs
+    let loadSnapshots (db : CoEffectDb) =
+        db.subscriptions
         |> List.map (fun x -> x.provider, x.uri)
-        |> flip (curry LoadSnapshotsEff) (saveSnapshots subs)
 
-    let syncSnapshots : SyncEffects = 
-        MongoDbEffects <| ReadEffect([ R.SubscriptionsDb, null ], loadSnapshots)
+    let saveSubs (db : CoEffectDb) requests results =
+        let toSubscription (newSub : NewSubscription) =
+            let provider =
+                requests
+                |> List.zip results
+                |> List.tryPick (fun (suc, (p, uri)) -> if uri = newSub.uri && suc then Some p else None)
+            { id = System.Guid.NewGuid()
+              userId = newSub.userId
+              provider = provider |> Option.defaultValue Provider.Invalid
+              uri = newSub.uri }
+        let ws = List.map toSubscription db.newSubscriptions
+        { db with newSubscriptions = []; subscriptions = db.subscriptions @ ws }
 
-    let private toSubscription (requests : (Provider * Uri) list) (results : bool list) (newSub : NewSubscription) =
-        let provider =
-            requests
-            |> List.zip results
-            |> List.tryPick (fun (suc, (p, uri)) ->
-                   if uri = newSub.uri && suc then Some p
-                   else None)
-        { id = System.Guid.NewGuid() // FIXME:
-          userId = newSub.userId
-          provider = provider |> Option.defaultValue Provider.Invalid
-          uri = newSub.uri }
+    let loadNewSubs (db : CoEffectDb) =
+        db.newSubscriptions
+        |> List.map (fun x -> x.uri)
+        |> List.allPairs [ Provider.Rss; Provider.Telegram ]
 
-    let saveSubs newSubs requests results : SyncEffects =
-        let ws =
-            newSubs
-            |> List.map (toSubscription requests results)
-            |> List.map (fun x -> R.SubscriptionsDb, x.ToBsonDocument())
-
-        let del = newSubs |> List.map (fun x -> R.NewSubscriptionsDb, sprintf "{uri: \"%O\"}" x.uri)
-        MongoDbEffects <| ChangeDbEffect(ws, del, always NoneEffect)
-
-    let convertToRssSub (xs : BsonDocument list list) : SyncEffects =
-        let newSubs = xs.[0] |> List.map BsonSerializer.Deserialize<NewSubscription>
-
-        let requests =
-            newSubs
-            |> List.map (fun x -> x.uri)
-            |> List.allPairs [ Provider.Rss; Provider.Telegram ]
-        ProviderIsValidEffect(requests, saveSubs newSubs requests)
-
-    let syncSubscriptions : SyncEffects = 
-        MongoDbEffects <| ReadEffect([ R.NewSubscriptionsDb, null ], convertToRssSub)
-
-module MongoInterpretator =
-    open MongoDB
+module private Effects =
     open MongoDB.Bson
-    open MongoDB.Bson.Serialization
     open MongoDB.Driver
 
-    let private delete (db : IMongoDatabase) colName (filter : MongoDbFilter) =
-        async {
-            let col = db.GetCollection colName
-            do! col.DeleteManyAsync(FilterDefinition.op_Implicit filter)
-                |> Async.AwaitTask
-                |> Async.Ignore
-        }
+    let isValid ps =
+        ps
+        |> List.map (fun (p, url) ->
+            match p with
+            | Provider.Rss -> RssParser.isValid url
+            | Provider.Telegram -> TelegramParser.isValid url
+            | _ -> failwithf "%O" p)
+        |> Async.Parallel >>- fun xs -> ps, List.ofArray xs
 
-    let private readList (x : IFindFluent<BsonDocument, BsonDocument>) =
-        x.Project(ProjectionDefinition<_, _>.op_Implicit "{}").ToListAsync()
+    let loadSnapshots ps =
+        ps
+        |> List.map (fun (p, url) ->
+            match p with
+            | Provider.Rss -> RssParser.getNodes url
+            | Provider.Telegram -> TelegramParser.getNodes url
+            | _ -> failwithf "%O" p)
+        |> Async.Parallel >>- List.ofArray
+
+    let saveToDb (db : IMongoDatabase) (ws : (string * BsonDocument) list) =
+        ws
+        |> List.map (fun (collection, value) ->
+                let col = db.GetCollection collection
+                col.InsertOneAsync value |> Async.AwaitTask)
+        |> Async.Parallel |> Async.Ignore
+
+    let loadFromMongo (db : IMongoDatabase) collection =
+        let col = db.GetCollection<BsonDocument> collection
+        col.Find(FilterDefinition.op_Implicit "{}")
+        |> fun x -> x.Project(ProjectionDefinition<_, _>.op_Implicit "{}").ToListAsync()
         |> Async.AwaitTask
         >>- Seq.toList
 
-    let rec executeEffects (db : IMongoDatabase) (eff : MongoDbEffects<'a>) =
+    let deleteFromCol (db : IMongoDatabase) col =
         async {
-            match eff with
-            | ReadEffect(readers, callback) ->
-                let! xs = readers
-                          |> List.map (fun (collection, f) ->
-                                 let col = db.GetCollection<BsonDocument> collection
-
-                                 let filter =
-                                     if String.IsNullOrEmpty f then "{}"
-                                     else f
-                                 col.Find(FilterDefinition.op_Implicit filter) |> readList)
-                          |> Async.Parallel
-                          >>- List.ofArray
-                return callback xs
-            | ChangeDbEffect(ws, dels, callback) ->
-                do! ws
-                    |> List.map (fun (collection, value) ->
-                           let col = db.GetCollection collection
-                           col.InsertOneAsync value |> Async.AwaitTask)
-                    |> Async.Parallel
-                    |> Async.Ignore
-                do! dels
-                    |> List.map (uncurry (delete db))
-                    |> Async.Parallel
-                    |> Async.Ignore
-                return callback()
+            return!
+                db.GetCollection col
+                |> fun x -> x.DeleteManyAsync(FilterDefinition.op_Implicit "{}")
+                |> Async.AwaitTask |> Async.Ignore
         }
 
-module Interpretator =
-    let rec executeEff db eff =
+module private Services =
+    open MongoDB.Bson
+    let dbContext mongo (f : CoEffectDb -> CoEffectDb Async) : unit Async =
         async {
-            match eff with
-            | ProviderIsValidEffect(ps, f) ->
-                do! ps
-                    |> List.map (fun (p, url) ->
-                           match p with
-                           | Provider.Rss -> RssParser.isValid url
-                           | Provider.Telegram -> TelegramParser.isValid url
-                           | _ -> failwithf "%O" p)
-                    |> Async.Parallel
-                    >>= (List.ofArray
-                         >> f
-                         >> executeEff db)
-            | LoadSnapshotsEff(ps, f) ->
-                do! ps
-                    |> List.map (fun (p, url) ->
-                           match p with
-                           | Provider.Rss -> RssParser.getNodes url
-                           | Provider.Telegram -> TelegramParser.getNodes url
-                           | _ -> failwithf "%O" p)
-                    |> Async.Parallel
-                    >>= (List.ofArray
-                         >> f
-                         >> executeEff db)
-            | MongoDbEffects dbEff -> do! MongoInterpretator.executeEffects db dbEff >>= executeEff db
-            | NoneEffect -> ()
+            let! subs = Effects.loadFromMongo mongo R.SubscriptionsDb
+            let! newSubs = Effects.loadFromMongo mongo R.NewSubscriptionsDb
+            let db = { subscriptions = subs; newSubscriptions = newSubs }
+            let! newDb = f db
+            if newDb <> db then
+                do! Effects.deleteFromCol mongo R.NewSubscriptionsDb
+                do! newDb.newSubscriptions
+                    |> List.map ^ fun x -> R.NewSubscriptionsDb, x.ToBsonDocument()
+                    |> Effects.saveToDb mongo
+                do! Effects.deleteFromCol mongo R.SubscriptionsDb
+                do! newDb.subscriptions
+                    |> List.map ^ fun x -> R.SubscriptionsDb, x.ToBsonDocument()
+                    |> Effects.saveToDb mongo
         }
+
+    let init mongo =
+        (dbContext mongo ^ fun db ->
+            Domain.loadNewSubs db
+            |> Effects.isValid
+            >>- uncurry (Domain.saveSubs db))
+        *>
+        (dbContext mongo ^ fun db ->
+            Domain.loadSnapshots db
+            |> Effects.loadSnapshots
+            >>- Domain.saveSnapshots db
+            >>= Effects.saveToDb mongo
+            >>- fun _ -> db)
 
 let start db =
-    printfn "Start synchronizer..."
-    Interpretator.executeEff db Domain.syncSubscriptions *> Interpretator.executeEff db Domain.syncSnapshots
-    |> I.executeInLoop 10000
-
-[<EntryPoint>]
-let main _ = failwith "TODO"
+    async {
+        while true do
+            printfn "Start syncing..."
+            do! Services.init db
+            printfn "End syncing, waiting..."
+            do! Async.Sleep 10_000
+    }
