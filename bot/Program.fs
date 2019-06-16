@@ -3,7 +3,7 @@
 open Spectator.Core
 open System
 
-module R = Spectator.Server.App.Repository
+module R = Spectator.Core.MongoCollections
 
 type Cmd =
     | GetUserSubscriptionsCmd of UserId
@@ -80,6 +80,3 @@ module Services =
         }
 
 let start db = async { Bot.repl (Services.handleTelegramMessage db) }
-
-[<EntryPoint>]
-let main _ = failwith "TODO"
