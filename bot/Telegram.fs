@@ -7,8 +7,8 @@ open Spectator.Core
 open MihaZupan
 
 type Message =
-    { text : String
-      user : String }
+    { text : string
+      user : string }
 
 type TelegramResponse =
     | SuccessResponse
@@ -30,19 +30,7 @@ let private makeClient() : TelegramBotClient =
     TelegramBotClient(token)
 #endif
 
-
-let private listerForMessages() =
-    let bot = makeClient()
-
-    let result =
-        bot.OnUpdate
-        |> Observable.map (fun args ->
-               { text = args.Update.Message.Text |? ""
-                 user = string args.Update.Message.From.Id })
-    bot.StartReceiving()
-    result
-
-let private sendToTelegramSingle (user : String) message =
+let private sendToTelegramSingle (user : string) message =
     let bot = makeClient()
     bot.SendTextMessageAsync(ChatId.op_Implicit user, message, parseMode = Enums.ParseMode.Html)
     |> (Async.AwaitTask >> Async.Catch)
@@ -52,11 +40,15 @@ let private sendToTelegramSingle (user : String) message =
         BotBlockedResponse
     | Choice2Of2 _ -> UnknownErrorResponse
 
-let repl handler =
-    let handle (message : Message) =
-        handler message
-        >>= sendToTelegramSingle message.user
-        |> (Async.Ignore >> Async.Start)
-    listerForMessages() |> Observable.add handle
-    printfn "Listening for updates..."
-    Threading.Thread.Sleep -1
+let repl f =
+    async {
+        let bot = makeClient()
+        bot.OnUpdate
+        |> Event.map ^ fun args -> { text = args.Update.Message.Text |? ""; user = string args.Update.Message.From.Id }
+        |> Event.add ^ fun msg -> f msg >>= sendToTelegramSingle msg.user |> (Async.Ignore >> Async.Start)
+
+        bot.StartReceiving()
+
+        do! Async.OnCancel (fun () -> bot.StopReceiving()) |> Async.Ignore
+        do! Async.Sleep System.Int32.MaxValue
+    }

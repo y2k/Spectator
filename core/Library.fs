@@ -98,3 +98,7 @@ module MongoCollections =
     let SnapshotsDb = "snapshots"
     let SubscriptionsDb = "subscriptions"
     let NewSubscriptionsDb = "newSubscriptions"
+
+type CoEffectDb =
+    { subscriptions : Subscription list
+      newSubscriptions : NewSubscription list }

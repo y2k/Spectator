@@ -1,16 +1,10 @@
 ﻿module Spectator.Worker.App
 
 open Spectator.Core
-open System
-module R = Spectator.Core.MongoCollections
-
-type CoEffectDb = {
-    subscriptions : Subscription list
-    newSubscriptions : NewSubscription list
- }
 
 module private Domain =
     open MongoDB.Bson
+    module R = Spectator.Core.MongoCollections
 
     let saveSnapshots (db : CoEffectDb) (snaps : Snapshot list list) =
         db.subscriptions
@@ -51,7 +45,7 @@ module private Effects =
             | Provider.Rss -> RssParser.isValid url
             | Provider.Telegram -> TelegramParser.isValid url
             | _ -> failwithf "%O" p)
-        |> Async.Parallel >>- fun xs -> ps, List.ofArray xs
+        |> Async.Parallel >>- fun xs -> List.ofArray xs
 
     let loadSnapshots ps =
         ps
@@ -69,52 +63,25 @@ module private Effects =
                 col.InsertOneAsync value |> Async.AwaitTask)
         |> Async.Parallel |> Async.Ignore
 
-    let loadFromMongo (db : IMongoDatabase) collection =
-        let col = db.GetCollection<BsonDocument> collection
-        col.Find(FilterDefinition.op_Implicit "{}")
-        |> fun x -> x.Project(ProjectionDefinition<_, _>.op_Implicit "{}").ToListAsync()
-        |> Async.AwaitTask
-        >>- Seq.toList
-
-    let deleteFromCol (db : IMongoDatabase) col =
-        async {
-            return!
-                db.GetCollection col
-                |> fun x -> x.DeleteManyAsync(FilterDefinition.op_Implicit "{}")
-                |> Async.AwaitTask |> Async.Ignore
-        }
-
 module private Services =
     open MongoDB.Bson
-    let dbContext mongo (f : CoEffectDb -> CoEffectDb Async) : unit Async =
-        async {
-            let! subs = Effects.loadFromMongo mongo R.SubscriptionsDb
-            let! newSubs = Effects.loadFromMongo mongo R.NewSubscriptionsDb
-            let db = { subscriptions = subs; newSubscriptions = newSubs }
-            let! newDb = f db
-            if newDb <> db then
-                do! Effects.deleteFromCol mongo R.NewSubscriptionsDb
-                do! newDb.newSubscriptions
-                    |> List.map ^ fun x -> R.NewSubscriptionsDb, x.ToBsonDocument()
-                    |> Effects.saveToDb mongo
-                do! Effects.deleteFromCol mongo R.SubscriptionsDb
-                do! newDb.subscriptions
-                    |> List.map ^ fun x -> R.SubscriptionsDb, x.ToBsonDocument()
-                    |> Effects.saveToDb mongo
-        }
+    open Spectator.Infrastructure
 
     let init mongo =
-        (dbContext mongo ^ fun db ->
-            Domain.loadNewSubs db
-            |> Effects.isValid
-            >>- uncurry (Domain.saveSubs db))
-        *>
-        (dbContext mongo ^ fun db ->
-            Domain.loadSnapshots db
-            |> Effects.loadSnapshots
-            >>- Domain.saveSnapshots db
-            >>= Effects.saveToDb mongo
-            >>- fun _ -> db)
+        async {
+            let! subReqs = dbContext mongo ^ fun db -> db, Domain.loadNewSubs db
+            let! subResps = Effects.isValid subReqs
+
+            do! dbContext mongo ^ fun db -> Domain.saveSubs db subReqs subResps, ()
+            
+            let! newSnapshots = 
+                dbContext mongo ^ fun db -> db, Domain.loadSnapshots db
+                >>= Effects.loadSnapshots
+
+            do! dbContext mongo 
+                    ^ fun db -> db, Domain.saveSnapshots db newSnapshots
+                >>= Effects.saveToDb mongo
+        }
 
 let start db =
     async {

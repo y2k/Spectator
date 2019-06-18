@@ -6,6 +6,11 @@
 
   <ItemGroup>
     <Compile Include="Library.fs" />
+    <Compile Include="Infrastructure.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MongoDB.Driver" Version="2.7.2" />
   </ItemGroup>
 
 </Project>
