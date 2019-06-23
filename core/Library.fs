@@ -19,6 +19,8 @@ module Operators =
     let inline uncurry' f (a, b, c) = f a b c
     let inline always a _ = a
     let inline (^) f a = f a
+    let inline (|||) a b = 
+        if String.IsNullOrEmpty a then b else a
 
 module Async =
     let lift = async.Return

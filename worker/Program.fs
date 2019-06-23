@@ -89,5 +89,5 @@ let start db =
             printfn "Start syncing..."
             do! Services.init db
             printfn "End syncing, waiting..."
-            do! Async.Sleep 10_000
+            do! Async.Sleep 600_000
     }
