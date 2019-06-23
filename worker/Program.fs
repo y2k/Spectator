@@ -70,13 +70,17 @@ module private Services =
     let init mongo =
         async {
             let! subReqs = dbContext mongo ^ fun db -> db, Domain.loadNewSubs db
+            printfn "LOG :: new subscriptions requests %A" subReqs
+
             let! subResps = Effects.isValid subReqs
+            printfn "LOG :: new subscriptions results %A" subResps
 
             do! dbContext mongo ^ fun db -> Domain.saveSubs db subReqs subResps, ()
             
             let! newSnapshots = 
                 dbContext mongo ^ fun db -> db, Domain.loadSnapshots db
                 >>= Effects.loadSnapshots
+            printfn "LOG :: new snapshots %A" newSnapshots
 
             do! dbContext mongo 
                     ^ fun db -> db, Domain.saveSnapshots db newSnapshots
