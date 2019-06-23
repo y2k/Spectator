@@ -35,7 +35,7 @@ module private Domain =
             { db with newSubscriptions = sub :: db.newSubscriptions },
             "Your subscription created"
         | UnknownCmd ->
-            db, "/ls - show your subscriptions\n/add [url] - add new subscription"
+            db, "/ls - Show your subscriptions\n/add [url] - Add new subscription"
 
 open Spectator.Core
 open Spectator.Infrastructure
