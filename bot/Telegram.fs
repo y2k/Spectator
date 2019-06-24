@@ -15,7 +15,7 @@ type TelegramResponse =
     | BotBlockedResponse
     | UnknownErrorResponse
 
-let private makeClient() : TelegramBotClient =
+let makeClient() : TelegramBotClient =
     let token = Environment.GetEnvironmentVariable "TELEGRAM_TOKEN"
     let hostPost = String.split (Environment.GetEnvironmentVariable "PROXY_HOST") ':'
     if List.isEmpty hostPost then
