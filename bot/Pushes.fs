@@ -6,25 +6,61 @@ open Spectator.Core
 open Telegram.Bot
 open Telegram.Bot.Types
 module R = Spectator.Core.MongoCollections
+module I = Spectator.Infrastructure
 
-let private mkMessage snaps : string = failwith "???"
+module private Domain =
+    let mkMessage (sub : Subscription) (snaps : Snapshot list) : string =
+        let prefix = sprintf "Update for '%O' (%i):" sub.uri (List.length snaps)
+        snaps
+        |> List.fold (fun s x -> sprintf "%s\n%s\n%s" s x.title (string x.uri)) prefix
 
-let private sendMessage bot id message : exn option Async = failwith "???"
+    let getUpdates (subscriptions : Subscription list) snaps lastId =
+        let actualSnaps = snaps |> List.takeWhile ^ fun x -> x.id <> lastId
+        subscriptions
+        |> List.map ^ fun sub ->
+            sub,
+            actualSnaps
+            |> List.filter ^ fun x -> x.subscriptionId = sub.id
+        |> List.filter ^ fun (_, snaps) -> snaps |> (List.isEmpty >> not)
 
-let main (db : CoEffectDb) (snaps : Snapshot list) =
+    let handleUpdate db snaps (topSnapshotIdOpt : string option) =
+        if (List.isEmpty snaps) then [], topSnapshotIdOpt
+        else if Option.isNone topSnapshotIdOpt then [], Some snaps.[0].id
+        else
+            let topSnapId = Option.get topSnapshotIdOpt
+            let botCommands =
+                getUpdates db.subscriptions snaps topSnapId
+                |> List.map ^ fun (sub, snaps) -> sub.userId, mkMessage sub snaps
+            botCommands, Some snaps.[0].id
+
+let private querySnapshots (mdb : IMongoDatabase) =
+    mdb.GetCollection<Snapshot>("snapshots")
+        .Find(FilterDefinition.op_Implicit "{}")
+        .Sort(SortDefinition.op_Implicit "{$natural:-1}")
+        .Limit(System.Nullable 100)
+        .ToListAsync() |> Async.AwaitTask
+    >>- Seq.toList
+
+let private sendToTelegramBroacase botCommands =
+    botCommands
+    |> List.map ^ uncurry Bot.sendToTelegramSingle
+    |> Async.Parallel
+    >>- Array.filter ^ (<>) Bot.SuccessResponse
+    >>- Array.iter ^ printfn "LOG :: can't send message %O"
+
+let main mdb =
     async {
-        let bot = Bot.makeClient()
+        let topSnapshotId : string option ref = ref None
 
-        let! results =
-            db.subscriptions
-            |> List.map ^ fun x -> {| sub = x; snaps = snaps |> List.filter ^ fun i -> i.subscriptionId = x.id |}
-            |> List.filter ^ fun x -> x.snaps |> (List.isEmpty >> not)
-            |> List.map ^ fun x -> sendMessage bot (x.sub.userId) (mkMessage x.snaps)
-            |> Async.Parallel
+        while true do
+            let! snaps = querySnapshots mdb
 
-        let xs =
-            results
-            |> Array.choose id
+            let! (botCommands, newTopSnapId) = 
+                I.dbContext mdb ^ fun db -> db, Domain.handleUpdate db snaps !topSnapshotId
 
-        return ()
+            topSnapshotId := newTopSnapId
+
+            do! sendToTelegramBroacase botCommands
+
+            do! Async.Sleep 5_000
     }

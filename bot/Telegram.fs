@@ -13,7 +13,7 @@ type Message =
 type TelegramResponse =
     | SuccessResponse
     | BotBlockedResponse
-    | UnknownErrorResponse
+    | UnknownErrorResponse of exn
 
 let makeClient() : TelegramBotClient =
     let token = Environment.GetEnvironmentVariable "TELEGRAM_TOKEN"
@@ -25,7 +25,7 @@ let makeClient() : TelegramBotClient =
         let proxy = HttpToSocks5Proxy(hostPost.[0], int hostPost.[1], auth.[0], auth.[1])
         TelegramBotClient(token, proxy)
 
-let private sendToTelegramSingle (user : string) message =
+let sendToTelegramSingle (user : string) message =
     let bot = makeClient()
     bot.SendTextMessageAsync(ChatId.op_Implicit user, message, parseMode = Enums.ParseMode.Html)
     |> (Async.AwaitTask >> Async.Catch)
@@ -33,7 +33,7 @@ let private sendToTelegramSingle (user : string) message =
     | Choice1Of2 _ -> SuccessResponse
     | Choice2Of2(:? AggregateException as ae) when (ae.InnerException :? Exceptions.ApiRequestException) ->
         BotBlockedResponse
-    | Choice2Of2 _ -> UnknownErrorResponse
+    | Choice2Of2 e -> UnknownErrorResponse e
 
 let repl f =
     async {

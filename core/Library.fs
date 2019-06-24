@@ -104,3 +104,5 @@ module MongoCollections =
 type CoEffectDb =
     { subscriptions : Subscription list
       newSubscriptions : NewSubscription list }
+
+type 'a CoEffect = (CoEffectDb -> CoEffectDb * 'a) -> 'a Async

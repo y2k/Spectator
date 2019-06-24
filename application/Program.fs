@@ -7,5 +7,6 @@ let main _ =
 
     Spectator.Worker.App.start db |> Async.Start
     Spectator.Bot.App.start db |> Async.Start
+    Spectator.Pushes.main db |> Async.Start
     System.Threading.Thread.Sleep -1
     0
