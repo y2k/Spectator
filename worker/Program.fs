@@ -37,6 +37,7 @@ module private Domain =
 module private Effects =
     open MongoDB.Bson
     open MongoDB.Driver
+    module L = Spectator.Infrastructure.Log
 
     let isValid ps =
         ps
@@ -56,12 +57,13 @@ module private Effects =
             | _ -> failwithf "%O" p)
         |> Async.Parallel >>- List.ofArray
 
-    let saveToDb (db : IMongoDatabase) (ws : (string * BsonDocument) list) =
+    let saveToDb (db : IMongoDatabase) (ws : (_ * BsonDocument) list) =
         ws
-        |> List.map (fun (collection, value) ->
-                let col = db.GetCollection collection
-                col.InsertOneAsync value |> Async.AwaitTask)
-        |> Async.Parallel |> Async.Ignore
+        |> List.groupBy fst
+        |> List.map ^ fun (cn, xs) ->
+                let col = db.GetCollection cn
+                xs |> List.map snd |> col.InsertManyAsync |> Async.AwaitTask
+        |> Async.seq |> Async.Ignore
 
 module private Services =
     open MongoDB.Bson
@@ -69,29 +71,29 @@ module private Services =
 
     let init mongo =
         async {
-            let! subReqs = dbContext mongo ^ fun db -> db, Domain.loadNewSubs db
+            let! subReqs = runCfx mongo ^ fun db -> db, Domain.loadNewSubs db
             printfn "LOG :: new subscriptions requests %A" subReqs
 
             let! subResps = Effects.isValid subReqs
             printfn "LOG :: new subscriptions results %A" subResps
 
-            do! dbContext mongo ^ fun db -> Domain.saveSubs db subReqs subResps, ()
-            
-            let! newSnapshots = 
-                dbContext mongo ^ fun db -> db, Domain.loadSnapshots db
+            do! runCfx mongo ^ fun db -> Domain.saveSubs db subReqs subResps, ()
+
+            let! newSnapshots =
+                runCfx mongo ^ fun db -> db, Domain.loadSnapshots db
                 >>= Effects.loadSnapshots
             printfn "LOG :: new snapshots %A" newSnapshots
 
-            do! dbContext mongo 
+            do! runCfx mongo
                     ^ fun db -> db, Domain.saveSnapshots db newSnapshots
                 >>= Effects.saveToDb mongo
         }
 
-let start db =
+let rec start db =
     async {
-        while true do
-            printfn "Start syncing..."
-            do! Services.init db
-            printfn "End syncing, waiting..."
-            do! Async.Sleep 600_000
+        printfn "Start syncing..."
+        do! Services.init db
+        printfn "End syncing, waiting..."
+        do! Async.Sleep 600_000
+        do! start db
     }

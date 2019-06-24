@@ -19,25 +19,23 @@ module Operators =
     let inline uncurry' f (a, b, c) = f a b c
     let inline always a _ = a
     let inline (^) f a = f a
-    let inline (|||) a b = 
+    let inline (|||) a b =
         if String.IsNullOrEmpty a then b else a
 
 module Async =
+    let rec seq = function
+    | [] -> async.Return []
+    | h :: t ->
+        async {
+            let! b = h
+            let! c = seq t
+            return b :: c
+        }
     let lift = async.Return
     let map2 f a = async { let! (a1, a2) = a
                            return f a1 a2 }
     let map3 f a = async { let! (a1, a2, a3) = a
                            return f a1 a2 a3 }
-
-    let bindAll (f : 'a -> Async<'b>) (xsa : Async<'a list>) : Async<'b list> =
-        async {
-            let! xs = xsa
-            return! xs
-                    |> List.map f
-                    |> Async.Parallel
-                    >>- Array.toList
-        }
-
     let zip a1 a2 f =
         async { let! r1 = a1
                 let! r2 = a2

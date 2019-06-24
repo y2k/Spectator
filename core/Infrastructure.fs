@@ -2,6 +2,14 @@ module Spectator.Infrastructure
 
 open Spectator.Core
 
+module Log =
+    let log m x =
+        printfn "LOG :: %s" m
+        x
+    let logf fm x =
+        printfn "LOG :: %s" <| fm x
+        x
+
 module private Effects =
     open MongoDB.Bson
     open MongoDB.Driver
@@ -11,7 +19,7 @@ module private Effects =
         |> List.map (fun (collection, value) ->
                 let col = db.GetCollection collection
                 col.InsertOneAsync value |> Async.AwaitTask)
-        |> Async.Parallel |> Async.Ignore
+        |> Async.seq |> Async.Ignore
 
     let loadFromMongo (db : IMongoDatabase) collection =
         let col = db.GetCollection<BsonDocument> collection
@@ -31,7 +39,7 @@ module private Effects =
 module R = Spectator.Core.MongoCollections
 open MongoDB.Bson
 
-let dbContext mongo (f : CoEffectDb -> CoEffectDb * _) =
+let runCfx mongo (f : CoEffectDb -> CoEffectDb * _) =
     async {
         let! subs = Effects.loadFromMongo mongo R.SubscriptionsDb
         let! newSubs = Effects.loadFromMongo mongo R.NewSubscriptionsDb
