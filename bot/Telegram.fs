@@ -15,7 +15,7 @@ type TelegramResponse =
     | BotBlockedResponse
     | UnknownErrorResponse of exn
 
-let makeClient() : TelegramBotClient =
+let private makeClient() =
     let token = Environment.GetEnvironmentVariable "TELEGRAM_TOKEN"
     let hostPost = String.split (Environment.GetEnvironmentVariable "PROXY_HOST") ':'
     if List.isEmpty hostPost then
@@ -44,6 +44,6 @@ let repl f =
 
         bot.StartReceiving()
 
-        do! Async.OnCancel (fun () -> bot.StopReceiving()) |> Async.Ignore
+        do! Async.OnCancel(fun () -> bot.StopReceiving()) |> Async.Ignore
         do! Async.Sleep System.Int32.MaxValue
     }
