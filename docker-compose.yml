@@ -1,6 +1,6 @@
 version: '3'
 services:
   mongodb:
-    image: mongo:3.4-jessie
+    image: mongo:4.0.10-xenial
     ports:
     - "27017:27017"

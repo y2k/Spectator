@@ -51,4 +51,4 @@ open Spectator.Infrastructure
 
 let start db =
     Bot.repl ^ fun msg ->
-        dbContext db (Domain.handle msg)
+        runCfx db (Domain.handle msg)
