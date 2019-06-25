@@ -15,19 +15,14 @@ type TelegramResponse =
     | BotBlockedResponse
     | UnknownErrorResponse
 
-let inline private (|?) (x : 'a) (def : 'a) =
-    if isNull x then def
-    else x
-
 let private makeClient() =
     let token = Environment.GetEnvironmentVariable "TELEGRAM_TOKEN"
-    let hostPost = String.split (Environment.GetEnvironmentVariable "PROXY_HOST") ':'
-    if List.isEmpty hostPost then
-        TelegramBotClient(token)
-    else
+    match String.split (Environment.GetEnvironmentVariable "PROXY_HOST" ||| "") ':' with
+    | host :: port :: _ ->
         let auth = String.split (Environment.GetEnvironmentVariable "PROXY_AUTH") ':'
-        let proxy = HttpToSocks5Proxy(hostPost.[0], int hostPost.[1], auth.[0], auth.[1])
+        let proxy = HttpToSocks5Proxy(host, int port, auth.[0], auth.[1])
         TelegramBotClient(token, proxy)
+    | _ -> TelegramBotClient token
 
 let private sendToTelegramSingle (user : string) message =
     let bot = makeClient()
@@ -43,7 +38,7 @@ let repl f =
     async {
         let bot = makeClient()
         bot.OnUpdate
-        |> Event.map ^ fun args -> { text = args.Update.Message.Text |? ""; user = string args.Update.Message.From.Id }
+        |> Event.map ^ fun args -> { text = args.Update.Message.Text ||| ""; user = string args.Update.Message.From.Id }
         |> Event.add ^ fun msg -> f msg >>= sendToTelegramSingle msg.user |> (Async.Ignore >> Async.Start)
 
         bot.StartReceiving()
