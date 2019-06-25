@@ -57,13 +57,13 @@ module private Effects =
             | _ -> failwithf "%O" p)
         |> Async.Parallel >>- List.ofArray
 
-    let saveToDb (db : IMongoDatabase) (ws : (_ * BsonDocument) list) =
-        ws
-        |> List.groupBy fst
-        |> List.map ^ fun (cn, xs) ->
+    let saveToDb (db : IMongoDatabase) (commands : (_ * BsonDocument) list) =
+        commands
+        |> List.map ^ fun (cn, doc) ->
+            Async.wrapTask ^ fun _ -> 
                 let col = db.GetCollection cn
-                xs |> List.map snd |> col.InsertManyAsync |> Async.AwaitTask
-        |> Async.seq |> Async.Ignore
+                col.InsertOneAsync doc
+        |> Async.seq |> Async.Ignore // TODO: логировать важные ошибки
 
 module private Services =
     open MongoDB.Bson

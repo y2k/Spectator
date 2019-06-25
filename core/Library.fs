@@ -23,14 +23,18 @@ module Operators =
         if String.IsNullOrEmpty a then b else a
 
 module Async =
-    let rec seq = function
-    | [] -> async.Return []
-    | h :: t ->
+    let wrapTask (f : unit -> System.Threading.Tasks.Task) =
         async {
-            let! b = h
-            let! c = seq t
-            return b :: c
+            do! f () |> Async.AwaitTask
         }
+    let rec seq = function
+        | [] -> async.Return []
+        | h :: t ->
+            async {
+                let! b = h |> Async.Catch >>- function | Choice1Of2 x -> Ok x | Choice2Of2 x -> Error x
+                let! c = seq t
+                return b :: c
+            }
     let lift = async.Return
     let map2 f a = async { let! (a1, a2) = a
                            return f a1 a2 }
