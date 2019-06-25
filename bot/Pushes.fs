@@ -10,9 +10,9 @@ module I = Spectator.Infrastructure
 
 module private Domain =
     let mkMessage (sub : Subscription) (snaps : Snapshot list) : string =
-        let prefix = sprintf "Update for '%O' (%i):" sub.uri (List.length snaps)
+        let prefix = sprintf "Update for <code>%O</code> (%i):" sub.uri (List.length snaps)
         snaps
-        |> List.fold (fun s x -> sprintf "%s\n%s\n%s" s x.title (string x.uri)) prefix
+        |> List.fold (fun s x -> sprintf "%s\n- <a href=\"%O\">%s</a>" s x.uri x.title) prefix
 
     let getUpdates (subscriptions : Subscription list) snaps lastId =
         let actualSnaps = snaps |> List.takeWhile ^ fun x -> x.id <> lastId
