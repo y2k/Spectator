@@ -56,7 +56,7 @@ let main mdb =
             let! snaps = querySnapshots mdb
 
             let! (botCommands, newTopSnapId) = 
-                I.dbContext mdb ^ fun db -> db, Domain.handleUpdate db snaps !topSnapshotId
+                I.runCfx mdb ^ fun db -> db, Domain.handleUpdate db snaps !topSnapshotId
 
             topSnapshotId := newTopSnapId
 
