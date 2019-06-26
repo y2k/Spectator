@@ -2,6 +2,8 @@ FROM mcr.microsoft.com/dotnet/core/sdk:2.2.300-alpine3.9
 
 WORKDIR /app
 COPY . /app
+
+RUN dotnet test
 RUN dotnet publish -c Release -r linux-x64 --self-contained false
 
 FROM mcr.microsoft.com/dotnet/core/runtime:2.2.5-alpine3.9
