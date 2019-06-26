@@ -24,6 +24,24 @@ module ClientFactory =
                  Configs.auth.Split(":").[1])
         proxyClient.CreateConnection(host, port)
 
+type TelegramState = { client : TelegramClient; code : string }
+
+let private state = ref { client = null; code = "" }
+
+let reset = 
+    async {
+        let client = new TelegramClient(Configs.appId, Configs.apiHash, handler = TcpClientConnectionHandler(ClientFactory.make))
+        do! client.ConnectAsync() |> Async.AwaitTask
+        if not <| client.IsUserAuthorized() then
+            let! hash = client.SendCodeRequestAsync(Configs.phone) |> Async.AwaitTask
+            printfn "Enter code:"
+            let code = Console.ReadLine()
+            let! user = client.MakeAuthAsync(Configs.phone, hash, code) |> Async.AwaitTask
+            printfn "User = %O" user.FirstName
+    }
+
+let setCode code = failwith "???"
+
 let private test chatName =
     async {
         use client =
