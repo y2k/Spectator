@@ -1,47 +1,20 @@
 {
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
-    "compounds": [
-        {
-            "name": "Bot + Server",
-            "configurations": [ "run Server", "run Bot" ]
-        },
-        {
-            "name": "Worker + Server",
-            "configurations": [ "run Server", "run Worker" ]
-        }
-    ],
     "configurations": [
         {
-            "name": "run Server",
-            "type": "coreclr",
-            "request": "launch",
-            "program": "${workspaceRoot}/server/bin/Debug/netcoreapp2.0/server.dll",
-            "args": [],
-            "cwd": "${workspaceRoot}",
-            "stopAtEntry": false,
-            "console": "internalConsole"
-        },
-        {
-            "name": "run Bot",
-            "type": "coreclr",
-            "request": "launch",
-            "program": "${workspaceFolder}/bot/bin/Debug/netcoreapp2.0/bot.dll",
-            "args": [],
-            "cwd": "${workspaceFolder}",
-            "stopAtEntry": false,
-            "console": "internalConsole",
-        },
-        {
-            "name": "run Worker",
+            "name": ".NET Core Launch (console)",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/worker/bin/Debug/netcoreapp2.0/worker.dll",
+            "program": "${workspaceFolder}/application/bin/Debug/netcoreapp2.1/application.dll",
             "args": [],
             "cwd": "${workspaceFolder}",
-            "console": "internalConsole",
             "stopAtEntry": false,
-            "internalConsoleOptions": "openOnSessionStart"
+            "console": "internalConsole"
         }
+
     ]
 }

@@ -64,6 +64,9 @@ module String =
     let split (x : String) (separator : Char) = x.Split(separator) |> Array.toList
 
 // Types
+
+type EnvironmentConfig = { admin : string }
+
 type UserId = string
 
 type SubscriptionId = Guid
@@ -108,3 +111,7 @@ type CoEffectDb =
       newSubscriptions : NewSubscription list }
 
 type 'a CoEffect = (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
+
+// Singletones
+
+let sTelegramApi : ((unit Async) * (string -> unit Async)) option ref = ref None
