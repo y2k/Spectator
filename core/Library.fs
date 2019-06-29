@@ -112,6 +112,17 @@ type CoEffectDb =
 
 type 'a CoEffect = (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
 
-// Singletones
+// Interfaces
 
-let sTelegramApi : ((unit Async) * (string -> unit Async)) option ref = ref None
+type TelegramConnectorApi =
+    abstract member isValid : Uri -> bool Async
+    abstract member getNodes : Uri -> Snapshot list Async
+    abstract member resetClient : unit Async 
+    abstract member updateToken : string -> unit Async
+
+let mutable sTelegramApi : TelegramConnectorApi = 
+    { new TelegramConnectorApi with
+        member __.isValid _ = async.Return false
+        member __.getNodes _ = async.Return []
+        member __.resetClient = async.Zero ()
+        member __.updateToken _ = async.Zero () }

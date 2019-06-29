@@ -42,13 +42,12 @@ module private Domain =
         match parse message with
         | ResetTelegram when env.admin = message.user -> 
             db, AsyncTextEff ^ async {
-                do! !sTelegramApi |> Option.get |> fst
+                do! sTelegramApi.resetClient
                 return "Telegram recreated"
             }
         | SetTelegramToken token when env.admin = message.user -> 
             db, AsyncTextEff ^ async {
-                let f = !sTelegramApi |> Option.get |> snd
-                do! f token
+                do! sTelegramApi.updateToken token
                 return "Token accepted"
             }
         | GetUserSubscriptionsCmd userId ->

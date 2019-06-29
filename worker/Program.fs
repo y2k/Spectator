@@ -44,7 +44,7 @@ module private Effects =
         |> List.map (fun (p, url) ->
             match p with
             | Provider.Rss -> RssParser.isValid url
-            | Provider.Telegram -> TelegramParser.isValid url
+            | Provider.Telegram -> sTelegramApi.isValid url
             | _ -> failwithf "%O" p)
         |> Async.Parallel >>- fun xs -> List.ofArray xs
 
@@ -53,7 +53,7 @@ module private Effects =
         |> List.map (fun (p, url) ->
             match p with
             | Provider.Rss -> RssParser.getNodes url
-            | Provider.Telegram -> TelegramParser.getNodes url
+            | Provider.Telegram -> sTelegramApi.getNodes url
             | _ -> failwithf "%O" p)
         |> Async.Parallel >>- List.ofArray
 
