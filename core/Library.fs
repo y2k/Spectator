@@ -25,7 +25,7 @@ module Operators =
 module Async =
     let wrapTask (f : unit -> System.Threading.Tasks.Task) =
         async {
-            do! f () |> Async.AwaitTask
+            do! f() |> Async.AwaitTask
         }
     let rec seq = function
         | [] -> async.Return []
@@ -65,7 +65,7 @@ module String =
 
 // Types
 
-type EnvironmentConfig = { admin : string }
+type EnvironmentConfig = { admin : string; filesDir : string }
 
 type UserId = string
 
@@ -75,8 +75,9 @@ type Provider =
     | Invalid = 0
     | Rss = 1
     | Telegram = 2
+    | Html = 3
 
-type NewSubscription =
+type NewSubscription = 
     { id : SubscriptionId
       userId : UserId
       uri : Uri }
@@ -115,14 +116,14 @@ type 'a CoEffect = (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
 // Interfaces
 
 type TelegramConnectorApi =
-    abstract member isValid : Uri -> bool Async
-    abstract member getNodes : Uri -> Snapshot list Async
-    abstract member resetClient : unit Async 
-    abstract member updateToken : string -> unit Async
+    abstract isValid : Uri -> bool Async
+    abstract getNodes : Uri -> Snapshot list Async
+    abstract resetClient : unit Async
+    abstract updateToken : string -> unit Async
 
-let mutable sTelegramApi : TelegramConnectorApi = 
+let mutable sTelegramApi : TelegramConnectorApi =
     { new TelegramConnectorApi with
-        member __.isValid _ = async.Return false
-        member __.getNodes _ = async.Return []
-        member __.resetClient = async.Zero ()
-        member __.updateToken _ = async.Zero () }
+          member __.isValid _ = async.Return false
+          member __.getNodes _ = async.Return []
+          member __.resetClient = async.Zero()
+          member __.updateToken _ = async.Zero() }

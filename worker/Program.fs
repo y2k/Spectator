@@ -45,15 +45,17 @@ module private Effects =
             match p with
             | Provider.Rss -> RssParser.isValid url
             | Provider.Telegram -> sTelegramApi.isValid url
+            | Provider.Html -> HtmlProvider.isValid url
             | _ -> failwithf "%O" p)
         |> Async.Parallel >>- fun xs -> List.ofArray xs
 
-    let loadSnapshots ps =
+    let loadSnapshots env ps =
         ps
         |> List.map (fun (p, url) ->
             match p with
             | Provider.Rss -> RssParser.getNodes url
             | Provider.Telegram -> sTelegramApi.getNodes url
+            | Provider.Html -> HtmlProvider.getNodes env url
             | _ -> failwithf "%O" p)
         |> Async.Parallel >>- List.ofArray
 
@@ -69,7 +71,7 @@ module private Services =
     open MongoDB.Bson
     open Spectator.Infrastructure
 
-    let init mongo =
+    let init env mongo =
         async {
             let! subReqs = runCfx mongo ^ fun db -> db, Domain.loadNewSubs db
             printfn "LOG :: new subscriptions requests %A" subReqs
@@ -81,7 +83,7 @@ module private Services =
 
             let! newSnapshots =
                 runCfx mongo ^ fun db -> db, Domain.loadSnapshots db
-                >>= Effects.loadSnapshots
+                >>= Effects.loadSnapshots env
             printfn "LOG :: new snapshots %A" newSnapshots
 
             do! runCfx mongo
@@ -89,11 +91,11 @@ module private Services =
                 >>= Effects.saveToDb mongo
         }
 
-let rec start db =
+let rec start env db =
     async {
-        printfn "Start syncing..."
-        do! Services.init db
-        printfn "End syncing, waiting..."
-        do! Async.Sleep 600_000
-        do! start db
+        while true do
+            printfn "Start syncing..."
+            do! Services.init env db
+            printfn "End syncing, waiting..."
+            do! Async.Sleep 600_000
     }
