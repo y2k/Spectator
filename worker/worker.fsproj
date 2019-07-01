@@ -6,11 +6,14 @@
     <ProjectReference Include="..\core\core.fsproj" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="HtmlProvider.fs" />
     <Compile Include="RssParser.fs" />
     <Compile Include="TelegramParser.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="HtmlAgilityPack" Version="1.11.8" />
+    <PackageReference Include="htmldiff.net" Version="1.4.0" />
     <PackageReference Include="MongoDB.Driver" Version="2.7.2" />
     <PackageReference Include="starksoft.aspen" Version="1.1.6" />
     <PackageReference Include="TeleSharp" Version="1.0.5" />
