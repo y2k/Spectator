@@ -61,6 +61,7 @@ module Http =
         }
 
 module String =
+    let isNullOrEmpty = String.IsNullOrEmpty
     let split (x : String) (separator : Char) = x.Split(separator) |> Array.toList
 
 // Types
@@ -77,16 +78,20 @@ type Provider =
     | Telegram = 2
     | Html = 3
 
-type NewSubscription = 
+[<CLIMutable>]
+type NewSubscription =
     { id : SubscriptionId
       userId : UserId
-      uri : Uri }
+      uri : Uri
+      filter : string }
 
+[<CLIMutable>]
 type Subscription =
     { id : SubscriptionId
       userId : UserId
       provider : Provider
-      uri : Uri }
+      uri : Uri
+      filter : string }
 
 type Snapshot =
     { subscriptionId : SubscriptionId
@@ -111,7 +116,7 @@ type CoEffectDb =
     { subscriptions : Subscription list
       newSubscriptions : NewSubscription list }
 
-type 'a CoEffect = (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
+type CoEffect<'a> = (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
 
 // Interfaces
 

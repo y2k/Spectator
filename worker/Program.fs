@@ -3,14 +3,17 @@
 open Spectator.Core
 
 module private Domain =
+    open System
     open MongoDB.Bson
     module R = Spectator.Core.MongoCollections
 
-    let saveSnapshots (db : CoEffectDb) (snaps : Snapshot list list) =
+    let mkSnapshotSaveCommands (db : CoEffectDb) (snaps : ((Provider * Uri) * Snapshot list) list) =
         db.subscriptions
-        |> List.zip snaps
-        |> List.collect (fun (sn, s) -> sn |> List.map (fun c -> { c with subscriptionId = s.id }))
-        |> List.map (fun x -> R.SnapshotsDb, x.ToBsonDocument())
+        |> List.collect ^ fun sub ->
+            snaps |> List.collect ^ fun ((p, u), x) ->
+                if p = sub.provider && sub.uri = u then x else []
+                |> List.map ^ fun x -> { x with subscriptionId = sub.id }
+        |> List.map ^ fun sn -> R.SnapshotsDb, sn.ToBsonDocument()
 
     let loadSnapshots (db : CoEffectDb) =
         db.subscriptions
@@ -21,11 +24,12 @@ module private Domain =
             let provider =
                 requests
                 |> List.zip results
-                |> List.tryPick (fun (suc, (p, uri)) -> if uri = newSub.uri && suc then Some p else None)
+                |> List.tryPick ^ fun (suc, (p, uri)) -> if uri = newSub.uri && suc then Some p else None
             { id = System.Guid.NewGuid()
               userId = newSub.userId
               provider = provider |> Option.defaultValue Provider.Invalid
-              uri = newSub.uri }
+              uri = newSub.uri
+              filter = newSub.filter }
         let ws = List.map toSubscription db.newSubscriptions
         { db with newSubscriptions = []; subscriptions = db.subscriptions @ ws }
 
@@ -57,12 +61,13 @@ module private Effects =
             | Provider.Telegram -> sTelegramApi.getNodes url
             | Provider.Html -> HtmlProvider.getNodes env url
             | _ -> failwithf "%O" p)
-        |> Async.Parallel >>- List.ofArray
+        |> Async.Parallel
+        >>- fun xs -> List.zip ps (List.ofArray xs)
 
     let saveToDb (db : IMongoDatabase) (commands : (_ * BsonDocument) list) =
         commands
         |> List.map ^ fun (cn, doc) ->
-            Async.wrapTask ^ fun _ -> 
+            Async.wrapTask ^ fun _ ->
                 let col = db.GetCollection cn
                 col.InsertOneAsync doc
         |> Async.seq |> Async.Ignore // TODO: логировать важные ошибки
@@ -87,7 +92,7 @@ module private Services =
             printfn "LOG :: new snapshots %A" newSnapshots
 
             do! runCfx mongo
-                    ^ fun db -> db, Domain.saveSnapshots db newSnapshots
+                    ^ fun db -> db, Domain.mkSnapshotSaveCommands db newSnapshots
                 >>= Effects.saveToDb mongo
         }
 

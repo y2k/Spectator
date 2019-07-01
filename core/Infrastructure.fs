@@ -35,35 +35,24 @@ module private Effects =
 module R = Spectator.Core.MongoCollections
 open MongoDB.Bson
 
-let private agent : MailboxProcessor<unit AsyncReplyChannel * unit Async> =
-    MailboxProcessor.Start ^ fun inbox ->
-        async {
-            while true do
-                let! (r, t) = inbox.Receive()
-                do! t
-                r.Reply()
-        }
+let private semaphore = new System.Threading.SemaphoreSlim(1)
 
-let runCfx mongo (f : CoEffectDb -> (CoEffectDb * 'a)) =
-    async {
-        let result : 'a option ref = ref None
-        do! agent.PostAndAsyncReply ^ fun r ->
-                r,
-                async {
-                    let! subs = Effects.loadFromMongo mongo R.SubscriptionsDb
-                    let! newSubs = Effects.loadFromMongo mongo R.NewSubscriptionsDb
-                    let db = { subscriptions = subs; newSubscriptions = newSubs }
-                    let (newDb, eff) = f db
-                    if newDb <> db then
-                        do! Effects.deleteFromCol mongo R.NewSubscriptionsDb
-                        do! newDb.newSubscriptions
-                            |> List.map ^ fun x -> R.NewSubscriptionsDb, x.ToBsonDocument()
-                            |> Effects.saveToDb mongo
-                        do! Effects.deleteFromCol mongo R.SubscriptionsDb
-                        do! newDb.subscriptions
-                            |> List.map ^ fun x -> R.SubscriptionsDb, x.ToBsonDocument()
-                            |> Effects.saveToDb mongo
-                    System.Threading.Volatile.Write(result, Some eff)
-                }
-        return System.Threading.Volatile.Read(result) |> Option.get
-    }
+let runCfx mongo (f : CoEffectDb -> (CoEffectDb * 'a)) = async {
+    do! semaphore.WaitAsync() |> Async.AwaitTask
+    try
+        let! subs = Effects.loadFromMongo mongo R.SubscriptionsDb
+        let! newSubs = Effects.loadFromMongo mongo R.NewSubscriptionsDb
+        let db = { subscriptions = subs; newSubscriptions = newSubs }
+        let (newDb, eff) = f db
+        if newDb <> db then
+            do! Effects.deleteFromCol mongo R.NewSubscriptionsDb
+            do! newDb.newSubscriptions
+                |> List.map ^ fun x -> R.NewSubscriptionsDb, x.ToBsonDocument()
+                |> Effects.saveToDb mongo
+            do! Effects.deleteFromCol mongo R.SubscriptionsDb
+            do! newDb.subscriptions
+                |> List.map ^ fun x -> R.SubscriptionsDb, x.ToBsonDocument()
+                |> Effects.saveToDb mongo
+        return eff
+    finally
+        semaphore.Release() |> ignore }
