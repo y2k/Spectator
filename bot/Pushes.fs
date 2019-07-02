@@ -6,6 +6,7 @@ open Spectator.Core
 open Telegram.Bot
 open Telegram.Bot.Types
 module I = Spectator.Infrastructure
+type L = Spectator.Infrastructure.Log
 
 module Domain =
     type R = System.Text.RegularExpressions.Regex
@@ -53,7 +54,7 @@ module private Effects =
         |> List.map ^ uncurry Bot.sendToTelegramSingle
         |> Async.Parallel
         >>- Array.filter ^ (<>) Bot.SuccessResponse
-        >>- Array.iter ^ printfn "LOG :: can't send message %O"
+        >>- Array.iter ^ (sprintf "LOG :: can't send message %O" >> L.log)
 
 let main mdb = async {
     let topSnapshotId : string option ref = ref None

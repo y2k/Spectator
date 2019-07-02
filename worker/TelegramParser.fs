@@ -7,7 +7,7 @@ open TeleSharp.TL
 open TeleSharp.TL.Contacts
 open TeleSharp.TL.Messages
 open Spectator.Core
-module L = Spectator.Infrastructure.Log
+type L = Spectator.Infrastructure.Log
 
 module Configs =
     let appId = int <| Environment.GetEnvironmentVariable "SPECTATOR_TELEGRAM_APIID"
@@ -40,22 +40,20 @@ type TelegramConnectorApiImpl() =
             async {
                 client <- ClientFactory.mkClient()
                 do! client.ConnectAsync() |> Async.AwaitTask
-                L.log "Telegram restarted" ()
+                L.log "Telegram restarted"
 
                 if client.IsUserAuthorized() then
-                    L.log "Telegram authorized" ()
+                    L.log "Telegram authorized"
                 else
                     let! h = client.SendCodeRequestAsync(Configs.phone) |> Async.AwaitTask
                     hash <- h
-                    L.log (sprintf "Telegram required code (hash = %s)" hash) ()
+                    L.log ^ sprintf "Telegram required code (hash = %s)" hash
             }
         member __.updateToken code =
             async {
-                L.log (sprintf "Telegram setCode called, code = %s" code) ()
+                L.log ^ sprintf "Telegram setCode called, code = %s" code
                 let! r = client.MakeAuthAsync(Configs.phone, hash, code) |> Async.AwaitTask |> Async.Catch
-                L.log (sprintf "Telegram code applied, result = %O" r) ()
-                // let! user = state.client.MakeAuthAsync(Configs.phone, state.hash, code) |> Async.AwaitTask
-                // L.log (sprintf "Telegram code applied, user = %s" user.FirstName) ()
+                L.log ^ sprintf "Telegram code applied, result = %O" r
             }
         member __.isValid uri =
             async {
@@ -73,7 +71,7 @@ type TelegramConnectorApiImpl() =
                 r.Username <- chatname
                 let! response = client.SendRequestAsync r |> Async.AwaitTask
                 let channel = (response :> TLResolvedPeer).Chats.[0] :?> TLChannel
-                L.log (sprintf "Response = %O | id = %O" channel.Username channel.Id) ()
+                L.log ^ sprintf "Response = %O | id = %O" channel.Username channel.Id
                 let i = TLInputPeerChannel()
                 i.ChannelId <- channel.Id
                 i.AccessHash <- channel.AccessHash.Value
