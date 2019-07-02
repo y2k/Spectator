@@ -12,6 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="..\bot\bot.fsproj" />
     <ProjectReference Include="..\worker\worker.fsproj" />
+    <ProjectReference Include="..\notifications\notifications.fsproj" />
   </ItemGroup>
 
   <PropertyGroup>

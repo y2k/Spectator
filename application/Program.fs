@@ -13,6 +13,6 @@ let main _ =
 
     [ Spectator.Worker.App.start env db
       Spectator.Bot.App.start db env
-      Spectator.Pushes.main db ]
+      Spectator.Notifications.main db ]
     |> Async.Parallel |> Async.RunSynchronously |> ignore
     0

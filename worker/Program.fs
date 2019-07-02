@@ -25,7 +25,8 @@ module private Domain =
             let provider =
                 requests
                 |> List.zip results
-                |> List.tryPick ^ fun (suc, (p, uri)) -> if uri = newSub.uri && suc then Some p else None
+                |> List.tryPick ^ fun (suc, (p, uri)) -> 
+                    if uri = newSub.uri && suc then Some p else None
             { id = System.Guid.NewGuid()
               userId = newSub.userId
               provider = provider |> Option.defaultValue Provider.Invalid
@@ -76,31 +77,27 @@ module private Services =
     open MongoDB.Bson
     open Spectator.Infrastructure
 
-    let init env mongo =
-        async {
-            let! subReqs = runCfx mongo ^ fun db -> db, Domain.loadNewSubs db
-            L.log (sprintf "LOG :: new subscriptions requests %A" subReqs)
+    let init env mongo = async {
+        let! subReqs = runCfx mongo ^ fun db -> db, Domain.loadNewSubs db
+        L.log (sprintf "LOG :: new subscriptions requests %A" subReqs)
 
-            let! subResps = Effects.isValid subReqs
-            L.log ^ sprintf "LOG :: new subscriptions results %A" subResps
+        let! subResps = Effects.isValid subReqs
+        L.log ^ sprintf "LOG :: new subscriptions results %A" subResps
 
-            do! runCfx mongo ^ fun db -> Domain.saveSubs db subReqs subResps, ()
+        do! runCfx mongo ^ fun db -> Domain.saveSubs db subReqs subResps, ()
 
-            let! newSnapshots =
-                runCfx mongo ^ fun db -> db, Domain.loadSnapshots db
-                >>= Effects.loadSnapshots env
-            L.log ^ sprintf "LOG :: new snapshots %A" newSnapshots
+        let! newSnapshots =
+            runCfx mongo ^ fun db -> db, Domain.loadSnapshots db
+            >>= Effects.loadSnapshots env
+        L.log ^ sprintf "LOG :: new snapshots %A" newSnapshots
 
-            do! runCfx mongo
-                    ^ fun db -> db, Domain.mkSnapshotSaveCommands db newSnapshots
-                >>= Effects.saveToDb mongo
-        }
+        do! runCfx mongo
+                ^ fun db -> db, Domain.mkSnapshotSaveCommands db newSnapshots
+            >>= Effects.saveToDb mongo }
 
-let rec start env db =
-    async {
-        while true do
-            L.log "Start syncing..."
-            do! Services.init env db
-            L.log "End syncing, waiting..."
-            do! Async.Sleep 600_000
-    }
+let rec start env db = async {
+    while true do
+        L.log "Start syncing..."
+        do! Services.init env db
+        L.log "End syncing, waiting..."
+        do! Async.Sleep 600_000 }
