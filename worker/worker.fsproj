@@ -1,16 +1,20 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <TargetFramework>netcoreapp2.1</TargetFramework>
   </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\core\core.fsproj" />
   </ItemGroup>
+
   <ItemGroup>
     <Compile Include="HtmlProvider.fs" />
     <Compile Include="RssParser.fs" />
     <Compile Include="TelegramParser.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="HtmlAgilityPack" Version="1.11.8" />
     <PackageReference Include="htmldiff.net" Version="1.4.0" />
@@ -19,4 +23,9 @@
     <PackageReference Include="TeleSharp" Version="1.0.5" />
     <PackageReference Include="TLSharp" Version="0.1.0.390" />
   </ItemGroup>
+
+  <PropertyGroup>
+    <NoWarn>NU1701</NoWarn>
+  </PropertyGroup>
+
 </Project>

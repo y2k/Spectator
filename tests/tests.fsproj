@@ -21,4 +21,8 @@
     <ProjectReference Include="..\worker\worker.fsproj" />
   </ItemGroup>
 
+  <PropertyGroup>
+    <NoWarn>NU1701</NoWarn>
+  </PropertyGroup>
+
 </Project>

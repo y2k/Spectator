@@ -1,6 +1,7 @@
 ﻿module Spectator.Worker.App
 
 open Spectator.Core
+type L = Spectator.Infrastructure.Log
 
 module private Domain =
     open System
@@ -41,7 +42,6 @@ module private Domain =
 module private Effects =
     open MongoDB.Bson
     open MongoDB.Driver
-    module L = Spectator.Infrastructure.Log
 
     let isValid ps =
         ps
@@ -79,17 +79,17 @@ module private Services =
     let init env mongo =
         async {
             let! subReqs = runCfx mongo ^ fun db -> db, Domain.loadNewSubs db
-            printfn "LOG :: new subscriptions requests %A" subReqs
+            L.log (sprintf "LOG :: new subscriptions requests %A" subReqs)
 
             let! subResps = Effects.isValid subReqs
-            printfn "LOG :: new subscriptions results %A" subResps
+            L.log ^ sprintf "LOG :: new subscriptions results %A" subResps
 
             do! runCfx mongo ^ fun db -> Domain.saveSubs db subReqs subResps, ()
 
             let! newSnapshots =
                 runCfx mongo ^ fun db -> db, Domain.loadSnapshots db
                 >>= Effects.loadSnapshots env
-            printfn "LOG :: new snapshots %A" newSnapshots
+            L.log ^ sprintf "LOG :: new snapshots %A" newSnapshots
 
             do! runCfx mongo
                     ^ fun db -> db, Domain.mkSnapshotSaveCommands db newSnapshots
@@ -99,8 +99,8 @@ module private Services =
 let rec start env db =
     async {
         while true do
-            printfn "Start syncing..."
+            L.log "Start syncing..."
             do! Services.init env db
-            printfn "End syncing, waiting..."
+            L.log "End syncing, waiting..."
             do! Async.Sleep 600_000
     }

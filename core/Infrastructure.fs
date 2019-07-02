@@ -2,9 +2,15 @@ module Spectator.Infrastructure
 
 open Spectator.Core
 
-module Log =
-    let log m x = printfn "LOG :: %s" m; x
-    let logf fm x = printfn "LOG :: %s" <| fm x; x
+type Log() =
+    static member log (message : string,
+                       [<System.Runtime.CompilerServices.CallerFilePath;
+                         System.Runtime.InteropServices.Optional;
+                         System.Runtime.InteropServices.DefaultParameterValue("")>] file : string,
+                       [<System.Runtime.CompilerServices.CallerLineNumber;
+                         System.Runtime.InteropServices.Optional;
+                         System.Runtime.InteropServices.DefaultParameterValue(0)>] line : int) =
+        printfn "LOG %s:%i :: %s" file line message
 
 module private Effects =
     open MongoDB.Bson
