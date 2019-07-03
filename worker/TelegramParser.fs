@@ -22,8 +22,8 @@ module ClientFactory =
     let make host port =
         let proxyClient =
             Socks5ProxyClient
-                (Configs.proxy.Split(":").[0], Configs.proxy.Split(":").[1] |> int, Configs.auth.Split(":").[0],
-                 Configs.auth.Split(":").[1])
+                (Configs.proxy.Split(':').[0], Configs.proxy.Split(':').[1] |> int, Configs.auth.Split(':').[0],
+                 Configs.auth.Split(':').[1])
         proxyClient.CreateConnection(host, port)
 
     let mkClient() =
