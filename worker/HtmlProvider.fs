@@ -39,7 +39,7 @@ let private mkFilePath (env : EnvironmentConfig) (uri : Uri) =
 let private compare env uri content = async {
     let path = mkFilePath env uri
     if F.Exists path then
-        let! oldContent = F.ReadAllTextAsync path |> Async.AwaitTask
+        let oldContent = F.ReadAllText path
         return ShinglesTester.compare oldContent content
     else return 0.0 }
 
@@ -59,7 +59,7 @@ let getNodes env (uri : Uri) : Snapshot list Async = async {
     let! content = download uri
     let! sim = compare env uri content
     if sim < 0.9 then
-        do! F.WriteAllTextAsync(mkFilePath env uri, content) |> Async.AwaitTask
+        F.WriteAllText(mkFilePath env uri, content)
         let snap =
             { subscriptionId = Guid.Empty
               id = sprintf "uri-%O" <| uri.GetHashCode()

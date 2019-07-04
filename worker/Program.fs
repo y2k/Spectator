@@ -74,7 +74,6 @@ module private Effects =
         |> Async.seq |> Async.Ignore // TODO: логировать важные ошибки
 
 module private Services =
-    open MongoDB.Bson
     open Spectator.Infrastructure
 
     let init env mongo = async {

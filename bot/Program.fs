@@ -50,8 +50,8 @@ module private Domain =
         match parse message with
         | ResetTelegram when env.admin = message.user ->
             db, AsyncTextEff ^ async {
-                do! sTelegramApi.resetClient
-                return "Telegram recreated"
+                let! authorized = sTelegramApi.resetClient
+                return sprintf "Telegram recreated, authorized = %O" authorized
             }
         | SetTelegramToken token when env.admin = message.user ->
             db, AsyncTextEff ^ async {

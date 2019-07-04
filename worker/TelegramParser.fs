@@ -22,8 +22,8 @@ module ClientFactory =
     let make host port =
         let proxyClient =
             Socks5ProxyClient
-                (Configs.proxy.Split(":").[0], Configs.proxy.Split(":").[1] |> int, Configs.auth.Split(":").[0],
-                 Configs.auth.Split(":").[1])
+                (Configs.proxy.Split(':').[0], Configs.proxy.Split(':').[1] |> int, Configs.auth.Split(':').[0],
+                 Configs.auth.Split(':').[1])
         proxyClient.CreateConnection(host, port)
 
     let mkClient() =
@@ -36,85 +36,58 @@ type TelegramConnectorApiImpl() =
     let mutable hash : string = ""
 
     interface TelegramConnectorApi with
-        member __.resetClient = 
-            async {
-                client <- ClientFactory.mkClient()
-                do! client.ConnectAsync() |> Async.AwaitTask
-                L.log "Telegram restarted"
-
-                if client.IsUserAuthorized() then
-                    L.log "Telegram authorized"
-                else
-                    let! h = client.SendCodeRequestAsync(Configs.phone) |> Async.AwaitTask
-                    hash <- h
-                    L.log ^ sprintf "Telegram required code (hash = %s)" hash
-            }
-        member __.updateToken code =
-            async {
-                L.log ^ sprintf "Telegram setCode called, code = %s" code
-                let! r = client.MakeAuthAsync(Configs.phone, hash, code) |> Async.AwaitTask |> Async.Catch
-                L.log ^ sprintf "Telegram code applied, result = %O" r
-            }
-        member __.isValid uri =
-            async {
-                if isNull client then return false
-                else
-                    let r = TLRequestResolveUsername()
-                    r.Username <- uri.AbsolutePath
-                    let! response = client.SendRequestAsync r |> Async.AwaitTask
-                    return not (Seq.isEmpty <| (response :> TLResolvedPeer).Chats)
-            }
-        member __.getNodes uri =
-            async {
-                let chatname = uri.AbsolutePath 
+        member __.resetClient = async {
+            client <- ClientFactory.mkClient()
+            do! client.ConnectAsync() |> Async.AwaitTask
+            L.log "Telegram restarted"
+            if client.IsUserAuthorized() then
+                L.log "Telegram authorized"
+            else
+                let! h = client.SendCodeRequestAsync(Configs.phone) |> Async.AwaitTask
+                hash <- h
+                L.log ^ sprintf "Telegram required code (hash = %s)" hash
+            return client.IsUserAuthorized() }
+        member __.updateToken code = async {
+            L.log ^ sprintf "Telegram setCode called, code = %s" code
+            let! r = client.MakeAuthAsync(Configs.phone, hash, code) |> Async.AwaitTask |> Async.Catch
+            L.log ^ sprintf "Telegram code applied, result = %O" r }
+        member __.isValid uri = async {
+            if isNull client then return false
+            else
                 let r = TLRequestResolveUsername()
-                r.Username <- chatname
+                r.Username <- uri.AbsolutePath
                 let! response = client.SendRequestAsync r |> Async.AwaitTask
-                let channel = (response :> TLResolvedPeer).Chats.[0] :?> TLChannel
-                L.log ^ sprintf "Response = %O | id = %O" channel.Username channel.Id
-                let i = TLInputPeerChannel()
-                i.ChannelId <- channel.Id
-                i.AccessHash <- channel.AccessHash.Value
-                let! history = client.GetHistoryAsync(i, 0, 0, 50) |> Async.AwaitTask
-                return
-                    (history :?> TLChannelMessages).Messages
-                    |> Seq.choose ^ function :? TLMessage as x -> Some x | _ -> None
-                    |> Seq.map ^ 
-                        fun x ->  
-                            { subscriptionId = Guid.Empty
-                              id = sprintf "telegram-%i" x.Id
-                              title = x.Message
-                              uri = Uri <| sprintf "https://t.me/%s/%i" chatname x.Id }
-                    |> Seq.rev
-                    |> Seq.toList
-            }
+                return not (Seq.isEmpty <| (response :> TLResolvedPeer).Chats) }
+        member __.getNodes uri = async {
+            let chatname = uri.Segments.[1]
+            let r = TLRequestResolveUsername()
+            r.Username <- chatname
+            let! response = client.SendRequestAsync r |> Async.AwaitTask
+            let channel = (response :> TLResolvedPeer).Chats.[0] :?> TLChannel
+            L.log ^ sprintf "Response = %O | id = %O" channel.Username channel.Id
+            let i = TLInputPeerChannel()
+            i.ChannelId <- channel.Id
+            i.AccessHash <- channel.AccessHash.Value
+            let! history = client.GetHistoryAsync(i, 0, 0, 50) |> Async.AwaitTask
+            return
+                (history :?> TLChannelMessages).Messages
+                |> Seq.choose ^ function | :? TLMessage as x -> Some x | _ -> None
+                |> Seq.map ^
+                    fun x ->
+                        { subscriptionId = Guid.Empty
+                          id = sprintf "telegram-%i" x.Id
+                          title = x.Message
+                          uri = Uri <| sprintf "https://t.me/%s/%i" chatname x.Id }
+                |> Seq.rev
+                |> Seq.toList }
 
-let test chatName =
-    async {
-        use client = ClientFactory.mkClient()
-        do! client.ConnectAsync() |> Async.AwaitTask
-        if not <| client.IsUserAuthorized() then
-            let! hash = client.SendCodeRequestAsync(Configs.phone) |> Async.AwaitTask
-            printfn "Enter code:"
-            let code = Console.ReadLine()
-            let! user = client.MakeAuthAsync(Configs.phone, hash, code) |> Async.AwaitTask
-            printfn "User = %O" user.FirstName
-        let r = TLRequestResolveUsername()
-        r.Username <- chatName
-        let! response = client.SendRequestAsync r |> Async.AwaitTask
-        let channel = (response :> TLResolvedPeer).Chats.[0] :?> TLChannel
-        printfn "Response = %O | id = %O" channel.Username channel.Id
-        let i = TLInputPeerChannel()
-        i.ChannelId <- channel.Id
-        i.AccessHash <- channel.AccessHash.Value
-        let! history = client.GetHistoryAsync(i, 0, 0, 50) |> Async.AwaitTask
-        (history :?> TLChannelMessages).Messages
-        |> Seq.choose (function
-            | :? TLMessage as x -> Some x
-            | _ -> None)
-        |> Seq.map (fun x -> x.Message)
-        |> Seq.rev
-        |> Seq.toList
-        |> fun xs ->
-            printfn "History [%i]:\n%A" xs.Length xs
-    }
+let test chatName = async {
+    IO.File.Delete "session.dat"
+    let api = sTelegramApi
+    let! authorized = api.resetClient
+    if not authorized then
+        printfn "Enter code:"
+        let code = Console.ReadLine()
+        do! api.updateToken code
+    let! nodes = api.getNodes ^ Uri ^ sprintf "https://t.me/%s" chatName
+    printfn "History [%i]:\n%A" nodes.Length nodes }
