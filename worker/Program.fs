@@ -4,8 +4,8 @@ open Spectator.Core
 type L = Spectator.Infrastructure.Log
 
 module private Domain =
-    open System
     open MongoDB.Bson
+    open System
     module R = Spectator.Core.MongoCollections
 
     let mkSnapshotSaveCommands (db : CoEffectDb) (snaps : ((Provider * Uri) * Snapshot list) list) =
@@ -14,7 +14,7 @@ module private Domain =
             snaps |> List.collect ^ fun ((p, u), x) ->
                 if p = sub.provider && sub.uri = u then x else []
                 |> List.map ^ fun x -> { x with subscriptionId = sub.id }
-        |> List.map ^ fun sn -> R.SnapshotsDb, sn.ToBsonDocument()
+        |> fun ss -> { db with snapshots = ss }
 
     let loadSnapshots (db : CoEffectDb) =
         db.subscriptions
@@ -25,7 +25,7 @@ module private Domain =
             let provider =
                 requests
                 |> List.zip results
-                |> List.tryPick ^ fun (suc, (p, uri)) -> 
+                |> List.tryPick ^ fun (suc, (p, uri)) ->
                     if uri = newSub.uri && suc then Some p else None
             { id = System.Guid.NewGuid()
               userId = newSub.userId
@@ -41,9 +41,6 @@ module private Domain =
         |> List.allPairs [ Provider.Rss; Provider.Telegram ]
 
 module private Effects =
-    open MongoDB.Bson
-    open MongoDB.Driver
-
     let isValid ps =
         ps
         |> List.map (fun (p, url) ->
@@ -65,39 +62,27 @@ module private Effects =
         |> Async.Parallel
         >>- fun xs -> List.zip ps (List.ofArray xs)
 
-    let saveToDb (db : IMongoDatabase) (commands : (_ * BsonDocument) list) =
-        commands
-        |> List.map ^ fun (cn, doc) ->
-            Async.wrapTask ^ fun _ ->
-                let col = db.GetCollection cn
-                col.InsertOneAsync doc
-        |> Async.seq |> Async.Ignore // TODO: логировать важные ошибки
+module M = Spectator.Infrastructure.MongoCofx
 
-module private Services =
-    open MongoDB.Bson
-    open Spectator.Infrastructure
+let start env mdb = async {
+    while true do
+        L.log "Start syncing..."
 
-    let init env mongo = async {
-        let! subReqs = runCfx mongo ^ fun db -> db, Domain.loadNewSubs db
+        let! subReqs = M.runCfx mdb ^ fun db -> db, Domain.loadNewSubs db
         L.log (sprintf "LOG :: new subscriptions requests %A" subReqs)
 
         let! subResps = Effects.isValid subReqs
         L.log ^ sprintf "LOG :: new subscriptions results %A" subResps
 
-        do! runCfx mongo ^ fun db -> Domain.saveSubs db subReqs subResps, ()
+        do! M.runCfx mdb ^ fun db -> Domain.saveSubs db subReqs subResps, ()
 
         let! newSnapshots =
-            runCfx mongo ^ fun db -> db, Domain.loadSnapshots db
+            M.runCfx mdb ^ fun db -> db, Domain.loadSnapshots db
             >>= Effects.loadSnapshots env
         L.log ^ sprintf "LOG :: new snapshots %A" newSnapshots
 
-        do! runCfx mongo
-                ^ fun db -> db, Domain.mkSnapshotSaveCommands db newSnapshots
-            >>= Effects.saveToDb mongo }
+        do! M.runCfx mdb ^ fun db ->
+                Domain.mkSnapshotSaveCommands db newSnapshots, ()
 
-let rec start env db = async {
-    while true do
-        L.log "Start syncing..."
-        do! Services.init env db
         L.log "End syncing, waiting..."
         do! Async.Sleep 600_000 }

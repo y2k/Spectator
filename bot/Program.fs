@@ -72,12 +72,12 @@ module private Domain =
         | _ -> db, TextEff "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription"
 
 open Spectator.Core
-open Spectator.Infrastructure
+module C = Spectator.Infrastructure.MongoCofx
 
 let start db env =
     Bot.repl ^ fun msg ->
         async {
-            match! runCfx db (Domain.handle msg env) with
+            match! C.runCfx db (Domain.handle msg env) with
             | Domain.TextEff t -> return t
             | Domain.AsyncTextEff at -> return! at
         }

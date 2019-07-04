@@ -12,53 +12,68 @@ type Log() =
                          System.Runtime.InteropServices.DefaultParameterValue(0)>] line : int) =
         printfn "LOG %s:%i :: %s" file line message
 
-module private Effects =
+module MongoCofx =
     open MongoDB.Bson
     open MongoDB.Driver
+    open System
+    module R = Spectator.Core.MongoCollections
 
-    let saveToDb (db : IMongoDatabase) (ws : (string * BsonDocument) list) =
-        ws
-        |> List.map ^ fun (collection, value) ->
-                let col = db.GetCollection collection
-                col.InsertOneAsync value |> Async.AwaitTask
-        |> Async.seq |> Async.Ignore
+    module Effects =
+        let insert (db : IMongoDatabase) colName items = async {
+            do! items
+                |> List.map ^ fun x ->
+                    Async.wrapTask ^ fun _ -> 
+                        (db.GetCollection colName).InsertOneAsync <| x.ToBsonDocument()
+                |> Async.seq
+                >>- List.iter (sprintf "Error %O" >> Log.log) }
 
-    let loadFromMongo (db : IMongoDatabase) collection =
-        let col = db.GetCollection<BsonDocument> collection
-        col.Find(FilterDefinition.op_Implicit "{}")
-        |> fun x -> x.Project(ProjectionDefinition<_, _>.op_Implicit "{}").ToListAsync()
-        |> Async.AwaitTask
-        >>- Seq.toList
+        let query (mdb : IMongoDatabase) colName limit offset =
+            mdb.GetCollection(colName)
+                .Find(FilterDefinition.op_Implicit "{}")
+                .Sort(SortDefinition.op_Implicit "{$natural:-1}")
+                .Limit(limit |> Option.toNullable)
+                .Skip(offset |> Option.toNullable)
+                .ToListAsync() |> Async.AwaitTask
+            >>- Seq.toList
 
-    let deleteFromCol (db : IMongoDatabase) col =
-        async {
+        let deleteFromCol (db : IMongoDatabase) col = async {
             return!
                 db.GetCollection col
                 |> fun x -> x.DeleteManyAsync(FilterDefinition.op_Implicit "{}")
-                |> Async.AwaitTask |> Async.Ignore
-        }
+                |> Async.AwaitTask |> Async.Ignore }
 
-module R = Spectator.Core.MongoCollections
-open MongoDB.Bson
+    let private semaphore = new Threading.SemaphoreSlim(1)
 
-let private semaphore = new System.Threading.SemaphoreSlim(1)
+    let runCfx mongo (f : CoEffectDb -> (CoEffectDb * 'a)) = async {
+        do! semaphore.WaitAsync() |> Async.AwaitTask
+        try
+            let! subs = Effects.query mongo R.SubscriptionsDb None None
+            let! newSubs = Effects.query mongo R.NewSubscriptionsDb None None
+            let db = { subscriptions = subs; newSubscriptions = newSubs; snapshots = [] }
+            let (newDb, eff) = f db
+            if newDb.newSubscriptions <> db.newSubscriptions then
+                do! Effects.deleteFromCol mongo R.NewSubscriptionsDb
+                do! newDb.newSubscriptions
+                    |> Effects.insert mongo R.NewSubscriptionsDb
+            if newDb.subscriptions <> db.subscriptions then
+                do! Effects.deleteFromCol mongo R.SubscriptionsDb
+                do! newDb.subscriptions
+                    |> Effects.insert mongo R.SubscriptionsDb
+            if not <| List.isEmpty newDb.snapshots then
+                do! Effects.insert mongo R.SnapshotsDb newDb.snapshots 
+            return eff
+        finally
+            semaphore.Release() |> ignore }
 
-let runCfx mongo (f : CoEffectDb -> (CoEffectDb * 'a)) = async {
-    do! semaphore.WaitAsync() |> Async.AwaitTask
-    try
-        let! subs = Effects.loadFromMongo mongo R.SubscriptionsDb
-        let! newSubs = Effects.loadFromMongo mongo R.NewSubscriptionsDb
-        let db = { subscriptions = subs; newSubscriptions = newSubs }
-        let (newDb, eff) = f db
-        if newDb <> db then
-            do! Effects.deleteFromCol mongo R.NewSubscriptionsDb
-            do! newDb.newSubscriptions
-                |> List.map ^ fun x -> R.NewSubscriptionsDb, x.ToBsonDocument()
-                |> Effects.saveToDb mongo
-            do! Effects.deleteFromCol mongo R.SubscriptionsDb
-            do! newDb.subscriptions
-                |> List.map ^ fun x -> R.SubscriptionsDb, x.ToBsonDocument()
-                |> Effects.saveToDb mongo
-        return eff
-    finally
-        semaphore.Release() |> ignore }
+    let subscribeQuery (mdb : IMongoDatabase) f = async {
+        let col = mdb.GetCollection R.SnapshotsDb
+        let! offsetStart = col.CountDocumentsAsync(FilterDefinition.op_Implicit "{}") |> Async.AwaitTask
+        let mutable offset = int offsetStart
+
+        while true do
+            let! snaps = Effects.query mdb R.SnapshotsDb (Some 100) (Some offset)
+            if not <| List.isEmpty snaps then
+                do! runCfx mdb ^ fun db -> db, f { db with snapshots = snaps }
+                    >>= id
+                offset <- offset + (List.length snaps)
+            do! Async.Sleep 5_000 }

@@ -35,8 +35,6 @@ type TelegramConnectorApiImpl() =
     let mutable client : TelegramClient = null
     let mutable hash : string = ""
 
-    member __.debugGetClient = client
-
     interface TelegramConnectorApi with
         member __.resetClient = async {
             client <- ClientFactory.mkClient()
@@ -85,7 +83,7 @@ type TelegramConnectorApiImpl() =
 
 let test chatName = async {
     IO.File.Delete "session.dat"
-    let api = Spectator.Core.sTelegramApi
+    let api = sTelegramApi
     let! authorized = api.resetClient
     if not authorized then
         printfn "Enter code:"
