@@ -3,7 +3,7 @@ type E = System.Environment
 
 [<EntryPoint>]
 let main _ =
-    Spectator.Core.sTelegramApi <- Spectator.Worker.TelegramParser.TelegramConnectorApiImpl()
+    sTelegramApi <- Spectator.Worker.TelegramParser.TelegramConnectorApiImpl()
     // Spectator.Worker.TelegramParser.test "kotlin_lang" |> Async.RunSynchronously
 
     let db = E.GetEnvironmentVariable "SPECTATOR_MONGO_DOMAIN" ||| "localhost"
