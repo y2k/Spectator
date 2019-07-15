@@ -31,10 +31,10 @@ module Domain =
             |> List.map ^ fun (sub, snaps) -> sub.userId, mkMessage sub snaps
         botCommands
 
-let main mdb =
+let main env mdb =
     let sendToTelegramBroadcast botCommands =
         botCommands
-        |> List.map ^ uncurry Bot.sendToTelegramSingle
+        |> List.map ^ uncurry (Bot.sendToTelegramSingle env)
         |> Async.Parallel
         >>- Array.filter ^ (<>) Bot.SuccessResponse
         >>- Array.iter ^ (sprintf "LOG :: can't send message %O" >> L.log)

@@ -5,6 +5,7 @@ module private Domain =
     open MongoDB.Bson.Serialization
     open Spectator.Core
     open System
+    type E = Spectator.Core.EnvironmentConfig.Root
     type R = System.Text.RegularExpressions.Regex
 
     type Eff =
@@ -46,18 +47,16 @@ module private Domain =
             newSubscriptions = db.newSubscriptions |> List.filter ^ fun x -> x.userId <> userId || x.uri <> uri
             subscriptions = db.subscriptions |> List.filter ^ fun x -> x.userId <> userId || x.uri <> uri }
 
-    let handle message env (db : CoEffectDb) =
+    let handle message (env : E) (db : CoEffectDb) =
         match parse message with
-        | ResetTelegram when env.admin = message.user ->
+        | ResetTelegram when env.TelegramAdmin = message.user ->
             db, AsyncTextEff ^ async {
                 let! authorized = sTelegramApi.resetClient
-                return sprintf "Telegram recreated, authorized = %O" authorized
-            }
-        | SetTelegramToken token when env.admin = message.user ->
+                return sprintf "Telegram recreated, authorized = %O" authorized }
+        | SetTelegramToken token when env.TelegramAdmin = message.user ->
             db, AsyncTextEff ^ async {
                 do! sTelegramApi.updateToken token
-                return "Token accepted"
-            }
+                return "Token accepted" }
         | GetUserSubscriptionsCmd userId ->
             db,
             TextEff ^ subListToMessageResponse
@@ -75,9 +74,8 @@ open Spectator.Core
 module C = Spectator.Infrastructure.MongoCofx
 
 let start db env =
-    Bot.repl ^ fun msg ->
+    Bot.repl env ^ fun msg ->
         async {
             match! C.runCfx db (Domain.handle msg env) with
             | Domain.TextEff t -> return t
-            | Domain.AsyncTextEff at -> return! at
-        }
+            | Domain.AsyncTextEff at -> return! at }

@@ -11,6 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="FSharp.Data" Version="3.1.1" />
     <PackageReference Include="HttpToSocks5Proxy" Version="1.1.2" />
     <PackageReference Include="Telegram.Bot" Version="14.10.0" />
     <PackageReference Include="MongoDB.Driver" Version="2.7.2" />

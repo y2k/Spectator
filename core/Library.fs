@@ -66,7 +66,7 @@ module String =
 
 // Types
 
-type EnvironmentConfig = { admin : string; filesDir : string }
+type EnvironmentConfig = FSharp.Data.JsonProvider<"../settings.local.json", InferTypesFromValues=false>
 
 type UserId = string
 

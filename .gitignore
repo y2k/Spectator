@@ -4,5 +4,6 @@ obj
 .ionide/
 
 *.local
+*.local.json
 
 *.dat

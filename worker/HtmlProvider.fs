@@ -33,8 +33,8 @@ let isValid (uri : Uri) = async { return uri.IsAbsoluteUri && uri.Scheme = "http
 
 type F = System.IO.File
 
-let private mkFilePath (env : EnvironmentConfig) (uri : Uri) =
-    IO.Path.Combine(env.filesDir, sprintf "snapshot_%O.html" <| uri.GetHashCode())
+let private mkFilePath (env : EnvironmentConfig.Root) (uri : Uri) =
+    IO.Path.Combine(env.FilesDir, sprintf "snapshot_%O.html" <| uri.GetHashCode())
 
 let private compare env uri content = async {
     let path = mkFilePath env uri
