@@ -1,5 +1,5 @@
-bin
-obj
+bin/
+obj/
 
 .ionide/
 
@@ -10,3 +10,5 @@ obj
 
 .idea/
 *.user
+
+local-storage/
