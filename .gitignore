@@ -7,3 +7,6 @@ obj
 *.local.json
 
 *.dat
+
+.idea/
+*.user
