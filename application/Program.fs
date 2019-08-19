@@ -3,7 +3,7 @@ type E = System.Environment
 
 [<EntryPoint>]
 let main args =
-    let env = EnvironmentConfig.Load(args.[0])
+    let env : EnvironmentConfig.Root = failwith "TODO"
 
     sTelegramApi <- Spectator.Worker.TelegramParser.TelegramConnectorApiImpl()
     // Spectator.Worker.TelegramParser.test "kotlin_lang" |> Async.RunSynchronously

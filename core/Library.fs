@@ -66,7 +66,16 @@ module String =
 
 // Types
 
-type EnvironmentConfig = FSharp.Data.JsonProvider<"../settings.local.json", InferTypesFromValues=false>
+module EnvironmentConfig =
+    type TelegramType = 
+        { Proxy : string
+          Auth : string
+          Token : string }
+    type Root =
+        { Telegram : TelegramType
+          TelegramAdmin : string
+          FilesDir : string
+          MongoDomain : string }
 
 type UserId = string
 
