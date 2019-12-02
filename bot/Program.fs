@@ -1,6 +1,6 @@
 ﻿module Spectator.Bot.App
 
-module private Domain =
+module Domain =
     open Spectator.Core
     open System
     type E = Spectator.Core.EnvironmentConfig.Root

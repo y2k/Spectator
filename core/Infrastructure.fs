@@ -49,7 +49,7 @@ module MongoCofx =
         try
             let! subs = Effects.query mongo R.SubscriptionsDb None None
             let! newSubs = Effects.query mongo R.NewSubscriptionsDb None None
-            let db = { subscriptions = subs; newSubscriptions = newSubs; snapshots = [] }
+            let db = { subscriptions = subs; newSubscriptions = newSubs; snapshots = PhantomList [] }
             let (newDb, eff) = f db
             if newDb.newSubscriptions <> db.newSubscriptions then
                 do! Effects.deleteFromCol mongo R.NewSubscriptionsDb
@@ -59,8 +59,9 @@ module MongoCofx =
                 do! Effects.deleteFromCol mongo R.SubscriptionsDb
                 do! newDb.subscriptions
                     |> Effects.insert mongo R.SubscriptionsDb
-            if not <| List.isEmpty newDb.snapshots then
-                do! Effects.insert mongo R.SnapshotsDb newDb.snapshots 
+            let (PhantomList snapshots) = newDb.snapshots
+            if not <| List.isEmpty snapshots then
+                do! Effects.insert mongo R.SnapshotsDb snapshots
             return eff
         finally
             semaphore.Release() |> ignore }
@@ -73,7 +74,7 @@ module MongoCofx =
         while true do
             let! snaps = Effects.query mdb R.SnapshotsDb (Some 100) (Some offset)
             if not <| List.isEmpty snaps then
-                do! runCfx mdb ^ fun db -> db, f { db with snapshots = snaps }
+                do! runCfx mdb ^ fun db -> db, f { db with snapshots = PhantomList snaps }
                     >>= id
                 offset <- offset + (List.length snaps)
             do! Async.Sleep 5_000 }

@@ -66,6 +66,9 @@ module String =
 
 // Types
 
+type PhantomList<'a> = PhantomList of 'a list
+    with member this.unwrap = match this with PhantomList x -> x
+
 module EnvironmentConfig =
     type TelegramType = 
         { Proxy : string
@@ -124,7 +127,7 @@ module MongoCollections =
 type CoEffectDb =
     { subscriptions : Subscription list
       newSubscriptions : NewSubscription list
-      snapshots : Snapshot list }
+      snapshots : Snapshot PhantomList }
 
 type CoEffect<'a> = (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
 

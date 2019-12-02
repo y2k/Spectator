@@ -27,7 +27,7 @@ module Domain =
 
     let handleUpdate db =
         let botCommands =
-            getUpdates db.subscriptions db.snapshots
+            getUpdates db.subscriptions db.snapshots.unwrap
             |> List.map ^ fun (sub, snaps) -> sub.userId, mkMessage sub snaps
         botCommands
 
