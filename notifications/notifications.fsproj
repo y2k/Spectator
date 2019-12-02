@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\core\core.fsproj" />
+    <ProjectReference Include="..\telegram\telegram.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -17,6 +17,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "tests", "tests\tests.fsproj
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "bot", "bot\bot.fsproj", "{C475291B-A415-4E68-A924-AE53E94BDDCE}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "telegram", "telegram\telegram.fsproj", "{AD0273D8-FB7E-4A98-B804-4F75AF0B9EDF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -114,5 +116,17 @@ Global
 		{C475291B-A415-4E68-A924-AE53E94BDDCE}.Release|x64.Build.0 = Release|Any CPU
 		{C475291B-A415-4E68-A924-AE53E94BDDCE}.Release|x86.ActiveCfg = Release|Any CPU
 		{C475291B-A415-4E68-A924-AE53E94BDDCE}.Release|x86.Build.0 = Release|Any CPU
+		{AD0273D8-FB7E-4A98-B804-4F75AF0B9EDF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AD0273D8-FB7E-4A98-B804-4F75AF0B9EDF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AD0273D8-FB7E-4A98-B804-4F75AF0B9EDF}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{AD0273D8-FB7E-4A98-B804-4F75AF0B9EDF}.Debug|x64.Build.0 = Debug|Any CPU
+		{AD0273D8-FB7E-4A98-B804-4F75AF0B9EDF}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{AD0273D8-FB7E-4A98-B804-4F75AF0B9EDF}.Debug|x86.Build.0 = Debug|Any CPU
+		{AD0273D8-FB7E-4A98-B804-4F75AF0B9EDF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AD0273D8-FB7E-4A98-B804-4F75AF0B9EDF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AD0273D8-FB7E-4A98-B804-4F75AF0B9EDF}.Release|x64.ActiveCfg = Release|Any CPU
+		{AD0273D8-FB7E-4A98-B804-4F75AF0B9EDF}.Release|x64.Build.0 = Release|Any CPU
+		{AD0273D8-FB7E-4A98-B804-4F75AF0B9EDF}.Release|x86.ActiveCfg = Release|Any CPU
+		{AD0273D8-FB7E-4A98-B804-4F75AF0B9EDF}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
