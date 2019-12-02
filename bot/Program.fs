@@ -1,8 +1,6 @@
 ﻿module Spectator.Bot.App
 
 module private Domain =
-    open MongoDB.Bson
-    open MongoDB.Bson.Serialization
     open Spectator.Core
     open System
     type E = Spectator.Core.EnvironmentConfig.Root
@@ -36,8 +34,10 @@ module private Domain =
         | "/telegram_token" :: [ token ] -> SetTelegramToken token
         | _ -> UnknownCmd
 
-    let private subListToMessageResponse (newSubs : NewSubscription list) (subs : Subscription list) =
-        newSubs
+    let subListToMessageResponse db userId =
+        let subs = db.subscriptions |> List.filter ^ fun x -> x.userId = userId
+        db.newSubscriptions
+        |> List.filter ^ fun x -> x.userId = userId
         |> List.map ^ fun x -> sprintf "(Waiting) %O (%s)" x.uri x.filter
         |> List.append (subs |> List.map ^ fun x -> sprintf "%O (%s)" x.uri x.filter)
         |> List.fold (sprintf "%s\n- %s") "Your subscriptions: "
@@ -46,7 +46,7 @@ module private Domain =
         { db with
             newSubscriptions = db.newSubscriptions |> List.filter ^ fun x -> x.userId <> userId || x.uri <> uri
             subscriptions = db.subscriptions |> List.filter ^ fun x -> x.userId <> userId || x.uri <> uri }
-
+    
     let handle message (env : E) (db : CoEffectDb) =
         match parse message with
         | ResetTelegram when env.TelegramAdmin = message.user ->
@@ -58,10 +58,7 @@ module private Domain =
                 do! sTelegramApi.updateToken token
                 return "Token accepted" }
         | GetUserSubscriptionsCmd userId ->
-            db,
-            TextEff ^ subListToMessageResponse
-                (db.newSubscriptions |> List.filter ^ fun x -> x.userId = userId)
-                (db.subscriptions |> List.filter ^ fun x -> x.userId = userId)
+            db, TextEff ^ subListToMessageResponse db userId
         | DeleteSubscriptionCmd(userId, uri) ->
             deleteSubs db userId uri, TextEff "Your subscription deleted"
         | AddNewSubscriptionCmd(userId, uri, filter) ->
