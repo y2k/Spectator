@@ -35,11 +35,12 @@ let sendToTelegramSingle env (user : string) message =
 
 let repl env f = async {
     let bot = makeClient env
-    bot.OnUpdate
-    |> Event.map ^ fun args -> { text = args.Update.Message.Text ||| ""; user = string args.Update.Message.From.Id }
-    |> Event.add ^ fun msg -> f msg >>= sendToTelegramSingle env msg.user |> (Async.Ignore >> Async.Start)
+    let disposable =
+        bot.OnUpdate
+        |> Observable.map ^ fun args -> { text = args.Update.Message.Text ||| ""; user = string args.Update.Message.From.Id }
+        |> Observable.subscribe ^ fun msg -> f msg >>= sendToTelegramSingle env msg.user |> (Async.Ignore >> Async.Start)
 
     bot.StartReceiving()
 
-    do! Async.OnCancel(fun () -> bot.StopReceiving()) |> Async.Ignore
+    do! Async.OnCancel(fun () -> disposable.Dispose(); bot.StopReceiving()) |> Async.Ignore
     do! Async.Sleep System.Int32.MaxValue }
