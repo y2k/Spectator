@@ -66,8 +66,8 @@ module String =
 
 // Types
 
-type PhantomList<'a> = PhantomList of 'a list
-    with member this.unwrap = match this with PhantomList x -> x
+type LogList<'a> = LogList of 'a list
+    with member this.unwrap = match this with LogList x -> x
 
 module EnvironmentConfig =
     type TelegramType = 
@@ -127,7 +127,7 @@ module MongoCollections =
 type CoEffectDb =
     { subscriptions : Subscription list
       newSubscriptions : NewSubscription list
-      snapshots : Snapshot PhantomList }
+      snapshots : Snapshot LogList }
 
 type CoEffect<'a> = (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
 

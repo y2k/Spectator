@@ -14,7 +14,7 @@ module private Domain =
             snaps |> List.collect ^ fun ((p, u), x) ->
                 if p = sub.provider && sub.uri = u then x else []
                 |> List.map ^ fun x -> { x with subscriptionId = sub.id }
-        |> fun ss -> { db with snapshots = PhantomList ss }
+        |> fun ss -> { db with snapshots = LogList ss }
 
     let loadSnapshots (db : CoEffectDb) =
         db.subscriptions
