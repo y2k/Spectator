@@ -5,7 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\core\core.fsproj" />
+    <ProjectReference Include="..\store\store.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

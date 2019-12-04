@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\core\core.fsproj" />
+    <ProjectReference Include="..\store\store.fsproj" />
     <ProjectReference Include="..\telegram\telegram.fsproj" />
   </ItemGroup>
 

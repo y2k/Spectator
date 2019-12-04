@@ -19,6 +19,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "bot", "bot\bot.fsproj", "{C
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "telegram", "telegram\telegram.fsproj", "{AD0273D8-FB7E-4A98-B804-4F75AF0B9EDF}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "store", "store\store.fsproj", "{4D1B6F18-7D24-460B-83B1-D8703D97C10A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -128,5 +130,17 @@ Global
 		{AD0273D8-FB7E-4A98-B804-4F75AF0B9EDF}.Release|x64.Build.0 = Release|Any CPU
 		{AD0273D8-FB7E-4A98-B804-4F75AF0B9EDF}.Release|x86.ActiveCfg = Release|Any CPU
 		{AD0273D8-FB7E-4A98-B804-4F75AF0B9EDF}.Release|x86.Build.0 = Release|Any CPU
+		{4D1B6F18-7D24-460B-83B1-D8703D97C10A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4D1B6F18-7D24-460B-83B1-D8703D97C10A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4D1B6F18-7D24-460B-83B1-D8703D97C10A}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{4D1B6F18-7D24-460B-83B1-D8703D97C10A}.Debug|x64.Build.0 = Debug|Any CPU
+		{4D1B6F18-7D24-460B-83B1-D8703D97C10A}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4D1B6F18-7D24-460B-83B1-D8703D97C10A}.Debug|x86.Build.0 = Debug|Any CPU
+		{4D1B6F18-7D24-460B-83B1-D8703D97C10A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4D1B6F18-7D24-460B-83B1-D8703D97C10A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4D1B6F18-7D24-460B-83B1-D8703D97C10A}.Release|x64.ActiveCfg = Release|Any CPU
+		{4D1B6F18-7D24-460B-83B1-D8703D97C10A}.Release|x64.Build.0 = Release|Any CPU
+		{4D1B6F18-7D24-460B-83B1-D8703D97C10A}.Release|x86.ActiveCfg = Release|Any CPU
+		{4D1B6F18-7D24-460B-83B1-D8703D97C10A}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
