@@ -1,8 +1,14 @@
-bin
-obj
+bin/
+obj/
 
 .ionide/
 
 *.local
+*.local.json
 
 *.dat
+
+.idea/
+*.user
+
+local-storage/

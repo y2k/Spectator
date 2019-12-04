@@ -66,7 +66,19 @@ module String =
 
 // Types
 
-type EnvironmentConfig = { admin : string; filesDir : string }
+type LogList<'a> = LogList of 'a list
+    with member this.unwrap = match this with LogList x -> x
+
+module EnvironmentConfig =
+    type TelegramType = 
+        { Proxy : string
+          Auth : string
+          Token : string }
+    type Root =
+        { Telegram : TelegramType
+          TelegramAdmin : string
+          FilesDir : string
+          MongoDomain : string }
 
 type UserId = string
 
@@ -114,7 +126,8 @@ module MongoCollections =
 
 type CoEffectDb =
     { subscriptions : Subscription list
-      newSubscriptions : NewSubscription list }
+      newSubscriptions : NewSubscription list
+      snapshots : Snapshot LogList }
 
 type CoEffect<'a> = (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
 
