@@ -49,7 +49,7 @@ module MongoCofx =
         try
             let! subs = Effects.query mongo R.SubscriptionsDb None None
             let! newSubs = Effects.query mongo R.NewSubscriptionsDb None None
-            let db = { subscriptions = subs; newSubscriptions = newSubs; snapshots = LogList [] }
+            let db = { subscriptions = subs; newSubscriptions = newSubs; snapshots = EventLog [] }
             let (newDb, eff) = f db
             if newDb.newSubscriptions <> db.newSubscriptions then
                 do! Effects.deleteFromCol mongo R.NewSubscriptionsDb
@@ -59,7 +59,7 @@ module MongoCofx =
                 do! Effects.deleteFromCol mongo R.SubscriptionsDb
                 do! newDb.subscriptions
                     |> Effects.insert mongo R.SubscriptionsDb
-            let (LogList snapshots) = newDb.snapshots
+            let (EventLog snapshots) = newDb.snapshots
             if not <| List.isEmpty snapshots then
                 do! Effects.insert mongo R.SnapshotsDb snapshots
             return eff
@@ -74,7 +74,7 @@ module MongoCofx =
         while true do
             let! snaps = Effects.query mdb R.SnapshotsDb (Some 100) (Some offset)
             if not <| List.isEmpty snaps then
-                do! runCfx mdb ^ fun db -> db, f { db with snapshots = LogList snaps }
+                do! runCfx mdb ^ fun db -> db, f { db with snapshots = EventLog snaps }
                     >>= id
                 offset <- offset + (List.length snaps)
             do! Async.Sleep 5_000 }
