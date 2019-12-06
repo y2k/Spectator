@@ -30,12 +30,14 @@ module ClientFactory =
         if isNull Configs.proxy then new TelegramClient(Configs.appId, Configs.apiHash)
         else new TelegramClient(Configs.appId, Configs.apiHash, handler = TcpClientConnectionHandler(make))
 
-type TelegramConnectorApiImpl() =
+type TelegramConnectorApiImpl' =
+    inherit TelegramConnectorApi
+    inherit Spectator.Worker.HtmlProvider.IParse
 
+let TelegramConnectorApiImpl =
     let mutable client : TelegramClient = null
     let mutable hash : string = ""
-
-    interface TelegramConnectorApi with
+    { new TelegramConnectorApiImpl' with
         member __.resetClient = async {
             client <- ClientFactory.mkClient()
             do! client.ConnectAsync() |> Async.AwaitTask
@@ -51,7 +53,6 @@ type TelegramConnectorApiImpl() =
             L.log ^ sprintf "Telegram setCode called, code = %s" code
             let! r = client.MakeAuthAsync(Configs.phone, hash, code) |> Async.AwaitTask |> Async.Catch
             L.log ^ sprintf "Telegram code applied, result = %O" r }
-    interface Spectator.Worker.HtmlProvider.IParse with
         member __.isValid uri = async {
             if isNull client then return false
             else
@@ -80,15 +81,66 @@ type TelegramConnectorApiImpl() =
                           title = x.Message
                           uri = Uri <| sprintf "https://t.me/%s/%i" chatName x.Id }
                 |> Seq.rev
-                |> Seq.toList }
+                |> Seq.toList } }
 
-let test chatName = async {
-    IO.File.Delete "session.dat"
-    let api = sTelegramApi
-    let! authorized = api.resetClient
-    if not authorized then
-        printfn "Enter code:"
-        let code = Console.ReadLine()
-        do! api.updateToken code
-    let! nodes = (api :?> Spectator.Worker.HtmlProvider.IParse).getNodes ^ Uri ^ sprintf "https://t.me/%s" chatName
-    printfn "History [%i]:\n%A" nodes.Length nodes }
+// type TelegramConnectorApiImpl() =
+//     let mutable client : TelegramClient = null
+//     let mutable hash : string = ""
+
+//     interface TelegramConnectorApi with
+//         member __.resetClient = async {
+//             client <- ClientFactory.mkClient()
+//             do! client.ConnectAsync() |> Async.AwaitTask
+//             L.log "Telegram restarted"
+//             if client.IsUserAuthorized() then
+//                 L.log "Telegram authorized"
+//             else
+//                 let! h = client.SendCodeRequestAsync(Configs.phone) |> Async.AwaitTask
+//                 hash <- h
+//                 L.log ^ sprintf "Telegram required code (hash = %s)" hash
+//             return client.IsUserAuthorized() }
+//         member __.updateToken code = async {
+//             L.log ^ sprintf "Telegram setCode called, code = %s" code
+//             let! r = client.MakeAuthAsync(Configs.phone, hash, code) |> Async.AwaitTask |> Async.Catch
+//             L.log ^ sprintf "Telegram code applied, result = %O" r }
+//     interface Spectator.Worker.HtmlProvider.IParse with
+//         member __.isValid uri = async {
+//             if isNull client then return false
+//             else
+//                 let r = TLRequestResolveUsername()
+//                 r.Username <- uri.AbsolutePath
+//                 let! response = client.SendRequestAsync r |> Async.AwaitTask
+//                 return not (Seq.isEmpty <| (response :> TLResolvedPeer).Chats) }
+//         member __.getNodes uri = async {
+//             let chatName = uri.Segments.[1]
+//             let r = TLRequestResolveUsername()
+//             r.Username <- chatName
+//             let! response = client.SendRequestAsync r |> Async.AwaitTask
+//             let channel = (response :> TLResolvedPeer).Chats.[0] :?> TLChannel
+//             L.log ^ sprintf "Response = %O | id = %O" channel.Username channel.Id
+//             let i = TLInputPeerChannel()
+//             i.ChannelId <- channel.Id
+//             i.AccessHash <- channel.AccessHash.Value
+//             let! history = client.GetHistoryAsync(i, 0, 0, 50) |> Async.AwaitTask
+//             return
+//                 (history :?> TLChannelMessages).Messages
+//                 |> Seq.choose ^ function | :? TLMessage as x -> Some x | _ -> None
+//                 |> Seq.map ^
+//                     fun x ->
+//                         { subscriptionId = Guid.Empty
+//                           id = sprintf "telegram-%i" x.Id
+//                           title = x.Message
+//                           uri = Uri <| sprintf "https://t.me/%s/%i" chatName x.Id }
+//                 |> Seq.rev
+//                 |> Seq.toList }
+
+// let test chatName = async {
+//     IO.File.Delete "session.dat"
+//     let api = sTelegramApi
+//     let! authorized = api.resetClient
+//     if not authorized then
+//         printfn "Enter code:"
+//         let code = Console.ReadLine()
+//         do! api.updateToken code
+//     let! nodes = (api :?> Spectator.Worker.HtmlProvider.IParse).getNodes ^ Uri ^ sprintf "https://t.me/%s" chatName
+//     printfn "History [%i]:\n%A" nodes.Length nodes }

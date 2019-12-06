@@ -137,7 +137,4 @@ type TelegramConnectorApi =
     abstract resetClient : bool Async
     abstract updateToken : string -> unit Async
 
-let mutable sTelegramApi : TelegramConnectorApi =
-    { new TelegramConnectorApi with
-          member __.resetClient = failwith "Not implemented"
-          member __.updateToken _ = failwith "Not implemented" }
+type DependencyGraph = { telegram : TelegramConnectorApi }

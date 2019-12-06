@@ -2,6 +2,7 @@
 
 open Spectator.Core
 type L = Spectator.Infrastructure.Log
+type IParser = Spectator.Worker.HtmlProvider.IParse
 
 module private Domain =
     open MongoDB.Bson
@@ -41,44 +42,41 @@ module private Domain =
         |> List.allPairs [ Provider.Rss; Provider.Telegram ]
 
 module private Effects =
-    let isValid env ps =
-        ps
-        |> List.map (fun (p, url) ->
-            match p with
-            | Provider.Rss -> RssParser.RssParse.isValid url
-            | Provider.Telegram -> (sTelegramApi :?> HtmlProvider.IParse).isValid url
-            | Provider.Html -> (HtmlProvider.HtmlParse(env) :> HtmlProvider.IParse).isValid url
-            | _ -> failwithf "%O" p)
-        |> Async.Parallel >>- fun xs -> List.ofArray xs
-
-    let loadSnapshots env ps =
-        ps
-        |> List.map (fun (p, url) ->
-            match p with
-            | Provider.Rss -> RssParser.RssParse.getNodes url
-            | Provider.Telegram -> (sTelegramApi :?> HtmlProvider.IParse).getNodes url
-            | Provider.Html -> (HtmlProvider.HtmlParse(env) :> HtmlProvider.IParse).getNodes url
-            | _ -> failwithf "%O" p)
-        |> Async.Parallel
-        >>- fun xs -> List.zip ps (List.ofArray xs)
+    let private apply parsers requets f =
+        requets
+        |> List.map ^ fun (p, url) ->
+            let x : IParser = Map.find p parsers
+            f x url
+        |> Async.Parallel 
+        >>- fun xs -> List.ofArray xs
+    let isValid parsers requests = 
+        apply parsers requests ^ fun x url -> x.isValid url
+    let loadSnapshots parsers requests =
+        apply parsers requests ^ fun x url -> x.getNodes url
+        >>- List.zip requests
 
 module M = Spectator.Infrastructure.MongoCofx
 
 let start env mdb = async {
+    let parsers = Map.ofList [
+        Provider.Rss, RssParser.RssParse
+        Provider.Telegram, Spectator.Worker.TelegramParser.TelegramConnectorApiImpl :> IParser
+        Provider.Html, HtmlProvider.HtmlParse(env) :> IParser ]
+
     while true do
         L.log "Start syncing..."
 
         let! subReqs = M.runCfx mdb ^ fun db -> db, Domain.loadNewSubs db
         L.log (sprintf "LOG :: new subscriptions requests %A" subReqs)
 
-        let! subResps = Effects.isValid env subReqs
+        let! subResps = Effects.isValid parsers subReqs
         L.log ^ sprintf "LOG :: new subscriptions results %A" subResps
 
         do! M.runCfx mdb ^ fun db -> Domain.saveSubs db subReqs subResps, ()
 
         let! newSnapshots =
             M.runCfx mdb ^ fun db -> db, Domain.loadSnapshots db
-            >>= Effects.loadSnapshots env
+            >>= Effects.loadSnapshots parsers
         L.log ^ sprintf "LOG :: new snapshots %A" newSnapshots
 
         do! M.runCfx mdb ^ fun db ->
