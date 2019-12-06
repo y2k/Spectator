@@ -41,13 +41,13 @@ module private Domain =
         |> List.allPairs [ Provider.Rss; Provider.Telegram ]
 
 module private Effects =
-    let isValid ps =
+    let isValid env ps =
         ps
         |> List.map (fun (p, url) ->
             match p with
-            | Provider.Rss -> RssParser.isValid url
-            | Provider.Telegram -> sTelegramApi.isValid url
-            | Provider.Html -> HtmlProvider.isValid url
+            | Provider.Rss -> RssParser.RssParse.isValid url
+            | Provider.Telegram -> (sTelegramApi :?> HtmlProvider.IParse).isValid url
+            | Provider.Html -> (HtmlProvider.HtmlParse(env) :> HtmlProvider.IParse).isValid url
             | _ -> failwithf "%O" p)
         |> Async.Parallel >>- fun xs -> List.ofArray xs
 
@@ -55,9 +55,9 @@ module private Effects =
         ps
         |> List.map (fun (p, url) ->
             match p with
-            | Provider.Rss -> RssParser.getNodes url
-            | Provider.Telegram -> sTelegramApi.getNodes url
-            | Provider.Html -> HtmlProvider.getNodes env url
+            | Provider.Rss -> RssParser.RssParse.getNodes url
+            | Provider.Telegram -> (sTelegramApi :?> HtmlProvider.IParse).getNodes url
+            | Provider.Html -> (HtmlProvider.HtmlParse(env) :> HtmlProvider.IParse).getNodes url
             | _ -> failwithf "%O" p)
         |> Async.Parallel
         >>- fun xs -> List.zip ps (List.ofArray xs)
@@ -71,7 +71,7 @@ let start env mdb = async {
         let! subReqs = M.runCfx mdb ^ fun db -> db, Domain.loadNewSubs db
         L.log (sprintf "LOG :: new subscriptions requests %A" subReqs)
 
-        let! subResps = Effects.isValid subReqs
+        let! subResps = Effects.isValid env subReqs
         L.log ^ sprintf "LOG :: new subscriptions results %A" subResps
 
         do! M.runCfx mdb ^ fun db -> Domain.saveSubs db subReqs subResps, ()

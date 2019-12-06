@@ -134,14 +134,10 @@ type CoEffect<'a> = (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
 // Interfaces
 
 type TelegramConnectorApi =
-    abstract isValid : Uri -> bool Async
-    abstract getNodes : Uri -> Snapshot list Async
     abstract resetClient : bool Async
     abstract updateToken : string -> unit Async
 
 let mutable sTelegramApi : TelegramConnectorApi =
     { new TelegramConnectorApi with
-          member __.isValid _ = async.Return false
-          member __.getNodes _ = async.Return []
-          member __.resetClient = async.Return false
-          member __.updateToken _ = async.Zero() }
+          member __.resetClient = failwith "Not implemented"
+          member __.updateToken _ = failwith "Not implemented" }

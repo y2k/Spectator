@@ -51,6 +51,7 @@ type TelegramConnectorApiImpl() =
             L.log ^ sprintf "Telegram setCode called, code = %s" code
             let! r = client.MakeAuthAsync(Configs.phone, hash, code) |> Async.AwaitTask |> Async.Catch
             L.log ^ sprintf "Telegram code applied, result = %O" r }
+    interface Spectator.Worker.HtmlProvider.IParse with
         member __.isValid uri = async {
             if isNull client then return false
             else
@@ -59,9 +60,9 @@ type TelegramConnectorApiImpl() =
                 let! response = client.SendRequestAsync r |> Async.AwaitTask
                 return not (Seq.isEmpty <| (response :> TLResolvedPeer).Chats) }
         member __.getNodes uri = async {
-            let chatname = uri.Segments.[1]
+            let chatName = uri.Segments.[1]
             let r = TLRequestResolveUsername()
-            r.Username <- chatname
+            r.Username <- chatName
             let! response = client.SendRequestAsync r |> Async.AwaitTask
             let channel = (response :> TLResolvedPeer).Chats.[0] :?> TLChannel
             L.log ^ sprintf "Response = %O | id = %O" channel.Username channel.Id
@@ -77,7 +78,7 @@ type TelegramConnectorApiImpl() =
                         { subscriptionId = Guid.Empty
                           id = sprintf "telegram-%i" x.Id
                           title = x.Message
-                          uri = Uri <| sprintf "https://t.me/%s/%i" chatname x.Id }
+                          uri = Uri <| sprintf "https://t.me/%s/%i" chatName x.Id }
                 |> Seq.rev
                 |> Seq.toList }
 
@@ -89,5 +90,5 @@ let test chatName = async {
         printfn "Enter code:"
         let code = Console.ReadLine()
         do! api.updateToken code
-    let! nodes = api.getNodes ^ Uri ^ sprintf "https://t.me/%s" chatName
+    let! nodes = (api :?> Spectator.Worker.HtmlProvider.IParse).getNodes ^ Uri ^ sprintf "https://t.me/%s" chatName
     printfn "History [%i]:\n%A" nodes.Length nodes }

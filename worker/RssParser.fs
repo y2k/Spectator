@@ -35,16 +35,9 @@ module Parser =
         |> XDocument.Parse
         |> (fun doc -> parseRss doc @ parseAtom doc)
 
-    let isValid =
-        getNodes
-        >> List.isEmpty
-        >> not
+    let isValid = getNodes >> List.isEmpty >> not
 
-let isValid (uri : Uri) =
-    uri
-    |> Http.download
-    >>- Parser.isValid
-let getNodes (uri : Uri) =
-    uri
-    |> Http.download
-    >>- Parser.getNodes
+let RssParse =
+    { new Spectator.Worker.HtmlProvider.IParse with
+        member __.isValid uri = uri |> Http.download >>- Parser.isValid
+        member __.getNodes uri = uri |> Http.download >>- Parser.getNodes }
