@@ -3,5 +3,5 @@ image:
 vscode:
   extensions:
     - Ionide.Ionide-fsharp@4.3.2:GoBUk/Z8vRkFzT/mkYNBhQ==
-    - ms-vscode.csharp@1.21.8:b295AK/AkVs7Pl/asBNDzQ==
     - kube.theme-kay@1.0.2:RNWWHFExFoXnYuXUeUXs+Q==
+    - k--kato.intellij-idea-keybindings@0.2.37:vz3hpwf8WGtALEI7zq/EXA==
