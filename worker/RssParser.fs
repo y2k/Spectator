@@ -1,12 +1,13 @@
 module Spectator.Worker.RssParser
 
 open Spectator.Core
-open System
-open System.Xml
-open System.Xml.Linq
-open System.Xml.XPath
 
 module Parser =
+    open System
+    open System.Xml
+    open System.Xml.Linq
+    open System.Xml.XPath
+
     let private ns = XmlNamespaceManager(NameTable())
 
     ns.AddNamespace("media", "http://search.yahoo.com/mrss/")
@@ -30,12 +31,21 @@ module Parser =
                  uri = e.XPathSelectElement("atom:link", ns).Attribute("href" |> XName.op_Implicit).Value |> Uri })
         |> Seq.toList
 
-    let getNodes (html : String) =
+    let getNodes (html : string) =
         html
         |> XDocument.Parse
         |> (fun doc -> parseRss doc @ parseAtom doc)
 
     let isValid = getNodes >> List.isEmpty >> not
+
+module private Http =
+    open System.Net.Http
+
+    let download (uri : System.Uri) = async {
+        use client = new HttpClient()
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/605.1.15 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/605.1 Edge/19.17763"
+        |> client.DefaultRequestHeaders.UserAgent.ParseAdd
+        return! client.GetStringAsync uri |> Async.AwaitTask }
 
 let RssParse =
     { new Spectator.Worker.HtmlProvider.IParse with

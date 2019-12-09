@@ -49,17 +49,6 @@ module Async =
     let next a2 a = async { let! _ = a
                             return! a2 }
 
-module Http =
-    open System.Net.Http
-
-    let download (uri : Uri) =
-        async {
-            use client = new HttpClient()
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/605.1.15 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/605.1 Edge/19.17763"
-            |> client.DefaultRequestHeaders.UserAgent.ParseAdd
-            return! client.GetStringAsync uri |> Async.AwaitTask
-        }
-
 module String =
     let isNullOrEmpty = String.IsNullOrEmpty
     let split (x : String) (separator : Char) = x.Split(separator) |> Array.toList
