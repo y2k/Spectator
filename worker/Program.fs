@@ -1,11 +1,10 @@
 module Spectator.Worker.App
 
 module private Domain =
-    open System
     open Spectator.Core
     module R = Spectator.Core.MongoCollections
 
-    let mkSnapshotSaveCommands (db : CoEffectDb) (snaps : ((Provider * Uri) * Snapshot list) list) =
+    let saveSnapshots (db : CoEffectDb) snaps =
         db.subscriptions
         |> List.collect ^ fun sub ->
             snaps |> List.collect ^ fun ((p, u), x) ->
@@ -72,7 +71,7 @@ let start parsers mdb = async {
         L.log ^ sprintf "LOG :: new snapshots %A" newSnapshots
 
         do! M.runCfx mdb ^ fun db ->
-                Domain.mkSnapshotSaveCommands db newSnapshots, ()
+                Domain.saveSnapshots db newSnapshots, ()
 
         L.log "End syncing, waiting..."
         do! Async.Sleep 600_000 }
