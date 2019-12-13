@@ -72,12 +72,7 @@ module EnvironmentConfig =
 type UserId = string
 
 type SubscriptionId = Guid
-
-type Provider =
-    | Invalid = 0
-    | Rss = 1
-    | Telegram = 2
-    | Html = 3
+type PluginId = Guid
 
 [<CLIMutable>]
 type NewSubscription =
@@ -90,7 +85,7 @@ type NewSubscription =
 type Subscription =
     { id : SubscriptionId
       userId : UserId
-      provider : Provider
+      provider : PluginId
       uri : Uri
       filter : string }
 

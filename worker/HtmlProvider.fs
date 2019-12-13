@@ -30,8 +30,9 @@ open Spectator.Core
 open System
 
 type IParse =
-    abstract member isValid : System.Uri -> bool Async
-    abstract member getNodes : System.Uri -> Snapshot list Async
+    abstract member id : Guid
+    abstract member isValid : Uri -> bool Async
+    abstract member getNodes : Uri -> Snapshot list Async
 
 type F = System.IO.File
 
@@ -59,6 +60,7 @@ let private download (uri : Uri) = async {
     
 type HtmlParse(env : EnvironmentConfig.Root) =
     interface IParse with
+        member __.id = Guid.Parse "AE4FEE1F-C08D-44B9-B526-4162FF1C328C"
         member __.isValid uri = async { return uri.IsAbsoluteUri && uri.Scheme = "https" }
         member __.getNodes uri = async {
             let! content = download uri

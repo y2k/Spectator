@@ -66,6 +66,8 @@ module MongoCofx =
         finally
             semaphore.Release() |> ignore }
 
+    let inline runCfx0 m f = runCfx m (fun db -> f db, ())
+    
     let subscribeQuery (mdb : IMongoDatabase) f = async {
         let col = mdb.GetCollection R.SnapshotsDb
         let! offsetStart = col.CountDocumentsAsync(FilterDefinition.op_Implicit "{}") |> Async.AwaitTask

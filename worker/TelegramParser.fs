@@ -38,6 +38,7 @@ let TelegramConnectorApiImpl =
     let mutable client : TelegramClient = null
     let mutable hash : string = ""
     { new TelegramConnectorApiImpl' with
+        member __.id = Guid.Parse "3B26457E-8AB7-41AD-8DEC-11AF891A3052"
         member __.resetClient = async {
             client <- ClientFactory.mkClient()
             do! client.ConnectAsync() |> Async.AwaitTask

@@ -49,5 +49,6 @@ module private Http =
 
 let RssParse =
     { new Spectator.Worker.HtmlProvider.IParse with
+        member __.id = System.Guid.Parse "E5D3A9F2-325C-4CEF-BCA9-99D23F9E5AE5"
         member __.isValid uri = uri |> Http.download >>- Parser.isValid
         member __.getNodes uri = uri |> Http.download >>- Parser.getNodes }

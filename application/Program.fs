@@ -12,10 +12,10 @@ let main _ =
     let deps = { telegram = TelegramParser.TelegramConnectorApiImpl }
     let db = MongoDB.Driver.MongoClient(sprintf "mongodb://%s" env.MongoDomain).GetDatabase("spectator")
 
-    let parsers = Map.ofList [
-        Provider.Rss, RssParser.RssParse
-        Provider.Telegram, TelegramParser.TelegramConnectorApiImpl :> HtmlProvider.IParse
-        Provider.Html, HtmlProvider.HtmlParse(env) :> HtmlProvider.IParse ]
+    let parsers =
+        [ RssParser.RssParse
+          TelegramParser.TelegramConnectorApiImpl :> HtmlProvider.IParse
+          HtmlProvider.HtmlParse(env) :> HtmlProvider.IParse ]
 
     [ Spectator.Worker.App.start parsers db
       Spectator.Bot.App.start deps db env
