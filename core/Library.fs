@@ -53,6 +53,11 @@ module String =
     let isNullOrEmpty = String.IsNullOrEmpty
     let split (x : String) (separator : Char) = x.Split(separator) |> Array.toList
 
+module List =
+    let inline exceptBy xs compare origin =
+        origin
+        |> List.filter ^ fun x -> xs |> List.exists (fun y -> compare x y) |> not
+
 // Types
 
 type EventLog<'a> = EventLog of 'a list
@@ -112,6 +117,7 @@ type CoEffectDb =
     { subscriptions : Subscription list
       newSubscriptions : NewSubscription list
       snapshots : Snapshot EventLog }
+    with static member empty = { subscriptions = [] ; newSubscriptions = [] ; snapshots = EventLog [] }
 
 type CoEffect<'a> = (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
 

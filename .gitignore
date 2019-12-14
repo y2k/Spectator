@@ -12,3 +12,5 @@ obj/
 *.user
 
 local-storage/
+
+tests.fsx
