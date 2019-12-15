@@ -38,13 +38,14 @@ module Domain =
     let mkNewSnapshots =
         let loadSnapshots (db : CoEffectDb) _ =
             db.subscriptions
-            |> List.map (fun x -> x.provider, x.uri)
+            |> List.map ^ fun x -> x.provider, x.uri
         let saveSnapshots (db : CoEffectDb) snaps =
             db.subscriptions
             |> List.collect ^ fun sub ->
-                snaps |> List.collect ^ fun ((p, u), snaps) ->
-                    if p = sub.provider && sub.uri = u then snaps else []
-                    |> List.map ^ fun x -> { x with subscriptionId = sub.id }
+                snaps 
+                |> List.collect ^ fun ((p, u), snaps) ->
+                    if p = sub.provider && u = sub.uri then snaps else []
+                |> List.map ^ fun x -> { x with subscriptionId = sub.id }
             |> fun ss -> { db with snapshots = EventLog ss }
 
         { before = loadSnapshots
