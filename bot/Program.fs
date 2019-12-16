@@ -1,10 +1,13 @@
-﻿module Spectator.Bot.App
+module Spectator.Bot.App
 
 module Domain =
     open Spectator.Core
     open System
+
     type E = Spectator.Core.EnvironmentConfig.Root
+
     type D = Spectator.Core.DependencyGraph
+
     type R = System.Text.RegularExpressions.Regex
 
     type Eff =
@@ -20,9 +23,10 @@ module Domain =
         | SetTelegramToken of string
 
     let private isValidFilter filter =
-        String.isNullOrEmpty filter ||
-            try R.IsMatch("", filter) |> ignore; true
-            with :? ArgumentException -> false
+        String.isNullOrEmpty filter || try
+                                           R.IsMatch("", filter) |> ignore
+                                           true
+                                       with :? ArgumentException -> false
 
     let private parse (message : Bot.Message) =
         match String.split message.text ' ' with
@@ -45,30 +49,39 @@ module Domain =
 
     let private deleteSubs db userId uri =
         { db with
-            newSubscriptions = db.newSubscriptions |> List.filter ^ fun x -> x.userId <> userId || x.uri <> uri
-            subscriptions = db.subscriptions |> List.filter ^ fun x -> x.userId <> userId || x.uri <> uri }
-    
+              newSubscriptions = db.newSubscriptions |> List.filter ^ fun x -> x.userId <> userId || x.uri <> uri
+              subscriptions = db.subscriptions |> List.filter ^ fun x -> x.userId <> userId || x.uri <> uri }
+
     let handle message (deps : D) (env : E) (db : CoEffectDb) =
         match parse message with
         | ResetTelegram when env.TelegramAdmin = message.user ->
-            db, AsyncTextEff ^ async {
-                let! authorized = deps.telegram.resetClient
-                return sprintf "Telegram recreated, authorized = %O" authorized }
+            db,
+            AsyncTextEff ^ async {
+                               let! authorized = deps.telegram.resetClient
+                               return sprintf "Telegram recreated, authorized = %O" authorized }
         | SetTelegramToken token when env.TelegramAdmin = message.user ->
-            db, AsyncTextEff ^ async {
-                do! deps.telegram.updateToken token
-                return "Token accepted" }
+            db,
+            AsyncTextEff ^ async {
+                               do! deps.telegram.updateToken token
+                               return "Token accepted"
+                           }
         | GetUserSubscriptionsCmd userId ->
             db, TextEff ^ subListToMessageResponse db userId
         | DeleteSubscriptionCmd(userId, uri) ->
             deleteSubs db userId uri, TextEff "Your subscription deleted"
         | AddNewSubscriptionCmd(userId, uri, filter) ->
-            let sub = { id = Guid.NewGuid(); userId = userId; uri = uri; filter = Option.defaultValue "" filter }
-            { db with newSubscriptions = sub :: db.newSubscriptions },
-            TextEff "Your subscription created"
-        | _ -> db, TextEff "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription"
+            let sub =
+                { id = Guid.NewGuid()
+                  userId = userId
+                  uri = uri
+                  filter = Option.defaultValue "" filter }
+            { db with newSubscriptions = sub :: db.newSubscriptions }, TextEff "Your subscription created"
+        | _ ->
+            db,
+            TextEff "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription"
 
 open Spectator.Core
+
 module C = Spectator.Infrastructure.MongoCofx
 
 let start deps db env =
@@ -76,4 +89,5 @@ let start deps db env =
         async {
             match! C.runCfx db (Domain.handle msg deps env) with
             | Domain.TextEff t -> return t
-            | Domain.AsyncTextEff at -> return! at }
+            | Domain.AsyncTextEff at -> return! at
+        }

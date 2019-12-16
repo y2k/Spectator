@@ -28,19 +28,30 @@ let sendToTelegramSingle env (user : string) message =
     bot.SendTextMessageAsync(ChatId.op_Implicit user, message, parseMode = Enums.ParseMode.Html)
     |> (Async.AwaitTask >> Async.Catch)
     >>- function
-        | Choice1Of2 _ -> SuccessResponse
-        | Choice2Of2(:? AggregateException as ae) when (ae.InnerException :? Exceptions.ApiRequestException) ->
-            BotBlockedResponse
-        | Choice2Of2 e -> UnknownErrorResponse e
+    | Choice1Of2 _ -> SuccessResponse
+    | Choice2Of2(:? AggregateException as ae) when (ae.InnerException :? Exceptions.ApiRequestException) ->
+        BotBlockedResponse
+    | Choice2Of2 e -> UnknownErrorResponse e
 
-let repl env f = async {
-    let bot = makeClient env
-    let disposable =
-        bot.OnUpdate
-        |> Observable.map ^ fun args -> { text = args.Update.Message.Text ||| ""; user = string args.Update.Message.From.Id }
-        |> Observable.subscribe ^ fun msg -> f msg >>= sendToTelegramSingle env msg.user |> (Async.Ignore >> Async.Start)
+let repl env f =
+    async {
+        let bot = makeClient env
 
-    bot.StartReceiving()
+        let disposable =
+            bot.OnUpdate
+            |> Observable.map ^ fun args ->
+                { text = args.Update.Message.Text ||| ""
+                  user = string args.Update.Message.From.Id }
+            |> Observable.subscribe ^ fun msg ->
+                f msg
+                >>= sendToTelegramSingle env msg.user
+                |> (Async.Ignore >> Async.Start)
 
-    do! Async.OnCancel(fun () -> disposable.Dispose(); bot.StopReceiving()) |> Async.Ignore
-    do! Async.Sleep System.Int32.MaxValue }
+        bot.StartReceiving()
+
+        do! Async.OnCancel(fun () ->
+                disposable.Dispose()
+                bot.StopReceiving())
+            |> Async.Ignore
+        do! Async.Sleep System.Int32.MaxValue
+    }

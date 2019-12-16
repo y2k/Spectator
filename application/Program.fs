@@ -7,7 +7,9 @@ let main _ =
     let env =
         System.IO.File.ReadAllText "local-storage/settings.yml"
         |> Deserialize<EnvironmentConfig.Root>
-        |> function [ Succes { Data = x } ] -> x | _ -> failwith "error"
+        |> function
+        | [ Succes { Data = x } ] -> x
+        | _ -> failwith "error"
 
     let deps = { telegram = TelegramParser.TelegramConnectorApiImpl }
     let db = MongoDB.Driver.MongoClient(sprintf "mongodb://%s" env.MongoDomain).GetDatabase("spectator")
@@ -20,5 +22,7 @@ let main _ =
     [ Spectator.Worker.App.start parsers db
       Spectator.Bot.App.start deps db env
       Spectator.Notifications.main env db ]
-    |> Async.Parallel |> Async.RunSynchronously |> ignore
+    |> Async.Parallel
+    |> Async.RunSynchronously
+    |> ignore
     0

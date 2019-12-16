@@ -1,4 +1,4 @@
-﻿open Suave
+open Suave
 open Suave.Swagger.Rest
 open Suave.Swagger.Swagger
 open Suave.Swagger.FunnyDsl

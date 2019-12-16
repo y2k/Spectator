@@ -4,50 +4,70 @@ open System
 
 [<AutoOpen>]
 module Operators =
-    let inline ( *> ) ma mb = async { let! _ = ma
-                                      return! mb }
+    let inline ( *> ) ma mb =
+        async {
+            let! _ = ma
+            return! mb }
     let inline (>>=) ma fm = async.Bind(ma, fm)
-    let inline (>>-) ma f = async { let! a = ma
-                                    return f a }
+    let inline (>>-) ma f =
+        async {
+            let! a = ma
+            return f a }
     let inline (>=>) mfa mfb a =
-        async { let! b = mfa a
-                let! c = mfb b
-                return c }
+        async {
+            let! b = mfa a
+            let! c = mfb b
+            return c }
     let inline flip f a b = f b a
     let inline curry f a b = f (a, b)
     let inline uncurry f (a, b) = f a b
     let inline uncurry' f (a, b, c) = f a b c
     let inline always a _ = a
     let inline (^) f a = f a
+
     let inline (|||) a b =
         if String.IsNullOrEmpty a then b else a
 
 module Async =
     let wrapTask (f : unit -> System.Threading.Tasks.Task) =
-        async {
-            do! f() |> Async.AwaitTask
-        }
-    let rec seq = function
+        async { do! f() |> Async.AwaitTask }
+
+    let rec seq =
+        function
         | [] -> async.Return []
         | h :: t ->
             async {
-                let! b = h |> Async.Catch >>- function | Choice1Of2 x -> Ok x | Choice2Of2 x -> Error x
+                let! b = h
+                         |> Async.Catch
+                         >>- function
+                         | Choice1Of2 x -> Ok x
+                         | Choice2Of2 x -> Error x
                 let! c = seq t
                 return b :: c
             }
+
     let lift = async.Return
-    let map2 f a = async { let! (a1, a2) = a
-                           return f a1 a2 }
-    let map3 f a = async { let! (a1, a2, a3) = a
-                           return f a1 a2 a3 }
+    let map2 f a =
+        async {
+            let! (a1, a2) = a
+            return f a1 a2 }
+    let map3 f a =
+        async {
+            let! (a1, a2, a3) = a
+            return f a1 a2 a3 }
     let zip a1 a2 f =
-        async { let! r1 = a1
-                let! r2 = a2
-                return f (r1, r2) }
-    let replaceWith x a = async { let! _ = a
-                                  return x }
-    let next a2 a = async { let! _ = a
-                            return! a2 }
+        async {
+            let! r1 = a1
+            let! r2 = a2
+            return f (r1, r2) }
+    let replaceWith x a =
+        async {
+            let! _ = a
+            return x }
+    let next a2 a =
+        async {
+            let! _ = a
+            return! a2 }
 
 module String =
     let isNullOrEmpty = String.IsNullOrEmpty
@@ -56,18 +76,25 @@ module String =
 module List =
     let inline exceptBy xs compare origin =
         origin
-        |> List.filter ^ fun x -> xs |> List.exists (fun y -> compare x y) |> not
+        |> List.filter ^ fun x ->
+            xs
+            |> List.exists (fun y -> compare x y)
+            |> not
 
 // Types
 
-type EventLog<'a> = EventLog of 'a list
-    with member this.unwrap = match this with EventLog x -> x
+type EventLog<'a> =
+    | EventLog of 'a list
+    member this.unwrap =
+        match this with
+        | EventLog x -> x
 
 module EnvironmentConfig =
-    type TelegramType = 
+    type TelegramType =
         { Proxy : string
           Auth : string
           Token : string }
+
     type Root =
         { Telegram : TelegramType
           TelegramAdmin : string
@@ -77,6 +104,7 @@ module EnvironmentConfig =
 type UserId = string
 
 type SubscriptionId = Guid
+
 type PluginId = Guid
 
 [<CLIMutable>]
@@ -117,7 +145,10 @@ type CoEffectDb =
     { subscriptions : Subscription list
       newSubscriptions : NewSubscription list
       snapshots : Snapshot EventLog }
-    with static member empty = { subscriptions = [] ; newSubscriptions = [] ; snapshots = EventLog [] }
+    static member empty =
+        { subscriptions = []
+          newSubscriptions = []
+          snapshots = EventLog [] }
 
 type CoEffect<'a> = (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
 
@@ -127,4 +158,5 @@ type TelegramConnectorApi =
     abstract resetClient : bool Async
     abstract updateToken : string -> unit Async
 
-type DependencyGraph = { telegram : TelegramConnectorApi }
+type DependencyGraph =
+    { telegram : TelegramConnectorApi }
