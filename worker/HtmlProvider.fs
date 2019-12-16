@@ -30,9 +30,9 @@ open Spectator.Core
 open System
 
 type IParse =
-    abstract member id : Guid
-    abstract member isValid : Uri -> bool Async
-    abstract member getNodes : Uri -> Snapshot list Async
+    abstract id : Guid
+    abstract isValid : Uri -> bool Async
+    abstract getNodes : Uri -> Snapshot list Async
 
 type F = System.IO.File
 
@@ -57,7 +57,7 @@ let private download (uri : Uri) = async {
     r.RequestMessage.Headers.UserAgent.ParseAdd "Mozilla/6.0 (Windows NT 6.2; WOW64; rv:16.0.1) Gecko/20121011 Firefox/16.0.1"
     r.RequestMessage.Headers.Accept.ParseAdd "text/html, application/xml;q=0.9, application/xhtml+xml, image/png, image/webp, image/jpeg, image/gif, image/x-xbitmap, */*;q=0.1"
     return! r.Content.ReadAsStringAsync() |> Async.AwaitTask }
-    
+
 type HtmlParse(env : EnvironmentConfig.Root) =
     interface IParse with
         member __.id = Guid.Parse "AE4FEE1F-C08D-44B9-B526-4162FF1C328C"

@@ -23,7 +23,7 @@ module Utils =
 
 [<Fact>]
 let ``mkNewSnapshots test``() =
-    let db = 
+    let db =
         D.mkNewSubscriptions.before Utils.db Utils.plugins
         |> List.map ^ fun x -> x, true
         |> D.mkNewSubscriptions.after Utils.db
@@ -38,8 +38,8 @@ let ``mkNewSnapshots test``() =
     let actual = requests |> List.map (fun r -> r, []) |> D.mkNewSnapshots.after db
     test <@ db = actual @>
 
-    let actual = 
-        requests 
+    let actual =
+        requests
         |> List.map ^ fun (p, u) -> (p, u), [ { subscriptionId = p; id = "0"; title = "title"; uri = u } ]
         |> D.mkNewSnapshots.after db
     test <@ requests.Length = actual.snapshots.unwrap.Length @>
@@ -52,14 +52,14 @@ let ``mkNewSubscriptions test``() =
     let expected = Utils.db.newSubscriptions |> List.map (fun x -> x.uri) |> List.allPairs Utils.plugins
     test <@ expected = requests @>
 
-    let actual = 
-        requests 
+    let actual =
+        requests
         |> List.map ^ fun x -> x, false
         |> D.mkNewSubscriptions.after Utils.db
     test <@ CoEffectDb.empty = actual @>
 
-    let actual = 
-        requests 
+    let actual =
+        requests
         |> List.map ^ fun x -> x, true
         |> D.mkNewSubscriptions.after Utils.db
     test <@ 2 = actual.subscriptions.Length && [] = actual.newSubscriptions @>

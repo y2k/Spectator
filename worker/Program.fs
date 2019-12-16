@@ -7,7 +7,7 @@ type IParser = Spectator.Worker.HtmlProvider.IParse
 module Domain =
     type Eff<'a, 'b> =
         { before : CoEffectDb -> PluginId list -> (PluginId * 'a) list
-          effect : IParser -> 'a -> 'b Async 
+          effect : IParser -> 'a -> 'b Async
           after : CoEffectDb -> ((PluginId * 'a) * 'b) list -> CoEffectDb }
 
     let mkNewSubscriptions =
@@ -42,7 +42,7 @@ module Domain =
         let saveSnapshots (db : CoEffectDb) snaps =
             db.subscriptions
             |> List.collect ^ fun sub ->
-                snaps 
+                snaps
                 |> List.collect ^ fun ((p, u), snaps) ->
                     if p = sub.provider && u = sub.uri then snaps else []
                 |> List.map ^ fun x -> { x with subscriptionId = sub.id }
@@ -58,9 +58,9 @@ module Infrastructure =
     let private apply parsers f requests =
         requests
         |> List.map ^ fun (p, url) ->
-            let x : IParser = parsers |> List.find ^ fun x -> x.id = p 
+            let x : IParser = parsers |> List.find ^ fun x -> x.id = p
             f x url
-        |> fun tasks -> Async.Parallel(tasks, 3) 
+        |> fun tasks -> Async.Parallel(tasks, 3)
         >>- (List.ofArray >> List.zip requests)
     let runFx mdb (parsers : IParser list) eff =
         let parserIds = parsers |> List.map ^ fun p -> p.id

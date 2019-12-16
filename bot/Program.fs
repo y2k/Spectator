@@ -1,4 +1,4 @@
-﻿module Spectator.Bot.App
+module Spectator.Bot.App
 
 module Domain =
     open Spectator.Core
@@ -47,7 +47,7 @@ module Domain =
         { db with
             newSubscriptions = db.newSubscriptions |> List.filter ^ fun x -> x.userId <> userId || x.uri <> uri
             subscriptions = db.subscriptions |> List.filter ^ fun x -> x.userId <> userId || x.uri <> uri }
-    
+
     let handle message (deps : D) (env : E) (db : CoEffectDb) =
         match parse message with
         | ResetTelegram when env.TelegramAdmin = message.user ->

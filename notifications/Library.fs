@@ -1,4 +1,4 @@
-﻿module Spectator.Notifications
+module Spectator.Notifications
 
 open Spectator.Core
 module M = Spectator.Infrastructure.MongoCofx

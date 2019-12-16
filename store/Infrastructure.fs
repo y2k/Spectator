@@ -22,7 +22,7 @@ module MongoCofx =
         let insert (db : IMongoDatabase) colName items = async {
             do! items
                 |> List.map ^ fun x ->
-                    Async.wrapTask ^ fun _ -> 
+                    Async.wrapTask ^ fun _ ->
                         (db.GetCollection colName).InsertOneAsync <| x.ToBsonDocument()
                 |> Async.seq
                 >>- List.iter (sprintf "Error %O" >> Log.log) }
@@ -67,7 +67,7 @@ module MongoCofx =
             semaphore.Release() |> ignore }
 
     let inline runCfx0 m f = runCfx m (fun db -> f db, ())
-    
+
     let subscribeQuery (mdb : IMongoDatabase) f = async {
         let col = mdb.GetCollection R.SnapshotsDb
         let! offsetStart = col.CountDocumentsAsync(FilterDefinition.op_Implicit "{}") |> Async.AwaitTask

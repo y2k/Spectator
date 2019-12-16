@@ -23,31 +23,16 @@ module Operators =
         if String.IsNullOrEmpty a then b else a
 
 module Async =
-    let wrapTask (f : unit -> System.Threading.Tasks.Task) =
-        async {
-            do! f() |> Async.AwaitTask
-        }
-    let rec seq = function
+    let wrapTask (f : unit -> System.Threading.Tasks.Task) = async {
+        do! f() |> Async.AwaitTask }
+    let rec seq =
+        function
         | [] -> async.Return []
         | h :: t ->
             async {
                 let! b = h |> Async.Catch >>- function | Choice1Of2 x -> Ok x | Choice2Of2 x -> Error x
                 let! c = seq t
-                return b :: c
-            }
-    let lift = async.Return
-    let map2 f a = async { let! (a1, a2) = a
-                           return f a1 a2 }
-    let map3 f a = async { let! (a1, a2, a3) = a
-                           return f a1 a2 a3 }
-    let zip a1 a2 f =
-        async { let! r1 = a1
-                let! r2 = a2
-                return f (r1, r2) }
-    let replaceWith x a = async { let! _ = a
-                                  return x }
-    let next a2 a = async { let! _ = a
-                            return! a2 }
+                return b :: c }
 
 module String =
     let isNullOrEmpty = String.IsNullOrEmpty
@@ -60,11 +45,12 @@ module List =
 
 // Types
 
-type EventLog<'a> = EventLog of 'a list
-    with member this.unwrap = match this with EventLog x -> x
+type EventLog<'a> =
+    | EventLog of 'a list
+    member this.unwrap = match this with | EventLog x -> x
 
 module EnvironmentConfig =
-    type TelegramType = 
+    type TelegramType =
         { Proxy : string
           Auth : string
           Token : string }
@@ -75,7 +61,6 @@ module EnvironmentConfig =
           MongoDomain : string }
 
 type UserId = string
-
 type SubscriptionId = Guid
 type PluginId = Guid
 
@@ -117,7 +102,7 @@ type CoEffectDb =
     { subscriptions : Subscription list
       newSubscriptions : NewSubscription list
       snapshots : Snapshot EventLog }
-    with static member empty = { subscriptions = [] ; newSubscriptions = [] ; snapshots = EventLog [] }
+    static member empty = { subscriptions = []; newSubscriptions = []; snapshots = EventLog [] }
 
 type CoEffect<'a> = (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
 
