@@ -38,7 +38,7 @@ let TelegramConnectorApiImpl =
     let mutable client : TelegramClient = null
     let mutable hash : string = ""
     { new TelegramConnectorApiImpl' with
-        member __.id = Guid.Parse "3B26457E-8AB7-41AD-8DEC-11AF891A3052"
+        member __.id = Guid.Parse "3B26457E-8AB7-41AD-8DEC-11AF891A3052" |> PluginId
         member __.resetClient = async {
             client <- ClientFactory.mkClient()
             do! client.ConnectAsync() |> Async.AwaitTask
@@ -77,7 +77,7 @@ let TelegramConnectorApiImpl =
                 |> Seq.choose ^ function | :? TLMessage as x -> Some x | _ -> None
                 |> Seq.map ^
                     fun x ->
-                        { subscriptionId = Guid.Empty
+                        { subscriptionId = SubscriptionId Guid.Empty
                           id = sprintf "telegram-%i" x.Id
                           title = x.Message
                           uri = Uri <| sprintf "https://t.me/%s/%i" chatName x.Id }

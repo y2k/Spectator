@@ -63,7 +63,7 @@ module Domain =
         | DeleteSubscriptionCmd(userId, uri) ->
             deleteSubs db userId uri, TextEff "Your subscription deleted"
         | AddNewSubscriptionCmd(userId, uri, filter) ->
-            let sub = { id = Guid.NewGuid(); userId = userId; uri = uri; filter = Option.defaultValue "" filter }
+            let sub = { id = SubscriptionId ^ Guid.NewGuid(); userId = userId; uri = uri; filter = Option.defaultValue "" filter }
             { db with newSubscriptions = sub :: db.newSubscriptions },
             TextEff "Your subscription created"
         | _ -> db, TextEff "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription"

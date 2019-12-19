@@ -11,15 +11,15 @@ module Utils =
     let db =
         { CoEffectDb.empty with
               newSubscriptions =
-                  [ { id = Guid.NewGuid()
+                  [ { id = SubscriptionId ^ Guid.NewGuid()
                       userId = "user"
                       uri = Uri "https://google.com/"
                       filter = "" }
-                    { id = Guid.NewGuid()
+                    { id = SubscriptionId ^ Guid.NewGuid()
                       userId = "user"
                       uri = Uri "https://wikipedia.org/rss.xml"
                       filter = "" } ] }
-    let plugins = List.init 3 ^ fun _ -> Guid.NewGuid()
+    let plugins = List.init 3 ^ fun _ -> Guid.NewGuid() |> PluginId
 
 [<Fact>]
 let ``mkNewSnapshots test``() =
@@ -27,7 +27,7 @@ let ``mkNewSnapshots test``() =
         D.mkNewSubscriptions.before Utils.db Utils.plugins
         |> List.map ^ fun x -> x, true
         |> D.mkNewSubscriptions.after Utils.db
-        |> fun db -> { db with subscriptions = db.subscriptions |> List.map ^ fun x -> { x with id = Guid.NewGuid(); provider = Guid.NewGuid() } }
+        |> fun db -> { db with subscriptions = db.subscriptions |> List.map ^ fun x -> { x with id = Guid.NewGuid() |> SubscriptionId ; provider = Guid.NewGuid() |> PluginId } }
     test <@ (db.subscriptions |> List.groupBy (fun x -> x.provider)).Length = db.subscriptions.Length && 2 = db.subscriptions.Length @>
 
     let requests = D.mkNewSnapshots.before db Utils.plugins
@@ -40,9 +40,11 @@ let ``mkNewSnapshots test``() =
 
     let actual =
         requests
-        |> List.map ^ fun (p, u) -> (p, u), [ { subscriptionId = p; id = "0"; title = "title"; uri = u } ]
+        |> List.map ^ fun (p, u) -> 
+            (p, u), [ { subscriptionId = p; id = "0"; title = "title"; uri = u } ]
         |> D.mkNewSnapshots.after db
     test <@ requests.Length = actual.snapshots.unwrap.Length @>
+
     let expected = List.map fst requests |> List.map (fun pid -> (db.subscriptions |> List.find (fun s -> s.provider = pid)).id)
     test <@ expected = (actual.snapshots.unwrap |> List.map ^ fun x -> x.subscriptionId) @>
 

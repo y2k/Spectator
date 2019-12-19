@@ -30,7 +30,7 @@ open Spectator.Core
 open System
 
 type IParse =
-    abstract id : Guid
+    abstract id : PluginId
     abstract isValid : Uri -> bool Async
     abstract getNodes : Uri -> Snapshot list Async
 
@@ -60,7 +60,7 @@ let private download (uri : Uri) = async {
 
 type HtmlParse(env : EnvironmentConfig.Root) =
     interface IParse with
-        member __.id = Guid.Parse "AE4FEE1F-C08D-44B9-B526-4162FF1C328C"
+        member __.id = Guid.Parse "AE4FEE1F-C08D-44B9-B526-4162FF1C328C" |> PluginId
         member __.isValid uri = async { return uri.IsAbsoluteUri && uri.Scheme = "https" }
         member __.getNodes uri = async {
             let! content = download uri
@@ -68,7 +68,7 @@ type HtmlParse(env : EnvironmentConfig.Root) =
             if sim < 0.9 then
                 F.WriteAllText(mkFilePath env uri, content)
                 let snap =
-                    { subscriptionId = Guid.Empty
+                    { subscriptionId = SubscriptionId Guid.Empty
                       id = sprintf "uri-%O" <| uri.GetHashCode()
                       title = getTitle content
                       uri = uri }

@@ -16,7 +16,7 @@ module Parser =
     let parseRss (doc : XDocument) =
         doc.XPathSelectElements "//channel/item"
         |> Seq.map (fun e ->
-               { subscriptionId = Guid.Empty
+               { subscriptionId = SubscriptionId Guid.Empty
                  id = e.XPathSelectElement("guid").Value
                  title = e.XPathSelectElement("title").Value
                  uri = e.XPathSelectElement("link").Value |> Uri })
@@ -25,7 +25,7 @@ module Parser =
     let parseAtom (doc : XDocument) =
         doc.XPathSelectElements("atom:feed//atom:entry", ns)
         |> Seq.map (fun e ->
-               { subscriptionId = Guid.Empty
+               { subscriptionId = SubscriptionId Guid.Empty
                  id = e.XPathSelectElement("atom:id", ns).Value
                  title = e.XPathSelectElement("atom:title", ns).Value
                  uri = e.XPathSelectElement("atom:link", ns).Attribute("href" |> XName.op_Implicit).Value |> Uri })
@@ -49,6 +49,6 @@ module private Http =
 
 let RssParse =
     { new Spectator.Worker.HtmlProvider.IParse with
-        member __.id = System.Guid.Parse "E5D3A9F2-325C-4CEF-BCA9-99D23F9E5AE5"
+        member __.id = System.Guid.Parse "E5D3A9F2-325C-4CEF-BCA9-99D23F9E5AE5" |> PluginId
         member __.isValid uri = uri |> Http.download >>- Parser.isValid
         member __.getNodes uri = uri |> Http.download >>- Parser.getNodes }

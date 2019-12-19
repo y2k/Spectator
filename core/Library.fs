@@ -61,8 +61,8 @@ module EnvironmentConfig =
           MongoDomain : string }
 
 type UserId = string
-type SubscriptionId = Guid
-type PluginId = Guid
+type SubscriptionId = SubscriptionId of Guid
+type PluginId = PluginId of Guid
 
 [<CLIMutable>]
 type NewSubscription =

@@ -21,14 +21,14 @@ module Domain =
                     subResps
                     |> List.tryPick ^ fun ((id, uri), suc) ->
                         if suc && uri = newSub.uri then Some id else None
-                { id = SubscriptionId.Empty
+                { id = SubscriptionId Guid.Empty
                   userId = newSub.userId
-                  provider = providerId |> Option.defaultValue PluginId.Empty
+                  provider = providerId |> Option.defaultValue (PluginId Guid.Empty)
                   uri = newSub.uri
                   filter = newSub.filter }
             let subs = db.subscriptions @ (List.map toSubscription db.newSubscriptions)
             { db with
-                subscriptions = subs |> List.filter ^ fun x -> x.provider <> PluginId.Empty
+                subscriptions = subs |> List.filter ^ fun x -> x.provider <> (PluginId Guid.Empty)
                 newSubscriptions = db.newSubscriptions |> List.exceptBy subs ^ fun ns sub -> ns.uri = sub.uri }
 
         { before = loadNewSubs
@@ -65,7 +65,9 @@ module Infrastructure =
     let runFx mdb (parsers : IParser list) eff =
         let parserIds = parsers |> List.map ^ fun p -> p.id
         let runCfx0 f =
-            let fixId id = if id = Guid.Empty then Guid.NewGuid() else id
+            let fixId (SubscriptionId id) = 
+                if id = Guid.Empty then Guid.NewGuid() else id
+                |> SubscriptionId
             M.runCfx0 mdb ^ fun db ->
                 let db = f db
                 { db with subscriptions = db.subscriptions |> List.map ^ fun x -> { x with id = fixId x.id } }

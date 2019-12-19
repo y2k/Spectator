@@ -13,9 +13,17 @@ type Log() =
         printfn "LOG %s:%i :: %s" file line message
 
 module MongoCofx =
+    module Converters =
+        open MongoDB.Bson.Serialization
+        let string wrap unwrap =
+            { new Serializers.SealedClassSerializerBase<_>() with
+                override __.Deserialize (ctx, _) = ctx.Reader.ReadString() |> wrap
+                override __.Serialize (ctx, _, value) = ctx.Writer.WriteString(unwrap value) }
+            |> BsonSerializer.RegisterSerializer
+
+    open System
     open MongoDB.Bson
     open MongoDB.Driver
-    open System
     module R = Spectator.Core.MongoCollections
 
     module Effects =
