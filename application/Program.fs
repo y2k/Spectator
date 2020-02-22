@@ -9,16 +9,18 @@ let main _ =
         |> Deserialize<EnvironmentConfig.Root>
         |> function | [ Succes { Data = x } ] -> x | _ -> failwith "error"
 
-    let deps = { telegram = TelegramParser.TelegramConnectorApiImpl }
+    DependencyGraph <- 
+         {| restTelegramPassword = ""
+            restTelegramBaseUrl = "" |}
     let db = MongoDB.Driver.MongoClient(sprintf "mongodb://%s" env.MongoDomain).GetDatabase("spectator")
 
     let parsers =
         [ RssParser.RssParse
-          TelegramParser.TelegramConnectorApiImpl :> HtmlProvider.IParse
+          TelegramParser.TelegramConnectorApiImpl
           HtmlProvider.HtmlParse(env) :> HtmlProvider.IParse ]
 
     [ Spectator.Worker.App.start parsers db
-      Spectator.Bot.App.start deps db env
+      Spectator.Bot.App.start () db env
       Spectator.Notifications.main env db ]
     |> Async.Parallel |> Async.RunSynchronously |> ignore
     0

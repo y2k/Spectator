@@ -1,6 +1,5 @@
 module Bot
 
-open MihaZupan
 open Spectator.Core
 open System
 open Telegram.Bot
@@ -16,12 +15,7 @@ type TelegramResponse =
     | UnknownErrorResponse of exn
 
 let private makeClient (env : EnvironmentConfig.Root) =
-    match String.split (env.Telegram.Proxy ||| "") ':' with
-    | host :: port :: _ ->
-        let auth = String.split env.Telegram.Auth ':'
-        let proxy = HttpToSocks5Proxy(host, int port, auth.[0], auth.[1])
-        TelegramBotClient(env.Telegram.Token, proxy)
-    | _ -> TelegramBotClient env.Telegram.Token
+    TelegramBotClient env.Telegram.Token
 
 let sendToTelegramSingle env (user : string) message =
     let bot = makeClient env

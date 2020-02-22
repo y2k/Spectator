@@ -4,7 +4,6 @@ module Domain =
     open Spectator.Core
     open System
     type E = Spectator.Core.EnvironmentConfig.Root
-    type D = Spectator.Core.DependencyGraph
     type R = System.Text.RegularExpressions.Regex
 
     type Eff =
@@ -16,8 +15,6 @@ module Domain =
         | UnknownCmd
         | AddNewSubscriptionCmd of UserId * Uri * string option
         | DeleteSubscriptionCmd of UserId * Uri
-        | ResetTelegram
-        | SetTelegramToken of string
 
     let private isValidFilter filter =
         String.isNullOrEmpty filter ||
@@ -31,8 +28,6 @@ module Domain =
             AddNewSubscriptionCmd(message.user, Uri url, Some filter)
         | "/add" :: [ url ] -> AddNewSubscriptionCmd(message.user, Uri url, None)
         | "/rm" :: [ url ] -> DeleteSubscriptionCmd(message.user, Uri url)
-        | [ "/telegram_reset" ] -> ResetTelegram
-        | "/telegram_token" :: [ token ] -> SetTelegramToken token
         | _ -> UnknownCmd
 
     let subListToMessageResponse db userId =
@@ -48,16 +43,8 @@ module Domain =
             newSubscriptions = db.newSubscriptions |> List.filter ^ fun x -> x.userId <> userId || x.uri <> uri
             subscriptions = db.subscriptions |> List.filter ^ fun x -> x.userId <> userId || x.uri <> uri }
 
-    let handle message (deps : D) (env : E) (db : CoEffectDb) =
+    let handle message _ (env : E) (db : CoEffectDb) =
         match parse message with
-        | ResetTelegram when env.TelegramAdmin = message.user ->
-            db, AsyncTextEff ^ async {
-                let! authorized = deps.telegram.resetClient
-                return sprintf "Telegram recreated, authorized = %O" authorized }
-        | SetTelegramToken token when env.TelegramAdmin = message.user ->
-            db, AsyncTextEff ^ async {
-                do! deps.telegram.updateToken token
-                return "Token accepted" }
         | GetUserSubscriptionsCmd userId ->
             db, TextEff ^ subListToMessageResponse db userId
         | DeleteSubscriptionCmd(userId, uri) ->

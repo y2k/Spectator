@@ -53,10 +53,10 @@ let private getTitle content =
 
 let private download (uri : Uri) = async {
     use http = new Net.Http.HttpClient()
-    use! r = http.GetAsync uri |> Async.AwaitTask
+    use! r = http.GetAsync uri
     r.RequestMessage.Headers.UserAgent.ParseAdd "Mozilla/6.0 (Windows NT 6.2; WOW64; rv:16.0.1) Gecko/20121011 Firefox/16.0.1"
     r.RequestMessage.Headers.Accept.ParseAdd "text/html, application/xml;q=0.9, application/xhtml+xml, image/png, image/webp, image/jpeg, image/gif, image/x-xbitmap, */*;q=0.1"
-    return! r.Content.ReadAsStringAsync() |> Async.AwaitTask }
+    return! r.Content.ReadAsStringAsync() }
 
 type HtmlParse(env : EnvironmentConfig.Root) =
     interface IParse with
