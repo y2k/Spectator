@@ -26,12 +26,12 @@ let TelegramConnectorApiImpl =
                 let chat = toChatName uri
                 let client = new HttpClient()
                 let auth =
-                    sprintf "_:%s" DependencyGraph.restTelegramPassword
+                    sprintf "_:%s" DependencyGraph.config.restTelegramPassword
                     |> Text.Encoding.UTF8.GetBytes
                     |> Convert.ToBase64String
                 client.DefaultRequestHeaders.Authorization <- Headers.AuthenticationHeaderValue("Basic", auth)
                 let! json = 
-                    sprintf "%s/history?chat=%s" DependencyGraph.restTelegramBaseUrl (toChatName uri)
+                    sprintf "%s/history?chat=%s" DependencyGraph.config.restTelegramBaseUrl (toChatName uri)
                     |> client.GetStringAsync
                 return
                     JsonConvert.DeserializeObject<SnapshotResponse[]> json
@@ -40,6 +40,4 @@ let TelegramConnectorApiImpl =
                           { subscriptionId = SubscriptionId Guid.Empty
                             id = x.id
                             title = x.title
-                            uri = Uri ^ sprintf "https://t.me/%s/%s" chat x.id }
-            }
-        }
+                            uri = Uri ^ sprintf "https://t.me/%s/%s" chat x.id } } }

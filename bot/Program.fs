@@ -3,7 +3,6 @@ module Spectator.Bot.App
 module Domain =
     open Spectator.Core
     open System
-    type E = Spectator.Core.EnvironmentConfig.Root
     type R = System.Text.RegularExpressions.Regex
 
     type Eff =
@@ -43,7 +42,7 @@ module Domain =
             newSubscriptions = db.newSubscriptions |> List.filter ^ fun x -> x.userId <> userId || x.uri <> uri
             subscriptions = db.subscriptions |> List.filter ^ fun x -> x.userId <> userId || x.uri <> uri }
 
-    let handle message _ (env : E) (db : CoEffectDb) =
+    let handle message (db : CoEffectDb) =
         match parse message with
         | GetUserSubscriptionsCmd userId ->
             db, TextEff ^ subListToMessageResponse db userId
@@ -58,9 +57,9 @@ module Domain =
 open Spectator.Core
 module C = Spectator.Infrastructure.MongoCofx
 
-let start deps db env =
-    Bot.repl env ^ fun msg ->
+let start =
+    Bot.repl ^ fun msg ->
         async {
-            match! C.runCfx db (Domain.handle msg deps env) with
+            match! DependencyGraph.dbEff.run (Domain.handle msg) with
             | Domain.TextEff t -> return t
             | Domain.AsyncTextEff at -> return! at }

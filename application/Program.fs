@@ -4,23 +4,24 @@ open Spectator.Worker
 
 [<EntryPoint>]
 let main _ =
-    let env =
+    DependencyGraph.config <- 
         System.IO.File.ReadAllText "local-storage/settings.yml"
-        |> Deserialize<EnvironmentConfig.Root>
+        |> Deserialize<DependencyGraph.Config>
         |> function | [ Succes { Data = x } ] -> x | _ -> failwith "error"
 
-    DependencyGraph <- 
-         {| restTelegramPassword = ""
-            restTelegramBaseUrl = "" |}
-    let db = MongoDB.Driver.MongoClient(sprintf "mongodb://%s" env.MongoDomain).GetDatabase("spectator")
+    let db = MongoDB.Driver
+              .MongoClient(sprintf "mongodb://%s" DependencyGraph.config.mongoDomain)
+              .GetDatabase("spectator")
+    DependencyGraph.subscribeEff <- Spectator.Infrastructure.MongoCofx.subscribeQuery db
+    DependencyGraph.dbEff <- { new IDbEff with member __.run f = Spectator.Infrastructure.MongoCofx.runCfx db f }
 
     let parsers =
         [ RssParser.RssParse
           TelegramParser.TelegramConnectorApiImpl
-          HtmlProvider.HtmlParse(env) :> HtmlProvider.IParse ]
+          HtmlProvider.HtmlParse ]
 
-    [ Spectator.Worker.App.start parsers db
-      Spectator.Bot.App.start () db env
-      Spectator.Notifications.main env db ]
+    [ Spectator.Worker.App.start parsers
+      Spectator.Bot.App.start
+      Spectator.Notifications.main ]
     |> Async.Parallel |> Async.RunSynchronously |> ignore
     0

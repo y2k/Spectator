@@ -59,15 +59,6 @@ type EventLog<'a> =
     | EventLog of 'a list
     member this.unwrap = match this with | EventLog x -> x
 
-module EnvironmentConfig =
-    type TelegramType =
-        { Token : string }
-    type Root =
-        { Telegram : TelegramType
-          TelegramAdmin : string
-          FilesDir : string
-          MongoDomain : string }
-
 type UserId = string
 type SubscriptionId = SubscriptionId of Guid
 type PluginId = PluginId of Guid
@@ -114,8 +105,18 @@ type CoEffectDb =
 
 type CoEffect<'a> = (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
 
-// Interfaces
+// Global effects
 
-let mutable DependencyGraph =
-    {| restTelegramPassword = ""
-       restTelegramBaseUrl = "" |}
+type IDbEff =
+    abstract member run<'a> : (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
+
+module DependencyGraph =
+    type Config =
+        { filesDir : string
+          mongoDomain : string
+          restTelegramPassword : string
+          restTelegramBaseUrl : string
+          telegramToken : string }
+    let mutable config = { filesDir = ""; mongoDomain = ""; restTelegramPassword = ""; restTelegramBaseUrl = ""; telegramToken = ""; }
+    let mutable subscribeEff : (CoEffectDb -> unit Async) -> unit Async = fun _ -> failwith "not implemented"
+    let mutable dbEff = { new IDbEff with member __.run _ = failwith "not implemented" }
