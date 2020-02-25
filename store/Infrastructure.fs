@@ -83,7 +83,7 @@ module MongoCofx =
 
         while true do
             let! snaps = Effects.query mdb R.SnapshotsDb (Some 100) (Some offset)
-            if not <| List.isEmpty snaps then
+            if List.isNotEmpty snaps then
                 do! runCfx mdb ^ fun db -> db, f { db with snapshots = EventLog snaps }
                     >>= id
                 offset <- offset + (List.length snaps)

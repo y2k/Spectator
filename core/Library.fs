@@ -31,6 +31,8 @@ module Prelude =
         let m = System.Text.RegularExpressions.Regex.Match(input, pattern)
         if m.Success then Some(List.tail [ for g in m.Groups -> g.Value ])
         else None
+    module List =
+        let inline isNotEmpty xs = List.isEmpty xs |> not
 
 module Async =
     let wrapTask (f : unit -> System.Threading.Tasks.Task) = async {
@@ -118,5 +120,5 @@ module DependencyGraph =
           restTelegramBaseUrl : string
           telegramToken : string }
     let mutable config = { filesDir = ""; mongoDomain = ""; restTelegramPassword = ""; restTelegramBaseUrl = ""; telegramToken = ""; }
-    let mutable subscribeEff : (CoEffectDb -> unit Async) -> unit Async = fun _ -> failwith "not implemented"
+    let mutable listenLogUpdates : (CoEffectDb -> unit Async) -> unit Async = fun _ -> failwith "not implemented"
     let mutable dbEff = { new IDbEff with member __.run _ = failwith "not implemented" }

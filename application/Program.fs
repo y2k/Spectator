@@ -12,7 +12,7 @@ let main _ =
     let db = MongoDB.Driver
               .MongoClient(sprintf "mongodb://%s" DependencyGraph.config.mongoDomain)
               .GetDatabase("spectator")
-    DependencyGraph.subscribeEff <- Spectator.Infrastructure.MongoCofx.subscribeQuery db
+    DependencyGraph.listenLogUpdates <- Spectator.Infrastructure.MongoCofx.subscribeQuery db
     DependencyGraph.dbEff <- { new IDbEff with member __.run f = Spectator.Infrastructure.MongoCofx.runCfx db f }
 
     let parsers =

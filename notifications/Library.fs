@@ -1,8 +1,6 @@
 module Spectator.Notifications
 
 open Spectator.Core
-module M = Spectator.Infrastructure.MongoCofx
-type L = Spectator.Infrastructure.Log
 
 type MessageCmd = { userId : string ; message : string }
 
@@ -20,26 +18,25 @@ module Domain =
             else R.IsMatch(content, optRegex)
 
     let private getUpdates (subscriptions : Subscription list) snaps =
-        subscriptions
-        |> List.map ^ fun sub ->
-            sub,
+        let findSnapsForSub (sub : Subscription) =
             snaps
             |> List.filter ^ fun x ->
                 x.subscriptionId = sub.id && matchContent x.title sub.filter
-        |> List.filter ^ fun (_, snaps) -> snaps |> (List.isEmpty >> not)
 
-    let handleUpdate db =
+        subscriptions
+        |> List.map ^ fun sub -> sub, findSnapsForSub sub
+        |> List.filter ^ fun (_, snaps) -> List.isNotEmpty snaps
+
+    let createNotificationMessages db =
         getUpdates db.subscriptions db.snapshots.unwrap
         |> List.map ^ fun (sub, snaps) -> { userId = sub.userId; message = mkMessage sub snaps }
 
 let main =
-    let sendToTelegramBroadcast botCommands =
-        botCommands
+    let sendToTelegramBroadcast messages =
+        messages
         |> List.map ^ fun x -> Bot.sendToTelegramSingle x.userId x.message
-        |> Async.Parallel
+        |> fun asyncSeq -> Async.Parallel (asyncSeq, maxDegreeOfParallelism = 5)
         >>- Array.filter ^ (<>) Bot.SuccessResponse
-        >>- Array.iter ^ (sprintf "LOG :: can't send message %O" >> L.log)
+        >>- Array.iter ^ (sprintf "LOG :: can't send message %O" >> Infrastructure.Log.log)
 
-    DependencyGraph.subscribeEff ^ fun db ->
-        Domain.handleUpdate db
-        |> sendToTelegramBroadcast
+    DependencyGraph.listenLogUpdates ^ (Domain.createNotificationMessages >> sendToTelegramBroadcast)
