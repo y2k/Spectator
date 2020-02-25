@@ -37,7 +37,7 @@
             "presentation": {
                 "reveal": "always"
             },
-            "problemMatcher": "$msCompile"
+            "problemMatcher": []
         }
     ]
 }

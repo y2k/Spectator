@@ -21,17 +21,16 @@ module Prelude =
     let inline (^) f a = f a
     let inline (|||) a b =
         if String.IsNullOrEmpty a then b else a
-    let (|Regex|_|) pattern input =
-        let m = System.Text.RegularExpressions.Regex.Match(input, pattern)
-        if m.Success then Some(List.tail [ for g in m.Groups -> g.Value ])
-        else None
-    module Result =
-        let unwrap = function Ok x -> x | Error e -> failwith e
     type Microsoft.FSharp.Control.AsyncBuilder with
         member __.Bind (t : System.Threading.Tasks.Task<'T>, f:'T -> Async<'R>) : Async<'R> =
             async.Bind(Async.AwaitTask t, f)
         member __.ReturnFrom (t : System.Threading.Tasks.Task<'T>) : Async<'T> = 
             async.ReturnFrom(Async.AwaitTask t)
+    let [<System.Obsolete>] TODO() = raise ^ System.NotImplementedException()
+    let (|Regex|_|) pattern input =
+        let m = System.Text.RegularExpressions.Regex.Match(input, pattern)
+        if m.Success then Some(List.tail [ for g in m.Groups -> g.Value ])
+        else None
 
 module Async =
     let wrapTask (f : unit -> System.Threading.Tasks.Task) = async {
@@ -59,17 +58,6 @@ module List =
 type EventLog<'a> =
     | EventLog of 'a list
     member this.unwrap = match this with | EventLog x -> x
-
-module EnvironmentConfig =
-    type TelegramType =
-        { Proxy : string
-          Auth : string
-          Token : string }
-    type Root =
-        { Telegram : TelegramType
-          TelegramAdmin : string
-          FilesDir : string
-          MongoDomain : string }
 
 type UserId = string
 type SubscriptionId = SubscriptionId of Guid
@@ -116,3 +104,19 @@ type CoEffectDb =
     static member empty = { subscriptions = []; newSubscriptions = []; snapshots = EventLog [] }
 
 type CoEffect<'a> = (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
+
+// Global effects
+
+type IDbEff =
+    abstract member run<'a> : (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
+
+module DependencyGraph =
+    type Config =
+        { filesDir : string
+          mongoDomain : string
+          restTelegramPassword : string
+          restTelegramBaseUrl : string
+          telegramToken : string }
+    let mutable config = { filesDir = ""; mongoDomain = ""; restTelegramPassword = ""; restTelegramBaseUrl = ""; telegramToken = ""; }
+    let mutable subscribeEff : (CoEffectDb -> unit Async) -> unit Async = fun _ -> failwith "not implemented"
+    let mutable dbEff = { new IDbEff with member __.run _ = failwith "not implemented" }

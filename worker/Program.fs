@@ -62,22 +62,22 @@ module Infrastructure =
             f x url
         |> fun tasks -> Async.Parallel(tasks, 3)
         >>- (List.ofArray >> List.zip requests)
-    let runFx mdb (parsers : IParser list) eff =
+    let runFx (parsers : IParser list) eff =
         let parserIds = parsers |> List.map ^ fun p -> p.id
         let runCfx0 f =
             let fixId (SubscriptionId id) = 
                 if id = Guid.Empty then Guid.NewGuid() else id
                 |> SubscriptionId
-            M.runCfx0 mdb ^ fun db ->
+            DependencyGraph.dbEff.run ^ fun db ->
                 let db = f db
-                { db with subscriptions = db.subscriptions |> List.map ^ fun x -> { x with id = fixId x.id } }
-        M.runCfx mdb ^ fun db -> db, eff.before db parserIds
+                { db with subscriptions = db.subscriptions |> List.map ^ fun x -> { x with id = fixId x.id } }, ()
+        DependencyGraph.dbEff.run ^ fun db -> db, eff.before db parserIds
         >>= apply parsers eff.effect
         >>= fun results -> runCfx0 ^ fun db -> eff.after db results
 
-let start (parsers : HtmlProvider.IParse list) mdb = async {
+let start (parsers : HtmlProvider.IParse list) = async {
     let log = Spectator.Infrastructure.Log.log
-    let runFx eff = Infrastructure.runFx mdb parsers eff
+    let runFx eff = Infrastructure.runFx parsers eff
     while true do
         log "Start syncing..."
 

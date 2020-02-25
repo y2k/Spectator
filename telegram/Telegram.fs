@@ -1,6 +1,5 @@
 module Bot
 
-open MihaZupan
 open Spectator.Core
 open System
 open Telegram.Bot
@@ -15,16 +14,11 @@ type TelegramResponse =
     | BotBlockedResponse
     | UnknownErrorResponse of exn
 
-let private makeClient (env : EnvironmentConfig.Root) =
-    match String.split (env.Telegram.Proxy ||| "") ':' with
-    | host :: port :: _ ->
-        let auth = String.split env.Telegram.Auth ':'
-        let proxy = HttpToSocks5Proxy(host, int port, auth.[0], auth.[1])
-        TelegramBotClient(env.Telegram.Token, proxy)
-    | _ -> TelegramBotClient env.Telegram.Token
+let private makeClient () =
+    TelegramBotClient DependencyGraph.config.telegramToken
 
-let sendToTelegramSingle env (user : string) message =
-    let bot = makeClient env
+let sendToTelegramSingle (user : string) message =
+    let bot = makeClient ()
     bot.SendTextMessageAsync(ChatId.op_Implicit user, message, parseMode = Enums.ParseMode.Html)
     |> (Async.AwaitTask >> Async.Catch)
     >>- function
@@ -33,12 +27,12 @@ let sendToTelegramSingle env (user : string) message =
             BotBlockedResponse
         | Choice2Of2 e -> UnknownErrorResponse e
 
-let repl env f = async {
-    let bot = makeClient env
+let repl f = async {
+    let bot = makeClient ()
     let disposable =
         bot.OnUpdate
         |> Observable.map ^ fun args -> { text = args.Update.Message.Text ||| ""; user = string args.Update.Message.From.Id }
-        |> Observable.subscribe ^ fun msg -> f msg >>= sendToTelegramSingle env msg.user |> (Async.Ignore >> Async.Start)
+        |> Observable.subscribe ^ fun msg -> f msg >>= sendToTelegramSingle msg.user |> (Async.Ignore >> Async.Start)
 
     bot.StartReceiving()
 

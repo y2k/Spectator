@@ -1,51 +1,43 @@
 module Spectator.Worker.TelegramParser
 
 open System
+open System.Net.Http
 open Spectator.Core
 type L = Spectator.Infrastructure.Log
+open Newtonsoft.Json
 
-type private SnapsthoResponse = 
-    { id : int 
-      message : string }
+type private SnapshotResponse = { title : string; author : string; id : string }
 
-let private getChatId = function
-    | Regex "^https://t.me/([\\w\\d_]+)$" [ id ] -> Ok id
-    | Regex "^([\\w\\d_]+)$" [ id ] -> Ok id
-    | origin -> Error ^ sprintf "Can't find valid id from %s" origin
-  
-let private requestHistory (subUri : string) : Async<SnapsthoResponse[]> =
-    async {
-        let chatName = getChatId subUri |> Result.unwrap
-        let url = sprintf "http://???/hisotory?chat=%s" chatName
-        let client = new Net.Http.HttpClient()
-        let! bytes = client.GetStringAsync(Uri url)
-        let r = Newtonsoft.Json.JsonConvert.DeserializeObject<SnapsthoResponse[]>(bytes)
-        return r
-    }
+let TelegramConnectorApiImpl =
+    let toChatName (_ : Uri) : string = failwith "???"
+    let getChatId (uri : Uri) = 
+        uri.AbsoluteUri
+        |> function
+           | Regex "^https://t.me/([\\w\\d_]+)$" [ id ] -> Ok id
+           | origin -> Error ^ sprintf "Can't find valid id from %s" origin
 
-let TelegramConnectorApi =
-    { new HtmlProvider.IParse with
-        member __.id = Guid.Parse "3B26457E-8AB7-41AD-8DEC-11AF891A3052" |> PluginId
-        member __.isValid uri = 
+    { new Spectator.Worker.HtmlProvider.IParse with
+        member __.id = PluginId ^ Guid.Parse "3B26457E-8AB7-41AD-8DEC-11AF891A3052"
+        member __.isValid uri =
+            match getChatId uri with Ok _ -> true | Error _ -> false
+            |> async.Return
+        member __.getNodes uri =
             async {
-                let! xs = requestHistory uri.AbsolutePath
-                return not <| Seq.isEmpty xs
-            }
-        member __.getNodes uri = 
-            async {
-                match getChatId uri.AbsoluteUri with
-                | Error _ -> return []
-                | Ok chatName ->
-                    let! xs = requestHistory uri.AbsolutePath
-                    return
-                        xs
-                        |> Seq.map ^
-                            fun x ->
-                                { subscriptionId = SubscriptionId Guid.Empty
-                                  id = sprintf "telegram-%i" x.id
-                                  title = x.message
-                                  uri = Uri <| sprintf "https://t.me/%s/%i" chatName x.id }
-                        |> Seq.rev
-                        |> Seq.toList 
-            }
-    }
+                let chat = toChatName uri
+                let client = new HttpClient()
+                let auth =
+                    sprintf "_:%s" DependencyGraph.config.restTelegramPassword
+                    |> Text.Encoding.UTF8.GetBytes
+                    |> Convert.ToBase64String
+                client.DefaultRequestHeaders.Authorization <- Headers.AuthenticationHeaderValue("Basic", auth)
+                let! json = 
+                    sprintf "%s/history?chat=%s" DependencyGraph.config.restTelegramBaseUrl (toChatName uri)
+                    |> client.GetStringAsync
+                return
+                    JsonConvert.DeserializeObject<SnapshotResponse[]> json
+                    |> Seq.toList
+                    |> List.map ^ fun x ->
+                          { subscriptionId = SubscriptionId Guid.Empty
+                            id = x.id
+                            title = x.title
+                            uri = Uri ^ sprintf "https://t.me/%s/%s" chat x.id } } }
