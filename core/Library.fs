@@ -71,6 +71,7 @@ type NewSubscription =
       userId : UserId
       uri : Uri
       filter : string }
+      static member empty = { id = SubscriptionId Guid.Empty; userId = ""; uri = null; filter = "" }
 
 [<CLIMutable>]
 type Subscription =

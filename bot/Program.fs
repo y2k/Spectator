@@ -17,7 +17,7 @@ module Parser =
         | Regex "/ls" [] -> GetUserSubscriptionsCmd
         | Regex "/add ([^ ]+) ([^ ]+)" [ url; filter ] when isValidUri url -> AddNewSubscriptionCmd (Uri url, Some filter)
         | Regex "/add ([^ ]+)" [ url ] when isValidUri url -> AddNewSubscriptionCmd (Uri url, None)
-        | Regex "/rm" [ url ] -> DeleteSubscriptionCmd ^ Uri url
+        | Regex "/rm ([^ ]+)" [ url ] -> DeleteSubscriptionCmd ^ Uri url
         | _ -> UnknownCmd
 
 module Domain =
