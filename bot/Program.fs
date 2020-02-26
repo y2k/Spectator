@@ -24,7 +24,7 @@ module Domain =
     open Spectator.Core
     module P = Parser
 
-    type TextEff = TextEff of string
+    type Message = Message of string
 
     let subListToMessageResponse db userId =
         let subs = db.subscriptions |> List.filter ^ fun x -> x.userId = userId
@@ -42,19 +42,19 @@ module Domain =
     let handle message (db : CoEffectDb) =
         match P.parse message with
         | P.GetUserSubscriptionsCmd ->
-            db, TextEff ^ subListToMessageResponse db message.user
+            db, Message ^ subListToMessageResponse db message.user
         | P.DeleteSubscriptionCmd uri ->
-            deleteSubs db message.user uri, TextEff "Your subscription deleted"
+            deleteSubs db message.user uri, Message "Your subscription deleted"
         | P.AddNewSubscriptionCmd (uri, filter) ->
             let sub = { id = SubscriptionId ^ Guid.NewGuid(); userId = message.user; uri = uri; filter = Option.defaultValue "" filter }
             { db with newSubscriptions = sub :: db.newSubscriptions },
-            TextEff "Your subscription created"
-        | P.UnknownCmd -> db, TextEff "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription"
+            Message "Your subscription created"
+        | P.UnknownCmd -> db, Message "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription"
 
 open Spectator.Core
 
 let start =
     Bot.repl ^ fun msg ->
         async {
-            match! DependencyGraph.dbEff.run (Domain.handle msg) with
-            | Domain.TextEff t -> return t }
+            let! (Domain.Message t) = DependencyGraph.dbEff.run (Domain.handle msg)
+            return t }

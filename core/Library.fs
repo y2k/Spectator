@@ -79,12 +79,14 @@ type Subscription =
       provider : PluginId
       uri : Uri
       filter : string }
+    static member empty = { id = SubscriptionId Guid.Empty; userId = ""; provider = PluginId Guid.Empty; uri = null; filter = "" }
 
 type Snapshot =
     { subscriptionId : SubscriptionId
       id : string
       title : string
       uri : Uri }
+    static member empty = { subscriptionId = SubscriptionId Guid.Empty; id = ""; title = ""; uri = null }
 
 module Auth =
     let computeAuthKey (user : UserId) (seed : string) =
