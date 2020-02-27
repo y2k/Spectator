@@ -1,6 +1,16 @@
-version: '3'
+version: '3.1'
+
 services:
-  mongodb:
-    image: mongo:4.0.10-xenial
+  mongo:
+    image: mongo:4.2.3-bionic
+    restart: always
     ports:
-    - "27017:27017"
+      - "27017:27017"
+    volumes:
+      - "./__data/mongodb:/data/db"
+
+  mongo-express:
+    image: mongo-express
+    restart: always
+    ports:
+      - 8081:8081

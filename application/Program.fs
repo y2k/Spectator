@@ -3,11 +3,11 @@ open Spectator.Core
 open Spectator.Worker
 
 [<EntryPoint>]
-let main _ =
+let main args =
     DependencyGraph.config <- 
-        System.IO.File.ReadAllText "local-storage/settings.yml"
+        System.IO.File.ReadAllText args.[0]
         |> Deserialize<DependencyGraph.Config>
-        |> function | [ Succes { Data = x } ] -> x | _ -> failwith "error"
+        |> function [ Succes { Data = x } ] -> x | _ -> failwith "error"
 
     let db = MongoDB.Driver
               .MongoClient(sprintf "mongodb://%s" DependencyGraph.config.mongoDomain)

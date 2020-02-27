@@ -11,6 +11,6 @@ obj/
 .idea/
 *.user
 
-local-storage/
+__data/
 
 tests.fsx

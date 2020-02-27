@@ -26,14 +26,17 @@ let ``test rm`` () =
 
 [<Fact>]
 let ``test add`` () =
-    let test' cmd url filter =
-        let (db2, (B.Message msg)) = B.handle { text = cmd; user = "111" } DB.empty
-        test <@ 1 = List.length db2.newSubscriptions @>
-        let s = db2.newSubscriptions.[0]
-        test <@ filter = s.filter && Uri url = s.uri && "111" = s.userId @>
+    let validate user cmd url filter  count db =
+        let (db2, (B.Message msg)) = B.handle { text = cmd; user = user } db
+        test <@ count = (db2.newSubscriptions |> List.filter (fun x -> x.userId = user) |> List.length) @>
+        let s = db2.newSubscriptions |> List.find (fun x -> x.userId = user)
+        test <@ filter = s.filter && Uri url = s.uri && user = s.userId @>
         test <@ "Your subscription created" = msg @>
-    test' "/add http://g.com/ xxx" "http://g.com/" "xxx"
-    test' "/add http://g.com/" "http://g.com/" ""
+        db2
+    DB.empty
+    |> validate "111" "/add http://a.com/ xxx" "http://a.com/" "xxx" 1
+    |> validate "111" "/add http://b.com/" "http://b.com/" "" 2
+    |> validate "222" "/add http://c.com/" "http://c.com/" "" 1
 
 [<Fact>]
 let ``test /ls`` () =
