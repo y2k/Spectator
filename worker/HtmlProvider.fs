@@ -60,7 +60,7 @@ let private download (uri : Uri) = async {
 
 let HtmlParse =
     { new IParse with
-        member __.id = Guid.Parse "AE4FEE1F-C08D-44B9-B526-4162FF1C328C" |> PluginId
+        member __.id = Guid.Parse "AE4FEE1F-C08D-44B9-B526-4162FF1C328C"
         member __.isValid uri = async { return uri.IsAbsoluteUri && uri.Scheme = "https" }
         member __.getNodes uri = async {
             let! content = download uri
@@ -68,7 +68,7 @@ let HtmlParse =
             if sim < 0.9 then
                 F.WriteAllText(mkFilePath DependencyGraph.config.filesDir uri, content)
                 let snap =
-                    { subscriptionId = SubscriptionId Guid.Empty
+                    { subscriptionId = TypedId.wrap Guid.Empty
                       id = sprintf "uri-%O" <| uri.GetHashCode()
                       title = getTitle content
                       uri = uri }

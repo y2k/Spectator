@@ -17,7 +17,7 @@ let main args =
 
     let parsers =
         [ RssParser.RssParse
-          TelegramParser.TelegramConnectorApiImpl
+          // TelegramParser.Parser
           HtmlProvider.HtmlParse ]
 
     [ Spectator.Worker.App.start parsers

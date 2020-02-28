@@ -8,9 +8,9 @@ open Core
 module B = Bot.App.Domain
 type DB = Core.CoEffectDb
 
-let private s1 = { Subscription.empty with userId = "111"; id = SubscriptionId (Guid.NewGuid()); uri = Uri "http://s1.com/" }
-let private ns1 = { NewSubscription.empty with userId = "111"; id = SubscriptionId (Guid.NewGuid()); uri = Uri "http://s1-2.com/" }
-let private s2 = { Subscription.empty with userId = "222"; id = SubscriptionId (Guid.NewGuid()); uri = Uri "http://s2.com/"; filter = "xxx" }
+let private s1 = { Subscription.empty with userId = "111"; id = TypedId.wrap (Guid.NewGuid()); uri = Uri "http://s1.com/" }
+let private ns1 = { NewSubscription.empty with userId = "111"; id = TypedId.wrap (Guid.NewGuid()); uri = Uri "http://s1-2.com/" }
+let private s2 = { Subscription.empty with userId = "222"; id = TypedId.wrap (Guid.NewGuid()); uri = Uri "http://s2.com/"; filter = "xxx" }
 let private db = { DB.empty with subscriptions = [ s1; s2 ]; newSubscriptions = [ ns1 ] }
 
 [<Fact>]

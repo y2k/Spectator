@@ -46,7 +46,7 @@ module Domain =
         | P.DeleteSubscriptionCmd uri ->
             deleteSubs db message.user uri, Message "Your subscription deleted"
         | P.AddNewSubscriptionCmd (uri, filter) ->
-            let sub = { id = SubscriptionId ^ Guid.NewGuid(); userId = message.user; uri = uri; filter = Option.defaultValue "" filter }
+            let sub = { id = TypedId.wrap Guid.Empty; userId = message.user; uri = uri; filter = Option.defaultValue "" filter }
             { db with newSubscriptions = sub :: db.newSubscriptions },
             Message "Your subscription created"
         | P.UnknownCmd -> db, Message "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription"

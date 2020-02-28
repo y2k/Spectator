@@ -33,6 +33,9 @@ module Prelude =
         else None
     module List =
         let inline isNotEmpty xs = List.isEmpty xs |> not
+    module Async =
+        let inline map f a = async.Bind(a, f >> async.Return)
+        let inline catch a = a |> Async.Catch |> map (function Choice1Of2 x -> Ok x | Choice2Of2 e -> Error e)
 
 module Async =
     let wrapTask (f : unit -> System.Threading.Tasks.Task) = async {
@@ -62,32 +65,38 @@ type EventLog<'a> =
     member this.unwrap = match this with | EventLog x -> x
 
 type UserId = string
-type SubscriptionId = SubscriptionId of Guid
-type PluginId = PluginId of Guid
+type PluginId = Guid
 
-[<CLIMutable>]
-type NewSubscription =
-    { id : SubscriptionId
-      userId : UserId
-      uri : Uri
-      filter : string }
-      static member empty = { id = SubscriptionId Guid.Empty; userId = ""; uri = null; filter = "" }
+[<MeasureAnnotatedAbbreviation>]
+type 'a TypedId = Guid
+#nowarn "42"
+module TypedId =
+    let inline wrap<'b> (a : Guid) : 'b TypedId = (# "" a : TypedId<'b> #)
 
 [<CLIMutable>]
 type Subscription =
-    { id : SubscriptionId
+    { id : Subscription TypedId
       userId : UserId
       provider : PluginId
       uri : Uri
       filter : string }
-    static member empty = { id = SubscriptionId Guid.Empty; userId = ""; provider = PluginId Guid.Empty; uri = null; filter = "" }
+    static member empty = { id = TypedId.wrap Guid.Empty; userId = ""; provider = Guid.Empty; uri = null; filter = "" }
 
+[<CLIMutable>]
+type NewSubscription =
+    { id : Subscription TypedId
+      userId : UserId
+      uri : Uri
+      filter : string }
+      static member empty = { id = TypedId.wrap Guid.Empty; userId = ""; uri = null; filter = "" }
+
+[<CLIMutable>]
 type Snapshot =
-    { subscriptionId : SubscriptionId
+    { subscriptionId : Subscription TypedId
       id : string
       title : string
       uri : Uri }
-    static member empty = { subscriptionId = SubscriptionId Guid.Empty; id = ""; title = ""; uri = null }
+    static member empty = { subscriptionId = TypedId.wrap Guid.Empty; id = ""; title = ""; uri = null }
 
 module Auth =
     let computeAuthKey (user : UserId) (seed : string) =
@@ -109,6 +118,10 @@ type CoEffectDb =
     static member empty = { subscriptions = []; newSubscriptions = []; snapshots = EventLog [] }
 
 type CoEffect<'a> = (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
+
+module Cmd =
+    let none = []
+    let map a b x = List.singleton ^ a(x, b)
 
 // Global effects
 

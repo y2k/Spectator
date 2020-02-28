@@ -8,7 +8,7 @@ open Newtonsoft.Json
 
 type private SnapshotResponse = { title : string; author : string; id : string }
 
-let TelegramConnectorApiImpl =
+let Parser =
     let toChatName (_ : Uri) : string = failwith "???"
     let getChatId (uri : Uri) = 
         uri.AbsoluteUri
@@ -17,7 +17,7 @@ let TelegramConnectorApiImpl =
            | origin -> Error ^ sprintf "Can't find valid id from %s" origin
 
     { new Spectator.Worker.HtmlProvider.IParse with
-        member __.id = PluginId ^ Guid.Parse "3B26457E-8AB7-41AD-8DEC-11AF891A3052"
+        member __.id = Guid.Parse "3B26457E-8AB7-41AD-8DEC-11AF891A3052"
         member __.isValid uri =
             match getChatId uri with Ok _ -> true | Error _ -> false
             |> async.Return
@@ -37,7 +37,7 @@ let TelegramConnectorApiImpl =
                     JsonConvert.DeserializeObject<SnapshotResponse[]> json
                     |> Seq.toList
                     |> List.map ^ fun x ->
-                          { subscriptionId = SubscriptionId Guid.Empty
+                          { subscriptionId = TypedId.wrap Guid.Empty
                             id = x.id
                             title = x.title
                             uri = Uri ^ sprintf "https://t.me/%s/%s" chat x.id } } }

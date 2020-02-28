@@ -52,6 +52,11 @@ module MongoCofx =
 
     let private semaphore = new Threading.SemaphoreSlim(1)
 
+    let private fixId (id : Subscription TypedId) = 
+        if id = TypedId.wrap Guid.Empty 
+            then TypedId.wrap ^ Guid.NewGuid() 
+            else id
+
     let runCfx mongo (f : CoEffectDb -> (CoEffectDb * 'a)) = async {
         do! semaphore.WaitAsync() |> Async.AwaitTask
         try
@@ -59,6 +64,10 @@ module MongoCofx =
             let! newSubs = Effects.query mongo R.NewSubscriptionsDb None None
             let db = { subscriptions = subs; newSubscriptions = newSubs; snapshots = EventLog [] }
             let (newDb, eff) = f db
+            let newDb = 
+                { newDb with 
+                    subscriptions = List.map (fun x -> { x with id = fixId x.id }) db.subscriptions 
+                    newSubscriptions = List.map (fun x -> { x with id = fixId x.id }) db.newSubscriptions }
             if newDb.newSubscriptions <> db.newSubscriptions then
                 do! Effects.deleteFromCol mongo R.NewSubscriptionsDb
                 do! newDb.newSubscriptions
