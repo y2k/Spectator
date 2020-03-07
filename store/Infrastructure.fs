@@ -33,7 +33,9 @@ module MongoCofx =
                     Async.wrapTask ^ fun _ ->
                         (db.GetCollection colName).InsertOneAsync <| x.ToBsonDocument()
                 |> Async.seq
-                >>- List.iter (sprintf "Error %O" >> Log.log) }
+                >>- List.choose ^ function Ok _ -> None | Error e -> Some e
+                >>- List.iter (sprintf "Error %O" >> Log.log)
+            }
 
         let query (mdb : IMongoDatabase) colName limit offset =
             mdb.GetCollection(colName)

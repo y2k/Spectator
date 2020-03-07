@@ -18,6 +18,7 @@ module Prelude =
     let inline uncurry f (a, b) = f a b
     let inline uncurry' f (a, b, c) = f a b c
     let inline always a _ = a
+    let inline pair a b = a, b
     let inline (^) f a = f a
     let inline (|||) a b =
         if String.IsNullOrEmpty a then b else a
@@ -121,7 +122,6 @@ type CoEffect<'a> = (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
 
 module Cmd =
     let none = []
-    let map a b x = List.singleton ^ a(x, b)
 
 // Global effects
 

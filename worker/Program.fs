@@ -34,77 +34,68 @@ module Domain =
 module Services =
     type Request = PluginId * Uri
     type Msg = 
-        | MkSubscriptions of PluginId list
+        | Init
         | MkSubscriptionsEnd of (Request * Result<bool, exn>) list
         | MkNewSnapshots 
         | MkNewSnapshotsEnd of (Request * Result<Snapshot list, exn>) list
-    type 'a Cmd = 
-        | LoadSubscriptions of Request list * ((Request * Result<bool, exn>) list -> 'a)
-        | LoadSnapshots of Request list * ((Request * Result<Snapshot list, exn>) list -> 'a)
+    type 'a Cmd =
+        | Delay of TimeSpan * 'a
+        | LoadSubscriptions of Request list * (Result<bool, exn> list -> 'a)
+        | LoadSnapshots of Request list * (Result<Snapshot list, exn> list -> 'a)
 
-    let update msg (db : CoEffectDb) =
+    let update parserIds msg (db : CoEffectDb) =
         match msg with
-        | MkSubscriptions parserIds ->
+        | Init ->
             db,
             db.newSubscriptions
             |> List.map ^ fun x -> x.uri
             |> List.allPairs parserIds
-            |> Cmd.map LoadSubscriptions MkSubscriptionsEnd
+            |> fun req -> [ LoadSubscriptions (req, fun resp -> MkSubscriptionsEnd (List.map2 pair req resp)) ]
         | MkSubscriptionsEnd subResps ->        
             let subs = db.subscriptions @ List.map (Domain.toSubscription subResps) db.newSubscriptions
             { db with
                 subscriptions = List.filter (fun x -> x.provider <> Guid.Empty) subs
-                newSubscriptions = Domain.removeSubs db.newSubscriptions subs }, Cmd.none
+                newSubscriptions = Domain.removeSubs db.newSubscriptions subs }, 
+            [ Delay (TimeSpan.Zero, MkNewSnapshots) ]
         | MkNewSnapshots -> 
             db,
             db.subscriptions
             |> List.map ^ fun x -> x.provider, x.uri
-            |> Cmd.map LoadSnapshots MkNewSnapshotsEnd
+            |> fun req -> [ LoadSnapshots (req, fun resp -> MkNewSnapshotsEnd (List.map2 pair req resp)) ]
         | MkNewSnapshotsEnd responses -> 
             db.subscriptions
             |> Domain.mkSnapshots responses
-            |> fun ss -> { db with snapshots = EventLog ss }, Cmd.none
+            |> fun snaps -> { db with snapshots = EventLog snaps }
+            , [ Delay (TimeSpan.FromSeconds 10., Init) ]
 
-    module Interpreator =
-        let rec run (parsers : HtmlProvider.IParse list) update intMsg =
-            let runPlugin requests f g =
-                async {
-                    let! responses =
-                        requests
-                        |> List.map ^ fun (pluginId, uri) ->
-                            parsers
-                            |> List.find ^ fun p -> p.id = pluginId
-                            |> fun p -> g p uri
-                            |> Async.catch
-                            |> Async.map ^ fun r -> 
-                                match r with
-                                | Error e -> eprintfn "[LOG][ERROR][SYNC] (%O, %O) %O"  pluginId uri e | _ -> ()
-                                (pluginId, uri), r
-                        |> Async.Sequential
-                    let msg = f (responses |> Array.toList)
-                    return! run parsers update msg  }
-            async {
-                let! cmds = DependencyGraph.dbEff.run (update intMsg)
-                for cmd in cmds do
-                    return!
-                        match cmd with
-                        | LoadSubscriptions (requests, f) -> runPlugin requests f (fun p uri -> p.isValid uri)
-                        | LoadSnapshots (requests, f) -> runPlugin requests f (fun p uri -> p.getNodes uri) }
+module Effects =
+    let private run f (parsers : HtmlProvider.IParse list) requests =
+        requests
+        |> List.map ^ fun (pluginId, uri) ->
+            parsers
+            |> List.find ^ fun p -> p.id = pluginId
+            |> fun p -> f p uri
+            |> Async.catch
+        |> Async.Sequential
+        >>- List.ofArray
+    let pluginIsValid parsers = run (fun p uri -> p.isValid uri) parsers 
+    let pluginGetNodes parsers = run (fun p uri -> p.getNodes uri) parsers
 
-let start (parsers : HtmlProvider.IParse list) = 
-    async {
-        let log = Spectator.Infrastructure.Log.log
-        let parserIds = parsers |> List.map ^ fun p -> p.id
-        while true do
-            log "Start syncing..."
-
-            do! Services.Interpreator.run parsers Services.update (Services.MkSubscriptions parserIds)
-            do! Services.Interpreator.run parsers Services.update Services.MkNewSnapshots
-
-            log "End syncing, waiting..."
-#if DEBUG
-            do! Async.Sleep 10_000 
-#else
-            do! Async.Sleep 600_000 
-#endif
-    }
+let start (parsers : HtmlProvider.IParse list) =
+    let rec run update (intMsg : 'msg) =
+        async {
+            let! cmds = DependencyGraph.dbEff.run (update intMsg)
+            for cmd in cmds do
+                match cmd with
+                | Services.Delay (time, msg) -> 
+                    do! Async.Sleep (int time.TotalMilliseconds)
+                    return! run update msg
+                | Services.LoadSubscriptions (requests, f) ->
+                    let! responses = Effects.pluginIsValid parsers requests
+                    return! f responses |> run update
+                | Services.LoadSnapshots (requests, f) -> 
+                    let! responses = Effects.pluginGetNodes parsers requests
+                    return! f responses |> run update
+        }
+    let parserIds = parsers |> List.map ^ fun p -> p.id
+    run (Services.update parserIds) Services.Init
