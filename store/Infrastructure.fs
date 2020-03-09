@@ -46,14 +46,13 @@ module MongoCofx =
                     | e -> Log.elog (string e)
                 | Error e -> Log.elog (string e)
 
-        let insert (db : IMongoDatabase) colName items = async {
-            do! items
-                |> List.map ^ fun x ->
-                    Async.wrapTask ^ fun _ ->
-                        (db.GetCollection colName).InsertOneAsync <| x.ToBsonDocument()
-                |> Async.seq
-                >>- printErrors
-            }
+        let insert (db : IMongoDatabase) colName items = 
+            items
+            |> List.map ^ fun x ->
+                Async.wrapTask ^ fun _ ->
+                    (db.GetCollection colName).InsertOneAsync <| x.ToBsonDocument()
+            |> Async.seq
+            >>- printErrors
 
         let query (mdb : IMongoDatabase) colName limit offset =
             mdb.GetCollection(colName)
@@ -77,6 +76,11 @@ module MongoCofx =
             then TypedId.wrap ^ Guid.NewGuid() 
             else id
 
+    let private fixIds db =
+        { db with 
+            subscriptions = List.map (fun x -> { x with id = fixId x.id }) db.subscriptions 
+            newSubscriptions = List.map (fun x -> { x with id = fixId x.id }) db.newSubscriptions }
+
     let runCfx mongo (f : CoEffectDb -> (CoEffectDb * 'a)) = async {
         do! semaphore.WaitAsync() |> Async.AwaitTask
         try
@@ -84,10 +88,7 @@ module MongoCofx =
             let! newSubs = Effects.query mongo R.NewSubscriptionsDb None None
             let db = { subscriptions = subs; newSubscriptions = newSubs; snapshots = EventLog [] }
             let (newDb, eff) = f db
-            let newDb = 
-                { newDb with 
-                    subscriptions = List.map (fun x -> { x with id = fixId x.id }) db.subscriptions 
-                    newSubscriptions = List.map (fun x -> { x with id = fixId x.id }) db.newSubscriptions }
+            let newDb = fixIds newDb
             if newDb.newSubscriptions <> db.newSubscriptions then
                 do! Effects.deleteFromCol mongo R.NewSubscriptionsDb
                 do! newDb.newSubscriptions
