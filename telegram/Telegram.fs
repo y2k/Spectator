@@ -32,7 +32,11 @@ let repl f = async {
     let disposable =
         bot.OnUpdate
         |> Observable.map ^ fun args -> { text = args.Update.Message.Text ||| ""; user = string args.Update.Message.From.Id }
-        |> Observable.subscribe ^ fun msg -> f msg >>= sendToTelegramSingle msg.user |> (Async.Ignore >> Async.Start)
+        |> Observable.subscribe ^ fun msg -> 
+            f msg
+            >>- fun r -> printfn "Telegram ::\n>>>\n%O\n<<<\n%s" msg r; r
+            >>= sendToTelegramSingle msg.user 
+            |> (Async.Ignore >> Async.Start)
 
     bot.StartReceiving()
 

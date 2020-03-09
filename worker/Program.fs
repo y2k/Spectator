@@ -66,7 +66,7 @@ module Services =
             db.subscriptions
             |> Domain.mkSnapshots responses
             |> fun snaps -> { db with snapshots = EventLog snaps }
-            , [ Delay (TimeSpan.FromMinutes 1., Init) ]
+            , [ Delay (TimeSpan.FromMinutes 5., Init) ]
 
 module Effects =
     let private run f (parsers : HtmlProvider.IParse list) requests =
