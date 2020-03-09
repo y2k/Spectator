@@ -11,6 +11,14 @@ type Log() =
                          System.Runtime.InteropServices.Optional;
                          System.Runtime.InteropServices.DefaultParameterValue(0)>] line : int) =
         printfn "LOG %s:%i :: %s" file line message
+    static member elog (message : string,
+                       [<System.Runtime.CompilerServices.CallerFilePath;
+                         System.Runtime.InteropServices.Optional;
+                         System.Runtime.InteropServices.DefaultParameterValue("")>] file : string,
+                       [<System.Runtime.CompilerServices.CallerLineNumber;
+                         System.Runtime.InteropServices.Optional;
+                         System.Runtime.InteropServices.DefaultParameterValue(0)>] line : int) =
+        eprintfn "LOG (ERROR) %s:%i :: %s" file line message
 
 module MongoCofx =
     module Converters =
@@ -27,14 +35,24 @@ module MongoCofx =
     module R = Spectator.Core.MongoCollections
 
     module Effects =
+        let private printErrors (results : Result<_, exn> list) =
+            results
+            |> List.iter ^
+                function
+                | Ok _ -> ()
+                | Error (:? AggregateException as ae) -> 
+                    match ae.InnerException with
+                    | :? MongoWriteException as me when me.WriteError.Code = 11000 -> ()
+                    | e -> Log.elog (string e)
+                | Error e -> Log.elog (string e)
+
         let insert (db : IMongoDatabase) colName items = async {
             do! items
                 |> List.map ^ fun x ->
                     Async.wrapTask ^ fun _ ->
                         (db.GetCollection colName).InsertOneAsync <| x.ToBsonDocument()
                 |> Async.seq
-                >>- List.choose ^ function Ok _ -> None | Error e -> Some e
-                >>- List.iter (sprintf "Error %O" >> Log.log)
+                >>- printErrors
             }
 
         let query (mdb : IMongoDatabase) colName limit offset =

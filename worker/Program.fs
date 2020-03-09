@@ -66,7 +66,7 @@ module Services =
             db.subscriptions
             |> Domain.mkSnapshots responses
             |> fun snaps -> { db with snapshots = EventLog snaps }
-            , [ Delay (TimeSpan.FromSeconds 10., Init) ]
+            , [ Delay (TimeSpan.FromMinutes 1., Init) ]
 
 module Effects =
     let private run f (parsers : HtmlProvider.IParse list) requests =
@@ -82,20 +82,21 @@ module Effects =
     let pluginGetNodes parsers = run (fun p uri -> p.getNodes uri) parsers
 
 let start (parsers : HtmlProvider.IParse list) =
-    let rec run update (intMsg : 'msg) =
+    let rec runEffects update (intMsg : 'msg) =
         async {
             let! cmds = DependencyGraph.dbEff.run (update intMsg)
+            cmds |> List.iter ^ printfn "Worker :: %O"
             for cmd in cmds do
                 match cmd with
                 | Services.Delay (time, msg) -> 
                     do! Async.Sleep (int time.TotalMilliseconds)
-                    return! run update msg
+                    return! runEffects update msg
                 | Services.LoadSubscriptions (requests, f) ->
                     let! responses = Effects.pluginIsValid parsers requests
-                    return! f responses |> run update
+                    return! f responses |> runEffects update
                 | Services.LoadSnapshots (requests, f) -> 
                     let! responses = Effects.pluginGetNodes parsers requests
-                    return! f responses |> run update
+                    return! f responses |> runEffects update
         }
     let parserIds = parsers |> List.map ^ fun p -> p.id
-    run (Services.update parserIds) Services.Init
+    runEffects (Services.update parserIds) Services.Init
