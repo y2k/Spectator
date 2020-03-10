@@ -22,7 +22,7 @@ let main args =
           HtmlProvider.HtmlParse ]
 
     [ Spectator.Worker.App.start parsers
-      Spectator.Bot.App.start
+      Spectator.Bot.App.main
       Spectator.Notifications.main ]
     |> Async.Parallel |> Async.RunSynchronously |> ignore
     0

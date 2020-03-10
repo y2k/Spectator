@@ -1,12 +1,11 @@
 module Spectator.Infrastructure
 
-open Spectator.Core
-
 module MongoCofx =
     open System
     open MongoDB.Bson
     open MongoDB.Driver
-    module R = Spectator.Core.MongoCollections
+    open Spectator.Core
+    module R = MongoCollections
 
     module private Effects =
         let private printErrors (results : Result<_, exn> list) =
@@ -89,7 +88,7 @@ module MongoCofx =
 
     let subscribeQuery (mdb : IMongoDatabase) f = async {
         let col = mdb.GetCollection R.SnapshotsDb
-        let! offsetStart = col.CountDocumentsAsync(FilterDefinition.op_Implicit "{}") |> Async.AwaitTask
+        let! offsetStart = col.CountDocumentsAsync(FilterDefinition.op_Implicit "{}")
         let mutable offset = int offsetStart
 
         while true do

@@ -66,7 +66,7 @@ module Updater =
         | P.UnknownCmd -> 
             db, "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription\n/history [url] - show last snapshots for subscriptio with url"
 
-let start = 
-    Bot.repl <| fun message ->
-        let f = Updater.handle message
-        DependencyGraph.dbEff.run (UserFilter message.user) f
+let main = 
+    Bot.repl <| fun message -> 
+        Updater.handle message 
+        |> DependencyGraph.dbEff.run (UserFilter message.user)
