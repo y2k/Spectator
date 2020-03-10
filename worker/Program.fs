@@ -65,7 +65,7 @@ module Services =
         | MkNewSnapshotsEnd responses -> 
             db.subscriptions
             |> Domain.mkSnapshots responses
-            |> fun snaps -> { db with snapshots = EventLog snaps }
+            |> fun snaps -> { db with snapshots = WriteLog snaps }
             , [ Delay (TimeSpan.FromMinutes 5., always Init) ]
 
 module Effects =

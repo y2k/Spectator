@@ -38,6 +38,9 @@ module Prelude =
     module Async =
         let inline map f a = async.Bind(a, f >> async.Return)
         let inline catch a = a |> Async.Catch |> map (function Choice1Of2 x -> Ok x | Choice2Of2 e -> Error e)
+    module Pair =
+        let inline map f (a, b) = f a, b
+        let inline map2 f (a, b) = a, f b
     type Log() =
         static member log (message : string,
                            [<System.Runtime.CompilerServices.CallerFilePath;
@@ -80,8 +83,9 @@ module List =
 // Types
 
 type EventLog<'a> =
-    | EventLog of 'a list
-    member this.unwrap = match this with | EventLog x -> x
+    | ReadLog of 'a list
+    | WriteLog of 'a list
+    member this.unwrap = match this with | ReadLog x -> x | WriteLog _ -> []
 
 type UserId = string
 type PluginId = Guid
@@ -134,7 +138,7 @@ type CoEffectDb =
     { subscriptions : Subscription list
       newSubscriptions : NewSubscription list
       snapshots : Snapshot EventLog }
-    static member empty = { subscriptions = []; newSubscriptions = []; snapshots = EventLog [] }
+    static member empty = { subscriptions = []; newSubscriptions = []; snapshots = ReadLog [] }
 
 type CoEffect<'a> = (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
 
@@ -143,8 +147,10 @@ module Cmd =
 
 // Global effects
 
+type Filter = NoneFilter | UserFilter of string
+
 type IDbEff =
-    abstract member run<'a> : (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
+    abstract member run<'a> : Filter -> (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
 
 module DependencyGraph =
     type Config =
@@ -155,12 +161,12 @@ module DependencyGraph =
           telegramToken : string }
     let mutable config = { filesDir = ""; mongoDomain = ""; restTelegramPassword = ""; restTelegramBaseUrl = ""; telegramToken = ""; }
     let mutable listenLogUpdates : (CoEffectDb -> unit Async) -> unit Async = fun _ -> failwith "not implemented"
-    let mutable dbEff = { new IDbEff with member __.run _ = failwith "not implemented" }
+    let mutable dbEff = { new IDbEff with member __.run _ _ = failwith "not implemented" }
 
 module Eff =
     let rec runEffects (invoke : 'cmd -> _) update (msg : 'msg) =
         async {
-            let! cmds = DependencyGraph.dbEff.run (update msg)
+            let! cmds = DependencyGraph.dbEff.run NoneFilter (update msg)
             cmds |> List.iter ^ printfn "Worker :: %O"
             for cmd in cmds do
                 let! responses = invoke cmd

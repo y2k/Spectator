@@ -13,7 +13,8 @@ let main args =
               .MongoClient(sprintf "mongodb://%s" DependencyGraph.config.mongoDomain)
               .GetDatabase("spectator")
     DependencyGraph.listenLogUpdates <- Spectator.Infrastructure.MongoCofx.subscribeQuery db
-    DependencyGraph.dbEff <- { new IDbEff with member __.run f = Spectator.Infrastructure.MongoCofx.runCfx db f }
+    DependencyGraph.dbEff <- 
+        { new IDbEff with member __.run filter f = Spectator.Infrastructure.MongoCofx.runCfx filter db f }
 
     let parsers =
         [ RssParser.RssParse

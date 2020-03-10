@@ -1,10 +1,9 @@
 module Spectator.Bot.App
 
 open System
+open Spectator.Core
 
 module Domain =
-    open Spectator.Core
-
     type Cmd =
         | History of Uri
         | GetUserSubscriptionsCmd
@@ -38,15 +37,23 @@ module Domain =
         let sub = { id = TypedId.wrap Guid.Empty; userId = user; uri = uri; filter = Option.defaultValue "" filter }
         sub :: newSubscriptions
 
+    let getHistory (snapshots : Snapshot EventLog) (subs : Subscription list) userId uri =
+        subs
+        |> List.tryFind @@ fun sub -> sub.uri = uri && sub.userId = userId
+        |> function
+           | None -> "Not found subscription with this url"
+           | Some sub ->
+               snapshots.unwrap 
+               |> List.filter @@ fun sn -> sn.subscriptionId = sub.id
+               |> List.fold (fun a x -> sprintf "%s\n- %O" a x.uri) "History:"
+
 module Updater =
-    open Spectator.Core
     module P = Domain
 
     let handle message (db : CoEffectDb) =
         match P.parse message with
         | P.History url -> 
-            db
-            , "History:"
+            db, Domain.getHistory db.snapshots db.subscriptions message.user url
         | P.GetUserSubscriptionsCmd ->
             db, Domain.subListToMessageResponse db.subscriptions db.newSubscriptions message.user
         | P.DeleteSubscriptionCmd uri ->
@@ -57,6 +64,9 @@ module Updater =
             { db with newSubscriptions = Domain.add db.newSubscriptions message.user uri filter },
             "Your subscription created"
         | P.UnknownCmd -> 
-            db, "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription"
+            db, "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription\n/history [url] - show last snapshots for subscriptio with url"
 
-let start = Bot.repl (Updater.handle >> Spectator.Core.DependencyGraph.dbEff.run)
+let start = 
+    Bot.repl <| fun message ->
+        let f = Updater.handle message
+        DependencyGraph.dbEff.run (UserFilter message.user) f
