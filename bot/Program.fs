@@ -6,6 +6,7 @@ module Domain =
     open Spectator.Core
 
     type Cmd =
+        | History of Uri
         | GetUserSubscriptionsCmd
         | UnknownCmd
         | AddNewSubscriptionCmd of Uri * string option
@@ -18,6 +19,7 @@ module Domain =
         | Regex "/add ([^ ]+) ([^ ]+)" [ url; filter ] when isValidUri url -> AddNewSubscriptionCmd (Uri url, Some filter)
         | Regex "/add ([^ ]+)" [ url ] when isValidUri url -> AddNewSubscriptionCmd (Uri url, None)
         | Regex "/rm ([^ ]+)" [ url ] -> DeleteSubscriptionCmd ^ Uri url
+        | Regex "/history ([^ ]+)" [ url ] -> History @@ Uri url
         | _ -> UnknownCmd
 
     let subListToMessageResponse (subscriptions : Subscription list) newSubscriptions userId =
@@ -42,6 +44,9 @@ module Updater =
 
     let handle message (db : CoEffectDb) =
         match P.parse message with
+        | P.History url -> 
+            db
+            , "History:"
         | P.GetUserSubscriptionsCmd ->
             db, Domain.subListToMessageResponse db.subscriptions db.newSubscriptions message.user
         | P.DeleteSubscriptionCmd uri ->

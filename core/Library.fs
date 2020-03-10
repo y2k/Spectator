@@ -19,6 +19,7 @@ module Prelude =
     let inline uncurry' f (a, b, c) = f a b c
     let inline always a _ = a
     let inline pair a b = a, b
+    let inline (@@) f x = f x
     let inline (^) f a = f a
     let inline (|||) a b =
         if String.IsNullOrEmpty a then b else a
