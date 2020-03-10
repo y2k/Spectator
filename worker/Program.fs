@@ -39,7 +39,7 @@ module Services =
         | MkNewSnapshots 
         | MkNewSnapshotsEnd of (Request * Result<Snapshot list, exn>) list
     type 'a Cmd =
-        | Delay of TimeSpan * 'a
+        | Delay of TimeSpan * (unit -> 'a)
         | LoadSubscriptions of Request list * (Result<bool, exn> list -> 'a)
         | LoadSnapshots of Request list * (Result<Snapshot list, exn> list -> 'a)
 
@@ -56,7 +56,7 @@ module Services =
             { db with
                 subscriptions = List.filter (fun x -> x.provider <> Guid.Empty) subs
                 newSubscriptions = Domain.removeSubs db.newSubscriptions subs }, 
-            [ Delay (TimeSpan.Zero, MkNewSnapshots) ]
+            [ Delay (TimeSpan.Zero, always MkNewSnapshots) ]
         | MkNewSnapshots -> 
             db,
             db.subscriptions
@@ -66,10 +66,10 @@ module Services =
             db.subscriptions
             |> Domain.mkSnapshots responses
             |> fun snaps -> { db with snapshots = EventLog snaps }
-            , [ Delay (TimeSpan.FromMinutes 5., Init) ]
+            , [ Delay (TimeSpan.FromMinutes 5., always Init) ]
 
 module Effects =
-    let private run f (parsers : HtmlProvider.IParse list) requests =
+    let runPlugin f (parsers : HtmlProvider.IParse list) requests =
         requests
         |> List.map ^ fun (pluginId, uri) ->
             parsers
@@ -78,25 +78,11 @@ module Effects =
             |> Async.catch
         |> Async.Sequential
         >>- List.ofArray
-    let pluginIsValid parsers = run (fun p uri -> p.isValid uri) parsers 
-    let pluginGetNodes parsers = run (fun p uri -> p.getNodes uri) parsers
 
 let start (parsers : HtmlProvider.IParse list) =
-    let rec runEffects update (intMsg : 'msg) =
-        async {
-            let! cmds = DependencyGraph.dbEff.run (update intMsg)
-            cmds |> List.iter ^ printfn "Worker :: %O"
-            for cmd in cmds do
-                match cmd with
-                | Services.Delay (time, msg) -> 
-                    do! Async.Sleep (int time.TotalMilliseconds)
-                    return! runEffects update msg
-                | Services.LoadSubscriptions (requests, f) ->
-                    let! responses = Effects.pluginIsValid parsers requests
-                    return! f responses |> runEffects update
-                | Services.LoadSnapshots (requests, f) -> 
-                    let! responses = Effects.pluginGetNodes parsers requests
-                    return! f responses |> runEffects update
-        }
     let parserIds = parsers |> List.map ^ fun p -> p.id
-    runEffects (Services.update parserIds) Services.Init
+    let effects = function
+        | Services.Delay (time, f) -> Async.Sleep (int time.TotalMilliseconds) >>- f
+        | Services.LoadSubscriptions (requests, f) -> Effects.runPlugin (fun p uri -> p.isValid uri) parsers requests >>- f
+        | Services.LoadSnapshots (requests, f) -> Effects.runPlugin (fun p uri -> p.getNodes uri) parsers requests >>- f
+    Eff.runEffects effects (Services.update parserIds) Services.Init

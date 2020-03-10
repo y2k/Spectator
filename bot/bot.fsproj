@@ -13,7 +13,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\store\store.fsproj" />
     <ProjectReference Include="..\telegram\telegram.fsproj" />
   </ItemGroup>
 

@@ -37,6 +37,23 @@ module Prelude =
     module Async =
         let inline map f a = async.Bind(a, f >> async.Return)
         let inline catch a = a |> Async.Catch |> map (function Choice1Of2 x -> Ok x | Choice2Of2 e -> Error e)
+    type Log() =
+        static member log (message : string,
+                           [<System.Runtime.CompilerServices.CallerFilePath;
+                             System.Runtime.InteropServices.Optional;
+                             System.Runtime.InteropServices.DefaultParameterValue("")>] file : string,
+                           [<System.Runtime.CompilerServices.CallerLineNumber;
+                             System.Runtime.InteropServices.Optional;
+                             System.Runtime.InteropServices.DefaultParameterValue(0)>] line : int) =
+            printfn "LOG %s:%i :: %s" file line message
+        static member elog (message : string,
+                           [<System.Runtime.CompilerServices.CallerFilePath;
+                             System.Runtime.InteropServices.Optional;
+                             System.Runtime.InteropServices.DefaultParameterValue("")>] file : string,
+                           [<System.Runtime.CompilerServices.CallerLineNumber;
+                             System.Runtime.InteropServices.Optional;
+                             System.Runtime.InteropServices.DefaultParameterValue(0)>] line : int) =
+            eprintfn "LOG (ERROR) %s:%i :: %s" file line message
 
 module Async =
     let wrapTask (f : unit -> System.Threading.Tasks.Task) = async {
@@ -138,3 +155,13 @@ module DependencyGraph =
     let mutable config = { filesDir = ""; mongoDomain = ""; restTelegramPassword = ""; restTelegramBaseUrl = ""; telegramToken = ""; }
     let mutable listenLogUpdates : (CoEffectDb -> unit Async) -> unit Async = fun _ -> failwith "not implemented"
     let mutable dbEff = { new IDbEff with member __.run _ = failwith "not implemented" }
+
+module Eff =
+    let rec runEffects (invoke : 'cmd -> _) update (msg : 'msg) =
+        async {
+            let! cmds = DependencyGraph.dbEff.run (update msg)
+            cmds |> List.iter ^ printfn "Worker :: %O"
+            for cmd in cmds do
+                let! responses = invoke cmd
+                return! responses |> runEffects invoke update
+        }

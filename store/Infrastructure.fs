@@ -2,24 +2,6 @@ module Spectator.Infrastructure
 
 open Spectator.Core
 
-type Log() =
-    static member log (message : string,
-                       [<System.Runtime.CompilerServices.CallerFilePath;
-                         System.Runtime.InteropServices.Optional;
-                         System.Runtime.InteropServices.DefaultParameterValue("")>] file : string,
-                       [<System.Runtime.CompilerServices.CallerLineNumber;
-                         System.Runtime.InteropServices.Optional;
-                         System.Runtime.InteropServices.DefaultParameterValue(0)>] line : int) =
-        printfn "LOG %s:%i :: %s" file line message
-    static member elog (message : string,
-                       [<System.Runtime.CompilerServices.CallerFilePath;
-                         System.Runtime.InteropServices.Optional;
-                         System.Runtime.InteropServices.DefaultParameterValue("")>] file : string,
-                       [<System.Runtime.CompilerServices.CallerLineNumber;
-                         System.Runtime.InteropServices.Optional;
-                         System.Runtime.InteropServices.DefaultParameterValue(0)>] line : int) =
-        eprintfn "LOG (ERROR) %s:%i :: %s" file line message
-
 module MongoCofx =
     module Converters =
         open MongoDB.Bson.Serialization

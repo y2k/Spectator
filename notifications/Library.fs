@@ -37,6 +37,6 @@ let main =
         |> List.map ^ fun x -> Bot.sendToTelegramSingle x.userId x.message
         |> fun asyncSeq -> Async.Parallel (asyncSeq, maxDegreeOfParallelism = 5)
         >>- Array.filter ^ (<>) Bot.SuccessResponse
-        >>- Array.iter ^ (sprintf "LOG :: can't send message %O" >> Infrastructure.Log.log)
+        >>- Array.iter ^ (sprintf "LOG :: can't send message %O" >> Log.log)
 
     DependencyGraph.listenLogUpdates ^ (Domain.createNotificationMessages >> sendToTelegramBroadcast)

@@ -3,7 +3,7 @@ module Spectator.Worker.TelegramParser
 open System
 open System.Net.Http
 open Spectator.Core
-type L = Spectator.Infrastructure.Log
+type L = Log
 open Newtonsoft.Json
 
 type private SnapshotResponse = { title : string; author : string; id : string }
