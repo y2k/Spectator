@@ -5,7 +5,11 @@ module MongoCofx =
     open MongoDB.Bson
     open MongoDB.Driver
     open Spectator.Core
-    module R = MongoCollections
+
+    module R =
+        let SnapshotsDb = "snapshots"
+        let SubscriptionsDb = "subscriptions"
+        let NewSubscriptionsDb = "newSubscriptions"
 
     module private Effects =
         let private printErrors (results : Result<_, exn> list) =
@@ -45,7 +49,7 @@ module MongoCofx =
     let private semaphore = new Threading.SemaphoreSlim(1)
 
     let private fixIds db =
-        let fixId (id : Subscription TypedId) = 
+        let fixId (id : _ TypedId) = 
             if id = TypedId.wrap Guid.Empty 
                 then TypedId.wrap ^ Guid.NewGuid() 
                 else id
@@ -98,3 +102,16 @@ module MongoCofx =
                     >>= id
                 offset <- offset + (List.length snaps)
             do! Async.Sleep 5_000 }
+
+    let mkDatabase () =
+        let db = MongoDB.Driver
+                  .MongoClient(sprintf "mongodb://%s" DependencyGraph.config.mongoDomain)
+                  .GetDatabase("spectator")
+        let snapshots = db.GetCollection<Snapshot>("snapshots")
+        CreateIndexModel(
+            IndexKeysDefinition<Snapshot>.op_Implicit("{ subscriptionId : 1, uri : 1 }"),
+            CreateIndexOptions(Unique = Nullable true)
+        )
+        |> snapshots.Indexes.CreateOne 
+        |> ignore
+        db          

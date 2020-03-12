@@ -15,20 +15,20 @@ let ``parsing wikipedia atom is success``() =
 [<Fact>]
 let ``parse simple rss``() =
     let xs = I.loadFromDisk "rss1.xml" |> P.Parser.getNodes
-    Assert.Equal([ { subscriptionId = TypedId.wrap Guid.Empty
-                     id = "http://liftoff.msfc.nasa.gov/2003/06/03.html#item573"
+    Assert.Equal([ { subscriptionId = TypedId.empty ()
+                     id = TypedId.empty ()
                      title = "Star City"
                      uri = Uri "http://liftoff.msfc.nasa.gov/news/2003/news-starcity.asp" }
-                   { subscriptionId = TypedId.wrap Guid.Empty
-                     id = "http://liftoff.msfc.nasa.gov/2003/05/30.html#item572"
+                   { subscriptionId = TypedId.empty ()
+                     id = TypedId.empty ()
                      title = "Space Exploration"
                      uri = Uri "http://liftoff.msfc.nasa.gov/" }
-                   { subscriptionId = TypedId.wrap Guid.Empty
-                     id = "http://liftoff.msfc.nasa.gov/2003/05/27.html#item571"
+                   { subscriptionId = TypedId.empty ()
+                     id = TypedId.empty ()
                      title = "The Engine That Does More"
                      uri = Uri "http://liftoff.msfc.nasa.gov/news/2003/news-VASIMR.asp" }
-                   { subscriptionId = TypedId.wrap Guid.Empty
-                     id = "http://liftoff.msfc.nasa.gov/2003/05/20.html#item570"
+                   { subscriptionId = TypedId.empty ()
+                     id = TypedId.empty ()
                      title = "Astronauts' Dirty Laundry"
                      uri = Uri "http://liftoff.msfc.nasa.gov/news/2003/news-laundry.asp" } ]
                  |> box, xs |> box)
@@ -36,8 +36,8 @@ let ``parse simple rss``() =
 [<Fact>]
 let ``parse simple atom``() =
     let xs = I.loadFromDisk "atom1.xml" |> P.Parser.getNodes
-    Assert.Equal([ { subscriptionId = TypedId.wrap Guid.Empty
-                     id = "urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa6a"
+    Assert.Equal([ { subscriptionId = TypedId.empty ()
+                     id = TypedId.empty ()
                      title = "Фотографии из Африки"
                      uri = Uri("http://example.org/2003/12/13/atom03") } ]
                  |> box, xs |> box)

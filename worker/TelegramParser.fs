@@ -37,7 +37,7 @@ let Parser =
                     JsonConvert.DeserializeObject<SnapshotResponse[]> json
                     |> Seq.toList
                     |> List.map ^ fun x ->
-                          { subscriptionId = TypedId.wrap Guid.Empty
-                            id = x.id
+                          { subscriptionId = TypedId.empty ()
+                            id = TypedId.empty ()
                             title = x.title
                             uri = Uri ^ sprintf "https://t.me/%s/%s" chat x.id } } }

@@ -16,8 +16,8 @@ module Parser =
     let parseRss (doc : XDocument) =
         doc.XPathSelectElements "//channel/item"
         |> Seq.map (fun e ->
-               { subscriptionId = TypedId.wrap Guid.Empty
-                 id = e.XPathSelectElement("guid").Value
+               { subscriptionId = TypedId.empty ()
+                 id = TypedId.empty ()
                  title = e.XPathSelectElement("title").Value
                  uri = e.XPathSelectElement("link").Value |> Uri })
         |> Seq.toList
@@ -25,8 +25,8 @@ module Parser =
     let parseAtom (doc : XDocument) =
         doc.XPathSelectElements("atom:feed//atom:entry", ns)
         |> Seq.map (fun e ->
-               { subscriptionId = TypedId.wrap Guid.Empty
-                 id = e.XPathSelectElement("atom:id", ns).Value
+               { subscriptionId = TypedId.empty ()
+                 id = TypedId.empty ()
                  title = e.XPathSelectElement("atom:title", ns).Value
                  uri = e.XPathSelectElement("atom:link", ns).Attribute("href" |> XName.op_Implicit).Value |> Uri })
         |> Seq.toList

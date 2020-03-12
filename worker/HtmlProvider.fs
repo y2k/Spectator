@@ -68,8 +68,8 @@ let HtmlParse =
             if sim < 0.9 then
                 F.WriteAllText(mkFilePath DependencyGraph.config.filesDir uri, content)
                 let snap =
-                    { subscriptionId = TypedId.wrap Guid.Empty
-                      id = sprintf "uri-%O" <| uri.GetHashCode()
+                    { subscriptionId = TypedId.empty ()
+                      id = TypedId.empty ()
                       title = getTitle content
                       uri = uri }
                 return [ snap ]

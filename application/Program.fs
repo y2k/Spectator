@@ -9,9 +9,7 @@ let main args =
         |> Deserialize<DependencyGraph.Config>
         |> function [ Succes { Data = x } ] -> x | _ -> failwith "error"
 
-    let db = MongoDB.Driver
-              .MongoClient(sprintf "mongodb://%s" DependencyGraph.config.mongoDomain)
-              .GetDatabase("spectator")
+    let db = Spectator.Infrastructure.MongoCofx.mkDatabase ()
     DependencyGraph.listenLogUpdates <- Spectator.Infrastructure.MongoCofx.subscribeQuery db
     DependencyGraph.dbEff <- 
         { new IDbEff with member __.run filter f = Spectator.Infrastructure.MongoCofx.runCfx filter db f }

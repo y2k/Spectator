@@ -95,6 +95,7 @@ type 'a TypedId = Guid
 #nowarn "42"
 module TypedId =
     let inline wrap<'b> (a : Guid) : 'b TypedId = (# "" a : TypedId<'b> #)
+    let empty () = wrap Guid.Empty
 
 [<CLIMutable>]
 type Subscription =
@@ -107,7 +108,7 @@ type Subscription =
 
 [<CLIMutable>]
 type NewSubscription =
-    { id : Subscription TypedId
+    { id : NewSubscription TypedId
       userId : UserId
       uri : Uri
       filter : string }
@@ -116,10 +117,10 @@ type NewSubscription =
 [<CLIMutable>]
 type Snapshot =
     { subscriptionId : Subscription TypedId
-      id : string
+      id : Snapshot TypedId
       title : string
       uri : Uri }
-    static member empty = { subscriptionId = TypedId.wrap Guid.Empty; id = ""; title = ""; uri = null }
+    static member empty = { subscriptionId = TypedId.wrap Guid.Empty; id = TypedId.wrap Guid.Empty; title = ""; uri = null }
 
 module Auth =
     let computeAuthKey (user : UserId) (seed : string) =
@@ -128,11 +129,6 @@ module Auth =
         |> System.Text.Encoding.UTF8.GetBytes
         |> md5.ComputeHash
         |> System.Convert.ToBase64String
-
-module MongoCollections =
-    let SnapshotsDb = "snapshots"
-    let SubscriptionsDb = "subscriptions"
-    let NewSubscriptionsDb = "newSubscriptions"
 
 type CoEffectDb =
     { subscriptions : Subscription list
