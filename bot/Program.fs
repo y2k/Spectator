@@ -21,12 +21,20 @@ module Domain =
         | Regex "/history ([^ ]+)" [ url ] -> History @@ Uri url
         | _ -> UnknownCmd
 
-    let subListToMessageResponse (subscriptions : Subscription list) newSubscriptions userId =
-        let subs = subscriptions |> List.filter ^ fun x -> x.userId = userId
+    let snapshotsCount (snapshots : Snapshot EventLog) subId =
+        snapshots.unwrap
+        |> List.filter @@ fun sn -> sn.subscriptionId = subId
+        |> List.length
+
+    let subListToMessageResponse (subscriptions : Subscription list) newSubscriptions userId snapshots =
+        let subs = 
+            subscriptions 
+            |> List.filter ^ fun x -> x.userId = userId
+            |> List.map ^ fun sub -> sprintf "%O '%s' (%i)" sub.uri sub.filter (snapshotsCount snapshots sub.id)
         newSubscriptions
         |> List.filter ^ fun x -> x.userId = userId
-        |> List.map ^ fun x -> sprintf "(Waiting) %O (%s)" x.uri x.filter
-        |> List.append (subs |> List.map ^ fun x -> sprintf "%O (%s)" x.uri x.filter)
+        |> List.map ^ fun x -> sprintf "(Waiting) %O '%s'" x.uri x.filter
+        |> List.append subs
         |> List.fold (sprintf "%s\n- %s") "Your subscriptions: "
 
     let deleteSubs (subscriptions : Subscription list) newSubscriptions userId uri =
@@ -55,7 +63,7 @@ module Updater =
         | P.History url -> 
             db, Domain.getHistory db.snapshots db.subscriptions message.user url
         | P.GetUserSubscriptionsCmd ->
-            db, Domain.subListToMessageResponse db.subscriptions db.newSubscriptions message.user
+            db, Domain.subListToMessageResponse db.subscriptions db.newSubscriptions message.user db.snapshots
         | P.DeleteSubscriptionCmd uri ->
             let (ns, ss) = Domain.deleteSubs db.subscriptions db.newSubscriptions message.user uri
             { db with subscriptions = ss; newSubscriptions = ns },

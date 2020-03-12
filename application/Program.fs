@@ -2,21 +2,21 @@ open Legivel.Serialization
 open Spectator.Core
 open Spectator.Worker
 
+let readConfig path =
+    System.IO.File.ReadAllText path
+    |> Deserialize<DependencyGraph.Config>
+    |> function [ Succes { Data = x } ] -> x | _ -> failwith "error"
+
 [<EntryPoint>]
 let main args =
-    DependencyGraph.config <- 
-        System.IO.File.ReadAllText args.[0]
-        |> Deserialize<DependencyGraph.Config>
-        |> function [ Succes { Data = x } ] -> x | _ -> failwith "error"
+    DependencyGraph.config <- readConfig args.[0]
 
-    let db = Spectator.Infrastructure.MongoCofx.mkDatabase ()
-    DependencyGraph.listenLogUpdates <- Spectator.Infrastructure.MongoCofx.subscribeQuery db
-    DependencyGraph.dbEff <- 
-        { new IDbEff with member __.run filter f = Spectator.Infrastructure.MongoCofx.runCfx filter db f }
+    let dbProvider = Spectator.Infrastructure.MongoCofx.mkProvider ()
+    DependencyGraph.listenLogUpdates <- dbProvider.listen
+    DependencyGraph.dbEff <- { new IDbEff with member __.run filter f = dbProvider.run filter f }
 
     let parsers =
         [ RssParser.RssParse
-          // TelegramParser.Parser
           HtmlProvider.HtmlParse ]
 
     [ Spectator.Worker.App.start parsers
