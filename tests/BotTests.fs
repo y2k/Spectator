@@ -46,8 +46,8 @@ let ``test /ls`` () =
 
     let (db2, msg) = B.handle { text = "/ls"; user = "111" } db
     test <@ db2 = db @>
-    test <@ "Your subscriptions: \n- http://s1.com/ ()\n- (Waiting) http://s1-2.com/ ()" = msg @>
+    test <@ "Your subscriptions: \n- http://s1.com/ '' (0)\n- (Waiting) http://s1-2.com/ ''" = msg @>
 
     let (db2, msg) = B.handle { text = "/ls"; user = "222" } db
     test <@ db2 = db @>
-    test <@ "Your subscriptions: \n- http://s2.com/ (xxx)" = msg @>
+    test <@ "Your subscriptions: \n- http://s2.com/ 'xxx' (0)" = msg @>
