@@ -113,22 +113,31 @@ let private runCfx (filter : Filter) mongo (f : CoEffectDb -> (CoEffectDb * 'a))
             semaphore.Release() |> ignore
     }
 
-let private subscribeQuery mdb f = 
+let private listenUpdates mdb listener =
+    let notifyListener snaps =
+        async {
+            let! listenerTask = 
+                runCfx NoneFilter mdb ^ fun db -> 
+                    db, listener { db with snapshots = ReadLog snaps }
+            do! listenerTask
+        }
+
     async {
-        let! offsetStart = Inner.count mdb R.SnapshotsDb
-        let mutable offset = int offsetStart
+        let! initOffset = Inner.count mdb R.SnapshotsDb
+        let offset = ref (int initOffset)
 
         while true do
-            let! snaps = Inner.query mdb R.SnapshotsDb (Some 100) (Some offset) None None
+            let! snaps = Inner.query mdb R.SnapshotsDb (Some 100) (Some !offset) None None
+
             if List.isNotEmpty snaps then
-                do! runCfx NoneFilter mdb ^ fun db -> db, f { db with snapshots = ReadLog snaps }
-                    >>= id
-                offset <- offset + (List.length snaps)
+                do! notifyListener snaps
+
+            offset := !offset + (List.length snaps)
             do! Async.Sleep 5_000 
     }
 
 let mkProvider () : IMongoProvider =
     let db = Inner.mkDatabase R.SnapshotsDb
     { new IMongoProvider with
-        member __.listen f = subscribeQuery db f
+        member __.listen f = listenUpdates db f
         member __.run filter f = runCfx filter db f }
