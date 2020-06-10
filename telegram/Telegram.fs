@@ -1,4 +1,4 @@
-module Bot
+module Spectator.Telegram
 
 open Spectator.Core
 open System
@@ -14,11 +14,11 @@ type TelegramResponse =
     | BotBlockedResponse
     | UnknownErrorResponse of exn
 
-let private makeClient () =
-    TelegramBotClient DependencyGraph.config.telegramToken
+let private makeClient telegramToken =
+    TelegramBotClient telegramToken
 
-let sendToTelegramSingle (user : string) message =
-    let bot = makeClient ()
+let sendToTelegramSingle telegramToken (user : string) message =
+    let bot = makeClient telegramToken
     bot.SendTextMessageAsync(ChatId.op_Implicit user, message, parseMode = Enums.ParseMode.Html)
     |> (Async.AwaitTask >> Async.Catch)
     >>- function
@@ -27,18 +27,21 @@ let sendToTelegramSingle (user : string) message =
             BotBlockedResponse
         | Choice2Of2 e -> UnknownErrorResponse e
 
-let repl f = async {
-    let bot = makeClient ()
-    let disposable =
-        bot.OnUpdate
-        |> Observable.map ^ fun args -> { text = args.Update.Message.Text ||| ""; user = string args.Update.Message.From.Id }
-        |> Observable.subscribe ^ fun msg -> 
-            f msg
-            >>- fun r -> printfn "Telegram ::\n>>>\n%O\n<<<\n%s" msg r; r
-            >>= sendToTelegramSingle msg.user 
-            |> (Async.Ignore >> Async.Start)
+let repl telegramToken f = 
+    async {
+        let bot = makeClient telegramToken
+        let disposable =
+            bot.OnUpdate
+            |> Observable.map @@ fun args -> 
+                string args.Update.Message.From.Id, args.Update.Message.Text ||| ""
+            |> Observable.subscribe ^ fun msg -> 
+                f msg
+                >>- fun r -> printfn "Telegram ::\n>>>\n%O\n<<<\n%s" msg r; r
+                >>= sendToTelegramSingle telegramToken (fst msg)
+                |> (Async.Ignore >> Async.Start)
 
-    bot.StartReceiving()
+        bot.StartReceiving()
 
-    do! Async.OnCancel(fun () -> disposable.Dispose(); bot.StopReceiving()) |> Async.Ignore
-    do! Async.Sleep System.Int32.MaxValue }
+        do! Async.OnCancel(fun () -> disposable.Dispose(); bot.StopReceiving()) |> Async.Ignore
+        do! Async.Sleep Int32.MaxValue
+    }

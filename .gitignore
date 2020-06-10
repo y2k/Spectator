@@ -13,6 +13,6 @@ obj/
 
 __data/
 
-tests.fsx
+*.fsx
 
 .fake

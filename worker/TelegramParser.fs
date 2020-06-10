@@ -8,7 +8,7 @@ open Newtonsoft.Json
 
 type private SnapshotResponse = { title : string; author : string; id : string }
 
-let Parser =
+let Parser restTelegramPassword restTelegramBaseUrl =
     let toChatName (_ : Uri) : string = failwith "???"
     let getChatId (uri : Uri) = 
         uri.AbsoluteUri
@@ -16,7 +16,7 @@ let Parser =
            | Regex "^https://t.me/([\\w\\d_]+)$" [ id ] -> Ok id
            | origin -> Error ^ sprintf "Can't find valid id from %s" origin
 
-    { new Spectator.Worker.HtmlProvider.IParse with
+    { new HtmlProvider.IParse with
         member __.id = Guid.Parse "3B26457E-8AB7-41AD-8DEC-11AF891A3052"
         member __.isValid uri =
             match getChatId uri with Ok _ -> true | Error _ -> false
@@ -26,12 +26,12 @@ let Parser =
                 let chat = toChatName uri
                 let client = new HttpClient()
                 let auth =
-                    sprintf "_:%s" DependencyGraph.config.restTelegramPassword
+                    sprintf "_:%s" restTelegramPassword
                     |> Text.Encoding.UTF8.GetBytes
                     |> Convert.ToBase64String
                 client.DefaultRequestHeaders.Authorization <- Headers.AuthenticationHeaderValue("Basic", auth)
                 let! json = 
-                    sprintf "%s/history?chat=%s" DependencyGraph.config.restTelegramBaseUrl (toChatName uri)
+                    sprintf "%s/history?chat=%s" restTelegramBaseUrl (toChatName uri)
                     |> client.GetStringAsync
                 return
                     JsonConvert.DeserializeObject<SnapshotResponse[]> json

@@ -2,8 +2,6 @@ module Spectator.Notifications
 
 open Spectator.Core
 
-type MessageCmd = { userId : string ; message : string }
-
 module Domain =
     type R = System.Text.RegularExpressions.Regex
 
@@ -27,16 +25,50 @@ module Domain =
         |> List.map ^ fun sub -> sub, findSnapsForSub sub
         |> List.filter ^ fun (_, snaps) -> List.isNotEmpty snaps
 
-    let createNotificationMessages db =
-        getUpdates db.subscriptions db.snapshots.unwrap
-        |> List.map ^ fun (sub, snaps) -> { userId = sub.userId; message = mkMessage sub snaps }
+    type Eff = SendToTelegramSingle of UserId * string
+    type State = { users : Map<Subscription TypedId, UserId> }
 
-let main =
-    let sendToTelegramBroadcast messages =
-        messages
-        |> List.map ^ fun x -> Bot.sendToTelegramSingle x.userId x.message
-        |> fun asyncSeq -> Async.Parallel (asyncSeq, maxDegreeOfParallelism = 5)
-        >>- Array.filter ^ (<>) Bot.SuccessResponse
-        >>- Array.iter ^ (sprintf "LOG :: can't send message %O" >> Log.log)
+    let init = { users = Map.empty }
 
-    DependencyGraph.listenLogUpdates ^ (Domain.createNotificationMessages >> sendToTelegramBroadcast)
+    let update e state =
+        match e with
+        | SnapshotCreated snap ->
+            match Map.tryFind snap.subscriptionId state.users with
+            | Some userId ->
+                let msg = sprintf "- <a href=\"%O\">%s</a>" snap.uri snap.title
+                state, [ SendToTelegramSingle (userId, msg) ]
+            | None -> state, []
+        | SubscriptionCreated sub ->
+            { state with users = Map.add sub.id sub.userId state.users }, []
+        | SubscriptionRemoved (subId, _) ->
+            { state with 
+                users = state.users 
+                        |> Map.filter @@ fun k _ -> not @@ List.contains k subId }
+            , []
+        | _ -> state, []
+
+let main readEvent sendToTelegramSingle =
+    let executeEff eff =
+        match eff with
+        | Domain.SendToTelegramSingle (u, msg) -> sendToTelegramSingle u msg
+
+    let state = ref Domain.init
+    let loopReadEvents () =
+        async {
+            let! (e : Events) = readEvent
+            let (s2, effs) = Domain.update e !state
+            state := s2
+            do! effs |> List.map executeEff |> Async.Sequential |> Async.Ignore
+            return ()
+        }
+    loopReadEvents ()
+
+// let main' =
+//     let sendToTelegramBroadcast messages =
+//         messages
+//         |> List.map ^ fun x -> Bot.sendToTelegramSingle x.userId x.message
+//         |> fun asyncSeq -> Async.Parallel (asyncSeq, maxDegreeOfParallelism = 5)
+//         >>- Array.filter ^ (<>) Bot.SuccessResponse
+//         >>- Array.iter ^ (sprintf "LOG :: can't send message %O" >> Log.log)
+
+//     DependencyGraph.listenLogUpdates ^ (Domain.createNotificationMessages >> sendToTelegramBroadcast)

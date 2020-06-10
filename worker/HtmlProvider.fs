@@ -58,15 +58,15 @@ let private download (uri : Uri) = async {
     r.RequestMessage.Headers.Accept.ParseAdd "text/html, application/xml;q=0.9, application/xhtml+xml, image/png, image/webp, image/jpeg, image/gif, image/x-xbitmap, */*;q=0.1"
     return! r.Content.ReadAsStringAsync() }
 
-let HtmlParse =
+let HtmlParse filesDir =
     { new IParse with
         member __.id = Guid.Parse "AE4FEE1F-C08D-44B9-B526-4162FF1C328C"
         member __.isValid uri = async { return uri.IsAbsoluteUri && uri.Scheme = "https" }
         member __.getNodes uri = async {
             let! content = download uri
-            let! sim = compare DependencyGraph.config.filesDir uri content
+            let! sim = compare filesDir uri content
             if sim < 0.9 then
-                F.WriteAllText(mkFilePath DependencyGraph.config.filesDir uri, content)
+                F.WriteAllText(mkFilePath filesDir uri, content)
                 let snap =
                     { subscriptionId = TypedId.empty ()
                       id = TypedId.empty ()

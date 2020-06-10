@@ -6,6 +6,8 @@
 
   <ItemGroup>
     <Compile Include="Infrastructure.fs" />
+    <Compile Include="MiniKafka.fs" />
+    <Compile Include="Persistent.fs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -14,6 +16,7 @@
 
   <ItemGroup>
     <PackageReference Include="MongoDB.Driver" Version="2.10.3" />
+    <PackageReference Include="System.Threading.Channels" Version="4.7.1" />
   </ItemGroup>
 
 </Project>

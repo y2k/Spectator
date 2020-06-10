@@ -3,10 +3,6 @@ module Spectator.Infrastructure.MongoCofx
 open System
 open Spectator.Core
 
-type IMongoProvider =
-    abstract member listen : (CoEffectDb -> unit Async) -> unit Async
-    abstract member run : Filter -> (CoEffectDb -> CoEffectDb * 'a) -> 'a Async
-
 module private Shared =
     open MongoDB.Bson
     open MongoDB.Driver
@@ -79,12 +75,12 @@ module private Shared =
                 do! Async.Sleep 5_000 
         }
 
-let private fixIds db =
-    let fixId (id : _ TypedId) = 
-        if id = TypedId.wrap Guid.Empty then TypedId.wrap ^ Guid.NewGuid() else id
-    { db with 
-        subscriptions = List.map (fun x -> { x with id = fixId x.id }) db.subscriptions 
-        newSubscriptions = List.map (fun x -> { x with id = fixId x.id }) db.newSubscriptions }
+// let private fixIds db =
+//     let fixId (id : _ TypedId) = 
+//         if id = TypedId.wrap Guid.Empty then TypedId.wrap ^ Guid.NewGuid() else id
+//     { db with 
+//         subscriptions = List.map (fun x -> { x with id = fixId x.id }) db.subscriptions 
+//         newSubscriptions = List.map (fun x -> { x with id = fixId x.id }) db.newSubscriptions }
 
 module private R =
     let SnapshotsDb = "snapshots"
@@ -105,47 +101,47 @@ let private loadSnapshots mongo (subs : Subscription list) = function
 
 let private semaphore = new Threading.SemaphoreSlim(1)
 
-let private runCfx (filter : Filter) mongo (f : CoEffectDb -> (CoEffectDb * 'a)) =
-    async {
-        do! semaphore.WaitAsync() |> Async.AwaitTask
-        try
-            let! subs = Shared.query mongo R.SubscriptionsDb None None None None
-            let! newSubs = Shared.query mongo R.NewSubscriptionsDb None None None None
-            let! snaps = loadSnapshots mongo subs filter
-            let db = { subscriptions = subs; newSubscriptions = newSubs; snapshots = ReadLog snaps }
+// let private runCfx (filter : Filter) mongo (f : CoEffectDb -> (CoEffectDb * 'a)) =
+//     async {
+//         do! semaphore.WaitAsync() |> Async.AwaitTask
+//         try
+//             let! subs = Shared.query mongo R.SubscriptionsDb None None None None
+//             let! newSubs = Shared.query mongo R.NewSubscriptionsDb None None None None
+//             let! snaps = loadSnapshots mongo subs filter
+//             let db = { subscriptions = subs; newSubscriptions = newSubs; snapshots = ReadLog snaps }
             
-            let (newDb, eff) = f db |> Pair.map fixIds
+//             let (newDb, eff) = f db |> Pair.map fixIds
 
-            if newDb.newSubscriptions <> db.newSubscriptions then
-                do! Shared.deleteFromCol mongo R.NewSubscriptionsDb
-                do! newDb.newSubscriptions
-                    |> Shared.insert mongo R.NewSubscriptionsDb
-            if newDb.subscriptions <> db.subscriptions then
-                do! Shared.deleteFromCol mongo R.SubscriptionsDb
-                do! newDb.subscriptions
-                    |> Shared.insert mongo R.SubscriptionsDb
-            let snapshots = match newDb.snapshots with WriteLog xs -> xs | ReadLog _ -> []
-            if List.isNotEmpty snapshots then
-                do! Shared.insert mongo R.SnapshotsDb snapshots
+//             if newDb.newSubscriptions <> db.newSubscriptions then
+//                 do! Shared.deleteFromCol mongo R.NewSubscriptionsDb
+//                 do! newDb.newSubscriptions
+//                     |> Shared.insert mongo R.NewSubscriptionsDb
+//             if newDb.subscriptions <> db.subscriptions then
+//                 do! Shared.deleteFromCol mongo R.SubscriptionsDb
+//                 do! newDb.subscriptions
+//                     |> Shared.insert mongo R.SubscriptionsDb
+//             let snapshots = match newDb.snapshots with WriteLog xs -> xs | ReadLog _ -> []
+//             if List.isNotEmpty snapshots then
+//                 do! Shared.insert mongo R.SnapshotsDb snapshots
 
-            return eff
-        finally
-            semaphore.Release() |> ignore
-    }
+//             return eff
+//         finally
+//             semaphore.Release() |> ignore
+//     }
 
-let private listenUpdates mdb collection listener =
-    Shared.listenUpdates mdb collection @@ fun snaps ->
-        async {
-            let! effect =
-                runCfx NoneFilter mdb ^ fun db -> 
-                    db, listener { db with snapshots = ReadLog snaps }
-            return! effect
-        }
+// let private listenUpdates mdb collection listener =
+//     Shared.listenUpdates mdb collection @@ fun snaps ->
+//         async {
+//             let! effect =
+//                 runCfx NoneFilter mdb ^ fun db -> 
+//                     db, listener { db with snapshots = ReadLog snaps }
+//             return! effect
+//         }
 
-let mkProvider () : IMongoProvider =
-    let db =
-        Map.ofList [ R.SnapshotsDb, "{ subscriptionId : 1, uri : 1 }" ]
-        |> Shared.mkDatabase DependencyGraph.config.mongoDomain "spectator"
-    { new IMongoProvider with
-        member __.listen f = listenUpdates db R.SnapshotsDb f
-        member __.run filter f = runCfx filter db f }
+// let mkProvider () : IMongoProvider =
+//     let db =
+//         Map.ofList [ R.SnapshotsDb, "{ subscriptionId : 1, uri : 1 }" ]
+//         |> Shared.mkDatabase DependencyGraph.config.mongoDomain "spectator"
+//     { new IMongoProvider with
+//         member __.listen f = listenUpdates db R.SnapshotsDb f
+//         member __.run filter f = runCfx filter db f }

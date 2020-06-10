@@ -1,26 +1,41 @@
-open Legivel.Serialization
+open Spectator
 open Spectator.Core
-open Spectator.Worker
 
 let readConfig path =
     System.IO.File.ReadAllText path
-    |> Deserialize<DependencyGraph.Config>
-    |> function [ Succes { Data = x } ] -> x | _ -> failwith "error"
+    |> Legivel.Serialization.Deserialize
+    |> function [ Legivel.Serialization.Succes { Legivel.Serialization.Data = x } ] -> x | _ -> failwith "error"
+
+type Config =
+    { filesDir : string
+      mongoDomain : string
+      restTelegramPassword : string
+      restTelegramBaseUrl : string
+      telegramToken : string }
+
+module K = Store.MiniKafka
 
 [<EntryPoint>]
 let main args =
-    DependencyGraph.config <- readConfig args.[0]
-
-    let dbProvider = Spectator.Infrastructure.MongoCofx.mkProvider ()
-    DependencyGraph.listenLogUpdates <- dbProvider.listen
-    DependencyGraph.dbEff <- { new IDbEff with member __.run filter f = dbProvider.run filter f }
+    let config : Config = readConfig args.[0]
 
     let parsers =
-        [ RssParser.RssParse
-          HtmlProvider.HtmlParse ]
+        [ Worker.RssParser.RssParse
+          Worker.HtmlProvider.HtmlParse config.filesDir ]
 
-    [ Spectator.Worker.App.start parsers
-      Spectator.Bot.App.main
-      Spectator.Notifications.main ]
-    |> Async.Parallel |> Async.RunSynchronously |> ignore
+    let repl = Telegram.repl config.telegramToken
+    let sendToTelegramSingle = Telegram.sendToTelegramSingle config.telegramToken
+    let group = K.createGroup ()
+
+    async {
+      let! botState = Store.Persistent.restoreState config.mongoDomain Bot.App.emptyState Bot.App.restore
+      let! workerState = Store.Persistent.restoreState config.mongoDomain Worker.App.emptyState Worker.App.restore
+
+      do!
+        [ Store.Persistent.main config.mongoDomain (K.createReader group)
+          Bot.App.main botState (K.sendEvent group) (K.createReader group) repl
+          Notifications.main (K.createReader group) sendToTelegramSingle
+          Worker.App.main workerState parsers (K.sendEvent group) ]
+        |> Async.Parallel |> Async.Ignore
+    } |> Async.RunSynchronously
     0

@@ -9,11 +9,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\telegram\telegram.fsproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Telegram.Bot" Version="14.10.0" />
+    <ProjectReference Include="..\core\core.fsproj" />
   </ItemGroup>
 
 </Project>
