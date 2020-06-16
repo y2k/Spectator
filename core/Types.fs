@@ -32,16 +32,16 @@ type NewSubscription =
 [<CLIMutable>]
 type Snapshot =
     { subscriptionId : Subscription TypedId
+      created : DateTime
       id : Snapshot TypedId
       title : string
       uri : Uri }
-    static member empty = { subscriptionId = TypedId.wrap Guid.Empty; id = TypedId.wrap Guid.Empty; title = ""; uri = null }
+    static member empty = { subscriptionId = TypedId.wrap Guid.Empty; created = DateTime.MinValue; id = TypedId.wrap Guid.Empty; title = ""; uri = null }
 
 type Events =
     | NewSubscriptionCreated of NewSubscription
     | SubscriptionCreated of Subscription
     | SubscriptionRemoved of Subscription TypedId list * NewSubscription TypedId list
     | SnapshotCreated of Snapshot
-    | RestoreFromPersistent of Subscription list * Snapshot list
 
 type Filter = NoneFilter | UserFilter of string

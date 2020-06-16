@@ -47,28 +47,23 @@ module Domain =
             , []
         | _ -> state, []
 
-let main readEvent sendToTelegramSingle =
+let emptyState = Domain.init
+
+let restore state e =
+    Domain.update e state |> fst
+
+let main initState readEvent sendToTelegramSingle =
     let executeEff eff =
         match eff with
         | Domain.SendToTelegramSingle (u, msg) -> sendToTelegramSingle u msg
 
-    let state = ref Domain.init
-    let loopReadEvents () =
+    let state = ref initState
+    let rec loopReadEvents () =
         async {
             let! (e : Events) = readEvent
             let (s2, effs) = Domain.update e !state
             state := s2
-            do! effs |> List.map executeEff |> Async.Sequential |> Async.Ignore
-            return ()
+            do! effs |> List.map executeEff |> Async.Parallel |> Async.Ignore
+            do! loopReadEvents ()
         }
     loopReadEvents ()
-
-// let main' =
-//     let sendToTelegramBroadcast messages =
-//         messages
-//         |> List.map ^ fun x -> Bot.sendToTelegramSingle x.userId x.message
-//         |> fun asyncSeq -> Async.Parallel (asyncSeq, maxDegreeOfParallelism = 5)
-//         >>- Array.filter ^ (<>) Bot.SuccessResponse
-//         >>- Array.iter ^ (sprintf "LOG :: can't send message %O" >> Log.log)
-
-//     DependencyGraph.listenLogUpdates ^ (Domain.createNotificationMessages >> sendToTelegramBroadcast)

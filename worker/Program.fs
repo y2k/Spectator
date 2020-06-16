@@ -11,7 +11,7 @@ module Domain =
             | Ok suc -> if suc && uri = newSub.uri then Some id else None
             | Error _ -> None
         |> Option.map @@ fun providerId ->
-            { id = TypedId.wrap Guid.Empty
+            { id = TypedId.wrap <| Guid.NewGuid()
               userId = newSub.userId
               provider = providerId
               uri = newSub.uri
@@ -25,33 +25,53 @@ module Domain =
                 match snaps with
                 | Ok snaps -> if p = sub.provider && u = sub.uri then snaps else []
                 | Error _ -> []
-            |> List.map ^ fun x -> { x with subscriptionId = sub.id }
+            |> List.map ^ fun x -> 
+                { x with
+                    created = x.created.ToUniversalTime()
+                    subscriptionId = sub.id
+                    id = TypedId.wrap <| Guid.NewGuid () }
+        |> List.sortBy @@ fun x -> x.created
 
     let removeSubs newSubscriptions (subs : Subscription list) =
         List.exceptBy subs (fun (ns : NewSubscription) sub -> ns.uri = sub.uri) newSubscriptions
 
+    let filterNewSnapshots (lastUpdated : Map<Subscription TypedId, DateTime>) snapshots =
+        snapshots
+        |> List.filter @@ fun snap ->
+            match Map.tryFind snap.subscriptionId lastUpdated with
+            | Some date -> snap.created > date
+            | None -> true
+
+    let udpateLastUpdates (lastUpdated : Map<Subscription TypedId, DateTime>) snapshots =
+        snapshots
+        |> List.fold 
+            (fun xs snap ->
+                match Map.tryFind snap.subscriptionId xs with
+                | Some date -> Map.add snap.subscriptionId (max date snap.created) xs
+                | None -> Map.add snap.subscriptionId snap.created xs)
+            lastUpdated
+
 module Services =
     type Request = PluginId * Uri
-    type State = { subscriptions : Subscription list }
+    type State = { subscriptions : Subscription list; lastUpdated : Map<Subscription TypedId, DateTime> }
     type Msg = 
         | EventReceived of Events
         | MkSubscriptionsEnd of NewSubscription * (Request * Result<bool, exn>) list
         | MkNewSnapshots 
         | MkNewSnapshotsEnd of (Request * Result<Snapshot list, exn>) list
-    type 'a Cmd =
+        | SendEventEnd
+    type 'a Effect =
         | Delay of TimeSpan * (unit -> 'a)
         | LoadSubscriptions of Request list * (Result<bool, exn> list -> 'a)
         | LoadSnapshots of Request list * (Result<Snapshot list, exn> list -> 'a)
-        | SendEvent of Events
+        | SendEvent of Events * (unit -> 'a)
 
-    let init = { subscriptions = []; }, [ Delay (TimeSpan.Zero, always MkNewSnapshots) ]
+    let init = { subscriptions = []; lastUpdated = Map.empty }, [ Delay (TimeSpan.Zero, always MkNewSnapshots) ]
 
-    let update parserIds msg (state : State) =
+    let update syncDelay parserIds msg (state : State) =
         match msg with
         | EventReceived event ->
             match event with
-            | RestoreFromPersistent (subs, _) ->
-                { state with subscriptions = subs @ state.subscriptions }, []
             | NewSubscriptionCreated ns ->
                 let req =
                     parserIds
@@ -63,14 +83,17 @@ module Services =
                         state.subscriptions 
                         |> List.filter (fun s -> not <| List.contains s.id sids) }
                 , []
-            | SubscriptionCreated | SnapshotCreated -> state, []
+            | SubscriptionCreated sub ->
+                { state with subscriptions = sub :: state.subscriptions }, []
+            | SnapshotCreated snap -> 
+                { state with lastUpdated = Domain.udpateLastUpdates state.lastUpdated [ snap ] }, []
         | MkSubscriptionsEnd (ns, subResps) ->
             match Domain.toSubscription subResps ns with
-            | None -> state, [ SendEvent @@ SubscriptionRemoved ([], [ ns.id ]) ]
+            | None -> state, [ SendEvent (SubscriptionRemoved ([], [ ns.id ]), always SendEventEnd) ]
             | Some sub ->
-                { state with subscriptions = sub :: state.subscriptions }
-                , [ SendEvent @@ SubscriptionCreated sub
-                    SendEvent @@ SubscriptionRemoved ([], [ ns.id ]) ]
+                state
+                , [ SendEvent (SubscriptionCreated sub, always SendEventEnd)
+                    SendEvent (SubscriptionRemoved ([], [ ns.id ]), always SendEventEnd) ]
         | MkNewSnapshots ->
             let effects =
                 state.subscriptions
@@ -78,12 +101,16 @@ module Services =
                 |> fun req -> [ LoadSnapshots (req, fun resp -> MkNewSnapshotsEnd (List.map2 pair req resp)) ]
             state, effects
         | MkNewSnapshotsEnd responses ->
-            let effects =
+            let newSnaps =
                 state.subscriptions
                 |> Domain.mkSnapshots responses
-                |> List.map @@ fun sn -> SendEvent (SnapshotCreated sn)
-            state
-            , [ Delay (TimeSpan.FromMinutes 5., always MkNewSnapshots) ] @ effects
+                |> Domain.filterNewSnapshots state.lastUpdated
+            let effects =
+                newSnaps
+                |> List.map @@ fun sn -> SendEvent (SnapshotCreated sn, always SendEventEnd)
+            { state with lastUpdated = Domain.udpateLastUpdates state.lastUpdated newSnaps }
+            , [ Delay (syncDelay, always MkNewSnapshots) ] @ effects
+        | SendEventEnd -> state, []
 
 module Effects =
     let runPlugin f (parsers : HtmlProvider.IParse list) requests =
@@ -101,41 +128,45 @@ type IParser = HtmlProvider.IParse
 let emptyState = Services.init |> fst
 
 let restore state e =
-    Services.update [] (Services.EventReceived e) state |> fst
+    Services.update TimeSpan.Zero [] (Services.EventReceived e) state |> fst
 
-let main initState (parsers : HtmlProvider.IParse list) sendEvent =
-    let executeEffect (cmd : Services.Msg Services.Cmd) : Services.Msg list Async =
-        match cmd with
+let main syncDelay initState (parsers : HtmlProvider.IParse list) sendEvent readEvent =
+    let update =
+        parsers
+        |> List.map @@ fun p -> p.id
+        |> Services.update syncDelay
+
+    let executeEffect eff =
+        match eff with
         | Services.Delay (time, f) -> 
-            Async.Sleep (int time.TotalMilliseconds) >>- (f >> List.singleton)
+            Async.Sleep (int time.TotalMilliseconds) >>- f
         | Services.LoadSubscriptions (requests, f) -> 
-            Effects.runPlugin (fun p uri -> p.isValid uri) parsers requests >>- (f >> List.singleton)
+            Effects.runPlugin (fun p uri -> p.isValid uri) parsers requests >>- f
         | Services.LoadSnapshots (requests, f) -> 
-            Effects.runPlugin (fun p uri -> p.getNodes uri) parsers requests >>- (f >> List.singleton)
-        | Services.SendEvent e ->
-            sendEvent e >>- (always [])
+            Effects.runPlugin (fun p uri -> p.getNodes uri) parsers requests >>- f
+        | Services.SendEvent (e, f) ->
+            sendEvent e >>- f
 
     let state = ref initState
 
-    let parserIds = parsers |> List.map @@ fun p -> p.id
-    let update = Services.update parserIds
-
-    let rec loopUpdate (msg : Services.Msg list) : unit Async =
+    let rec loopUpdate msg =
         async {
-            let (s2, effs) =
-                List.fold 
-                    (fun (state, effs) m ->
-                        let (s2, effs2) = update m state
-                        s2, effs2 @ effs) 
-                    (!state, []) msg
+            let (s2, effs) = update msg !state
             state := s2
-            for ef in effs do
-                let! msg = executeEffect ef
-                do! loopUpdate msg
+            do! effs
+                |> List.map (executeEffect >=> loopUpdate)
+                |> Async.Parallel
+                |> Async.Ignore
         }
 
-    snd Services.init
-    |> List.map executeEffect
-    |> Async.Sequential
-    |> Async.map (List.concat)
-    >>= loopUpdate
+    [ async {
+          let cmd = snd Services.init
+          for eff in cmd do
+              let! msg = executeEffect eff
+              do! loopUpdate msg }
+      async {
+          while true do
+              let! e = readEvent
+              do! loopUpdate (Services.EventReceived e) } ]
+    |> Async.Parallel
+    |> Async.Ignore 

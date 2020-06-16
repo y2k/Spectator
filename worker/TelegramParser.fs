@@ -38,6 +38,7 @@ let Parser restTelegramPassword restTelegramBaseUrl =
                     |> Seq.toList
                     |> List.map ^ fun x ->
                           { subscriptionId = TypedId.empty ()
+                            created = failwith "???"
                             id = TypedId.empty ()
                             title = x.title
                             uri = Uri ^ sprintf "https://t.me/%s/%s" chat x.id } } }

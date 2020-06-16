@@ -69,6 +69,7 @@ let HtmlParse filesDir =
                 F.WriteAllText(mkFilePath filesDir uri, content)
                 let snap =
                     { subscriptionId = TypedId.empty ()
+                      created = failwith "???"
                       id = TypedId.empty ()
                       title = getTitle content
                       uri = uri }

@@ -21,21 +21,26 @@ module Domain =
         | Regex "/history ([^ ]+)" [ url ] -> History @@ Uri url
         | _ -> UnknownCmd
 
-    // let parse' (message : Bot.Message) = parse message.text
-
     let snapshotsCount (snapshots : Snapshot list) subId =
         snapshots
         |> List.filter @@ fun sn -> sn.subscriptionId = subId
         |> List.length
 
+    let subToString snapshots (sub : Subscription) =
+        let provider =
+            match sub.provider with
+            | id when id = Guid "E5D3A9F2-325C-4CEF-BCA9-99D23F9E5AE5" -> "RSS"
+            | _ -> "?"
+        sprintf "[%s] %O '%s' (%i)" provider sub.uri sub.filter (snapshotsCount snapshots sub.id)
+
     let subListToMessageResponse (subscriptions : Subscription list) newSubscriptions userId snapshots =
         let subs = 
             subscriptions 
             |> List.filter ^ fun x -> x.userId = userId
-            |> List.map ^ fun sub -> sprintf "%O '%s' (%i)" sub.uri sub.filter (snapshotsCount snapshots sub.id)
+            |> List.map (subToString snapshots)
         newSubscriptions
         |> List.filter ^ fun x -> x.userId = userId
-        |> List.map ^ fun x -> sprintf "(Waiting) %O '%s'" x.uri x.filter
+        |> List.map ^ fun x -> sprintf "[Processing...] %O '%s'" x.uri x.filter
         |> List.append subs
         |> List.fold (sprintf "%s\n- %s") "Your subscriptions: "
 
@@ -44,7 +49,7 @@ module Domain =
         , subscriptions |> List.filter ^ fun x -> x.userId <> userId || x.uri <> uri
 
     let createNewSub user uri filter =
-        { id = TypedId.wrap Guid.Empty; userId = user; uri = uri; filter = Option.defaultValue "" filter }
+        { id = TypedId.wrap <| Guid.NewGuid (); userId = user; uri = uri; filter = Option.defaultValue "" filter }
 
     let add newSubscriptions user uri filter =
         let sub = createNewSub user uri filter
@@ -119,29 +124,7 @@ module Updater =
             { db with response = "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription\n/history [url] - show last snapshots for subscriptio with url" }
             , []
 
-    let private handleEvent state = 
-        function
-        | RestoreFromPersistent (subs, snaps) ->
-            let state =
-                subs
-                |> List.fold 
-                    (fun state sub -> 
-                        updateUserState state sub.userId @@ fun us -> 
-                            { us with subscriptions = sub :: us.subscriptions }, []
-                        |> fst) 
-                    state
-            let state =
-                snaps
-                |> List.fold
-                    (fun state snap ->
-                        match findUserBySnapshot state snap with
-                        | Some userId ->
-                            updateUserState state userId @@ fun us -> 
-                                { us with snapshots = snap :: us.snapshots }, []
-                        | None -> state, []
-                        |> fst)
-                    state
-            state, []
+    let private handleEvent state = function
         | SnapshotCreated snap ->
             match findUserBySnapshot state snap with
             | Some userId ->
@@ -151,7 +134,17 @@ module Updater =
         | SubscriptionCreated sub ->
             updateUserState state sub.userId @@ fun us -> 
                 { us with subscriptions = sub :: us.subscriptions }, []
-        | NewSubscriptionCreated | SubscriptionRemoved -> state, []
+        | NewSubscriptionCreated -> state, []
+        | SubscriptionRemoved (_, ids) ->
+            { state with 
+                states =
+                    state.states
+                    |> Map.map @@ fun _ state ->
+                        { state with
+                            newSubscriptions = 
+                                state.newSubscriptions 
+                                |> List.filter (fun s -> not <| List.contains s.id ids) } }
+            , []
 
     let view (userId : UserId) (state : State) =
         match Map.tryFind userId state.states with
@@ -180,7 +173,6 @@ let main initState sendEvent receiveEvent repl =
         |> List.map sendEvent
         |> Async.Sequential
         |> Async.Ignore
-        |> Async.Start
 
     let state = ref initState
 
@@ -189,14 +181,16 @@ let main initState sendEvent receiveEvent repl =
             let! e = receiveEvent
             let (s2, events) = Updater.update (Updater.EventsReceived e) !state
             state := s2
-            handleEvents events
+            do! handleEvents events
             do! loopReadEvents ()
         }
     let handle (user : UserId, text : string) =
-        let (s2, events) = Updater.update (Updater.TextReceived (user, text)) !state
-        state := s2
-        handleEvents events
-        Updater.view user s2 |> async.Return
+        async {
+            let (s2, events) = Updater.update (Updater.TextReceived (user, text)) !state
+            state := s2
+            do! handleEvents events
+            return Updater.view user s2
+        }
 
     [ loopReadEvents ()
       repl handle ]

@@ -50,7 +50,7 @@ let restoreState mongoDomain emptyState f =
 let main mongoDomain receiceEvent =
     let db = Inner.getDatabase mongoDomain database
 
-    let loop () =
+    let rec loop () =
         async {
             match! receiceEvent with
             | SubscriptionCreated sub ->
@@ -60,6 +60,7 @@ let main mongoDomain receiceEvent =
                     do! Inner.delete db "subscriptions" id
             | SnapshotCreated snap ->
                 do! Inner.insert db "snapshots" snap
-            | NewSubscriptionCreated | RestoreFromPersistent -> ()
+            | NewSubscriptionCreated -> ()
+            do! loop ()
         }
     loop ()

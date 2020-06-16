@@ -1,3 +1,4 @@
+open System
 open Spectator
 open Spectator.Core
 
@@ -12,6 +13,13 @@ type Config =
       restTelegramPassword : string
       restTelegramBaseUrl : string
       telegramToken : string }
+
+let logEvents logReader =
+    async {
+        while true do
+            let! e = logReader
+            printfn "Send event ::\n%O" e
+    }
 
 module K = Store.MiniKafka
 
@@ -30,12 +38,13 @@ let main args =
     async {
       let! botState = Store.Persistent.restoreState config.mongoDomain Bot.App.emptyState Bot.App.restore
       let! workerState = Store.Persistent.restoreState config.mongoDomain Worker.App.emptyState Worker.App.restore
+      let! notifyState = Store.Persistent.restoreState config.mongoDomain Notifications.emptyState Notifications.restore
 
-      do!
-        [ Store.Persistent.main config.mongoDomain (K.createReader group)
-          Bot.App.main botState (K.sendEvent group) (K.createReader group) repl
-          Notifications.main (K.createReader group) sendToTelegramSingle
-          Worker.App.main workerState parsers (K.sendEvent group) ]
-        |> Async.Parallel |> Async.Ignore
+      do! [ logEvents (K.createReader group)
+            Store.Persistent.main config.mongoDomain (K.createReader group)
+            Bot.App.main botState (K.sendEvent group) (K.createReader group) repl
+            Notifications.main notifyState (K.createReader group) sendToTelegramSingle
+            Worker.App.main (TimeSpan.FromMinutes 1.) workerState parsers (K.sendEvent group) (K.createReader group) ]
+          |> Async.Parallel |> Async.Ignore
     } |> Async.RunSynchronously
     0
