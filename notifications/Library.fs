@@ -30,40 +30,39 @@ module Domain =
 
     let init = { users = Map.empty }
 
+    type Msg =
+        | EventReceived of Events
+        | SendToTelegramEnd
+
     let update e state =
         match e with
-        | SnapshotCreated snap ->
-            match Map.tryFind snap.subscriptionId state.users with
-            | Some userId ->
-                let msg = sprintf "- <a href=\"%O\">%s</a>" snap.uri snap.title
-                state, [ SendToTelegramSingle (userId, msg) ]
-            | None -> state, []
-        | SubscriptionCreated sub ->
-            { state with users = Map.add sub.id sub.userId state.users }, []
-        | SubscriptionRemoved (subId, _) ->
-            { state with 
-                users = state.users 
-                        |> Map.filter @@ fun k _ -> not @@ List.contains k subId }
-            , []
-        | _ -> state, []
+        | SendToTelegramEnd -> state, []
+        | EventReceived e ->
+            match e with
+            | SnapshotCreated snap ->
+                match Map.tryFind snap.subscriptionId state.users with
+                | Some userId ->
+                    let msg = sprintf "- <a href=\"%O\">%s</a>" snap.uri snap.title
+                    state, [ SendToTelegramSingle (userId, msg) ]
+                | None -> state, []
+            | SubscriptionCreated sub ->
+                { state with users = Map.add sub.id sub.userId state.users }, []
+            | SubscriptionRemoved (subId, _) ->
+                { state with 
+                    users = state.users 
+                            |> Map.filter @@ fun k _ -> not @@ List.contains k subId }
+                , []
+            | _ -> state, []
 
 let emptyState = Domain.init
+let restore state e = Domain.update (Domain.EventReceived e) state |> fst
 
-let restore state e =
-    Domain.update e state |> fst
+let executeEffect sendToTelegramSingle eff =
+    match eff with
+    | Domain.SendToTelegramSingle (u, msg) -> 
+        sendToTelegramSingle u msg
+        >>- always Domain.SendToTelegramEnd
 
 let main initState readEvent sendToTelegramSingle =
-    let executeEff eff =
-        match eff with
-        | Domain.SendToTelegramSingle (u, msg) -> sendToTelegramSingle u msg
-
-    let state = ref initState
-    let rec loopReadEvents () =
-        async {
-            let! (e : Events) = readEvent
-            let (s2, effs) = Domain.update e !state
-            state := s2
-            do! effs |> List.map executeEff |> Async.Parallel |> Async.Ignore
-            do! loopReadEvents ()
-        }
-    loopReadEvents ()
+    let executeEffect = executeEffect sendToTelegramSingle
+    Tea.start initState [] Domain.update Domain.EventReceived executeEffect readEvent

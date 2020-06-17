@@ -31,8 +31,8 @@ let main args =
         [ Worker.RssParser.RssParse
           Worker.HtmlProvider.HtmlParse config.filesDir ]
 
-    let repl = Telegram.repl config.telegramToken
     let sendToTelegramSingle = Telegram.sendToTelegramSingle config.telegramToken
+    let readMessage = Telegram.readMessage config.telegramToken
     let group = K.createGroup ()
 
     async {
@@ -42,7 +42,7 @@ let main args =
 
       do! [ logEvents (K.createReader group)
             Store.Persistent.main config.mongoDomain (K.createReader group)
-            Bot.App.main botState (K.sendEvent group) (K.createReader group) repl
+            Bot.App.main botState (K.sendEvent group) (K.createReader group) sendToTelegramSingle readMessage
             Notifications.main notifyState (K.createReader group) sendToTelegramSingle
             Worker.App.main (TimeSpan.FromMinutes 1.) workerState parsers (K.sendEvent group) (K.createReader group) ]
           |> Async.Parallel |> Async.Ignore

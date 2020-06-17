@@ -27,6 +27,16 @@ let sendToTelegramSingle telegramToken (user : string) message =
             BotBlockedResponse
         | Choice2Of2 e -> UnknownErrorResponse e
 
+let readMessage token =
+    let bot = makeClient token
+    let offset = ref 0
+    async {
+        let! updates = bot.GetUpdatesAsync(offset = !offset, limit = 1, timeout = Int32.MaxValue) |> Async.AwaitTask
+        let x = updates.[0]
+        offset := x.Id + 1
+        return string x.Message.From.Id, x.Message.Text
+    }
+
 let repl telegramToken f = 
     async {
         let bot = makeClient telegramToken

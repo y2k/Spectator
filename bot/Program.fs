@@ -71,8 +71,7 @@ module Updater =
     type UserState =
         { subscriptions : Subscription list
           newSubscriptions : NewSubscription list
-          snapshots : Snapshot list
-          response : string }
+          snapshots : Snapshot list }
     type State = { states : Map<UserId, UserState> }
 
     let private findUserBySnapshot (state : State) (snap : Snapshot) : UserId option =
@@ -84,20 +83,29 @@ module Updater =
     let private updateUserState (state : State) (userId : UserId) (f : UserState -> UserState * 'a list) : State * 'a list =
         let us =
             Map.tryFind userId state.states
-            |> Option.defaultValue { snapshots = []; subscriptions = []; newSubscriptions = []; response = ""}
+            |> Option.defaultValue { snapshots = []; subscriptions = []; newSubscriptions = [] }
         let (us, effs) = f us
         { state with states = Map.add userId us state.states }, effs
 
-    let init = { states = Map.empty }
+    type Msg =
+        | EventsReceived of Events
+        | TextReceived of UserId * string
+        | SendMessageEnd
+        | SendEventEnd
+
+    type Cmd =
+        | SendEvent of Events
+        | ReadNewMessage of (UserId * string -> Msg)
+        | SendMessage of UserId * string
 
     let private handleBotMessage (user : UserId) text (db : UserState) =
         match P.parse text with
         | P.History url -> 
-            { db with response = Domain.getHistory db.snapshots db.subscriptions user url }
-            , []
+            db
+            , [ SendMessage (user, Domain.getHistory db.snapshots db.subscriptions user url) ]
         | P.GetUserSubscriptionsCmd ->
-            { db with response = Domain.subListToMessageResponse db.subscriptions db.newSubscriptions user db.snapshots }
-            , []
+            db
+            , [ SendMessage (user, Domain.subListToMessageResponse db.subscriptions db.newSubscriptions user db.snapshots) ]
         | P.DeleteSubscriptionCmd uri ->
             let (ns, ss) = Domain.deleteSubs db.subscriptions db.newSubscriptions user uri
             let remSubs = 
@@ -110,19 +118,17 @@ module Updater =
                 |> List.map @@ fun x -> x.id
                 |> List.filter @@ fun id -> 
                     ns |> List.forall @@ fun nsi -> nsi.id <> id
-            { db with 
-                subscriptions = ss; newSubscriptions = ns
-                response = "Your subscription deleted" }
-            , [ SubscriptionRemoved (remSubs, rmNewSubs) ]
+            { db with subscriptions = ss; newSubscriptions = ns }
+            , [ SendEvent <| SubscriptionRemoved (remSubs, rmNewSubs)
+                SendMessage (user, "Your subscription deleted") ]
         | P.AddNewSubscriptionCmd (uri, filter) ->
             let newSub = Domain.createNewSub user uri filter
-            { db with 
-                newSubscriptions = newSub :: db.newSubscriptions
-                response = "Your subscription created" }
-            , [ NewSubscriptionCreated newSub ]
+            { db with newSubscriptions = newSub :: db.newSubscriptions }
+            , [ SendEvent <| NewSubscriptionCreated newSub
+                SendMessage (user, "Your subscription created") ]
         | P.UnknownCmd -> 
-            { db with response = "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription\n/history [url] - show last snapshots for subscriptio with url" }
-            , []
+            db
+            , [ SendMessage (user, "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription\n/history [url] - show last snapshots for subscription with url") ]
 
     let private handleEvent state = function
         | SnapshotCreated snap ->
@@ -145,53 +151,32 @@ module Updater =
                                 state.newSubscriptions 
                                 |> List.filter (fun s -> not <| List.contains s.id ids) } }
             , []
-
-    let view (userId : UserId) (state : State) =
-        match Map.tryFind userId state.states with
-        | Some x -> x.response
-        | None -> ""
-
-    type Msg =
-        | EventsReceived of Events
-        | TextReceived of UserId * string
+    
+    let init = { states = Map.empty }, [ ReadNewMessage TextReceived ]
 
     let update (msg : Msg) (state : State) =
         match msg with
         | EventsReceived e ->
             handleEvent state e
-        | TextReceived (userId, message) -> 
-            updateUserState state userId (handleBotMessage userId message)
+        | TextReceived (userId, message) ->
+            let state, cmd = updateUserState state userId (handleBotMessage userId message)
+            state
+            , ReadNewMessage TextReceived :: cmd
+        | SendMessageEnd | SendEventEnd -> state, []
 
-let emptyState = Updater.init
+let emptyState = Updater.init |> fst
 
 let restore state e =
     Updater.update (Updater.EventsReceived e) state |> fst
 
-let main initState sendEvent receiveEvent repl =
-    let handleEvents events =
-        events
-        |> List.map sendEvent
-        |> Async.Sequential
-        |> Async.Ignore
+let executeEffect sendToTelegram readFromTelegram sendEvent = function
+    | Updater.ReadNewMessage f ->
+        readFromTelegram >>- f
+    | Updater.SendMessage (userId, text) ->
+        sendToTelegram userId text >>- always Updater.SendMessageEnd
+    | Updater.SendEvent e ->
+        sendEvent e >>- always Updater.SendEventEnd
 
-    let state = ref initState
-
-    let rec loopReadEvents () =
-        async {
-            let! e = receiveEvent
-            let (s2, events) = Updater.update (Updater.EventsReceived e) !state
-            state := s2
-            do! handleEvents events
-            do! loopReadEvents ()
-        }
-    let handle (user : UserId, text : string) =
-        async {
-            let (s2, events) = Updater.update (Updater.TextReceived (user, text)) !state
-            state := s2
-            do! handleEvents events
-            return Updater.view user s2
-        }
-
-    [ loopReadEvents ()
-      repl handle ]
-    |> Async.Parallel |> Async.Ignore
+let main initState sendEvent receiveEvent sendToTelegram readFromTelegram =
+    let executeEffect = executeEffect sendToTelegram readFromTelegram sendEvent
+    Tea.start initState (snd Updater.init) Updater.update Updater.EventsReceived executeEffect receiveEvent

@@ -130,43 +130,20 @@ let emptyState = Services.init |> fst
 let restore state e =
     Services.update TimeSpan.Zero [] (Services.EventReceived e) state |> fst
 
+let executeEffect parsers sendEvent = function
+    | Services.Delay (time, f) -> 
+        Async.Sleep (int time.TotalMilliseconds) >>- f
+    | Services.LoadSubscriptions (requests, f) -> 
+        Effects.runPlugin (fun p uri -> p.isValid uri) parsers requests >>- f
+    | Services.LoadSnapshots (requests, f) -> 
+        Effects.runPlugin (fun p uri -> p.getNodes uri) parsers requests >>- f
+    | Services.SendEvent (e, f) ->
+        sendEvent e >>- f
+
 let main syncDelay initState (parsers : HtmlProvider.IParse list) sendEvent readEvent =
     let update =
         parsers
         |> List.map @@ fun p -> p.id
         |> Services.update syncDelay
-
-    let executeEffect eff =
-        match eff with
-        | Services.Delay (time, f) -> 
-            Async.Sleep (int time.TotalMilliseconds) >>- f
-        | Services.LoadSubscriptions (requests, f) -> 
-            Effects.runPlugin (fun p uri -> p.isValid uri) parsers requests >>- f
-        | Services.LoadSnapshots (requests, f) -> 
-            Effects.runPlugin (fun p uri -> p.getNodes uri) parsers requests >>- f
-        | Services.SendEvent (e, f) ->
-            sendEvent e >>- f
-
-    let state = ref initState
-
-    let rec loopUpdate msg =
-        async {
-            let (s2, effs) = update msg !state
-            state := s2
-            do! effs
-                |> List.map (executeEffect >=> loopUpdate)
-                |> Async.Parallel
-                |> Async.Ignore
-        }
-
-    [ async {
-          let cmd = snd Services.init
-          for eff in cmd do
-              let! msg = executeEffect eff
-              do! loopUpdate msg }
-      async {
-          while true do
-              let! e = readEvent
-              do! loopUpdate (Services.EventReceived e) } ]
-    |> Async.Parallel
-    |> Async.Ignore 
+    let executeEffect = executeEffect parsers sendEvent
+    Tea.start initState (snd Services.init) update Services.EventReceived executeEffect readEvent

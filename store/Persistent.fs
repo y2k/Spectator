@@ -47,12 +47,12 @@ let restoreState mongoDomain emptyState f =
         return !state
     }
 
-let main mongoDomain receiceEvent =
+let main mongoDomain receiveEvent =
     let db = Inner.getDatabase mongoDomain database
 
     let rec loop () =
         async {
-            match! receiceEvent with
+            match! receiveEvent with
             | SubscriptionCreated sub ->
                 do! Inner.insert db "subscriptions" sub
             | SubscriptionRemoved (sids, _) ->
