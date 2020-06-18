@@ -4,6 +4,12 @@ open System
 open Spectator.Core
 
 module Domain =
+
+    type UserState =
+        { subscriptions : Subscription list
+          newSubscriptions : NewSubscription list
+          snapshots : Snapshot list }
+
     type Cmd =
         | History of Uri
         | GetUserSubscriptionsCmd
@@ -65,13 +71,17 @@ module Domain =
                |> List.filter @@ fun sn -> sn.subscriptionId = sub.id
                |> List.fold (fun a x -> sprintf "%s\n- %O" a x.uri) "History:"
 
-module Updater =
-    module P = Domain
+    let removeSubsWithIds states ids =
+        states
+        |> Map.map @@ fun _ state ->
+            { state with
+                newSubscriptions = 
+                    state.newSubscriptions 
+                    |> List.filter (fun s -> not <| List.contains s.id ids) }
 
-    type UserState =
-        { subscriptions : Subscription list
-          newSubscriptions : NewSubscription list
-          snapshots : Snapshot list }
+module Updater =
+    open Domain
+
     type State = { states : Map<UserId, UserState> }
 
     let private findUserBySnapshot (state : State) (snap : Snapshot) : UserId option =
@@ -99,15 +109,15 @@ module Updater =
         | SendMessage of UserId * string
 
     let private handleBotMessage (user : UserId) text (db : UserState) =
-        match P.parse text with
-        | P.History url -> 
+        match parse text with
+        | History url -> 
             db
-            , [ SendMessage (user, Domain.getHistory db.snapshots db.subscriptions user url) ]
-        | P.GetUserSubscriptionsCmd ->
+            , [ SendMessage (user, getHistory db.snapshots db.subscriptions user url) ]
+        | GetUserSubscriptionsCmd ->
             db
-            , [ SendMessage (user, Domain.subListToMessageResponse db.subscriptions db.newSubscriptions user db.snapshots) ]
-        | P.DeleteSubscriptionCmd uri ->
-            let (ns, ss) = Domain.deleteSubs db.subscriptions db.newSubscriptions user uri
+            , [ SendMessage (user, subListToMessageResponse db.subscriptions db.newSubscriptions user db.snapshots) ]
+        | DeleteSubscriptionCmd uri ->
+            let (ns, ss) = deleteSubs db.subscriptions db.newSubscriptions user uri
             let remSubs = 
                 db.subscriptions
                 |> List.map @@ fun x -> x.id
@@ -121,12 +131,12 @@ module Updater =
             { db with subscriptions = ss; newSubscriptions = ns }
             , [ SendEvent <| SubscriptionRemoved (remSubs, rmNewSubs)
                 SendMessage (user, "Your subscription deleted") ]
-        | P.AddNewSubscriptionCmd (uri, filter) ->
-            let newSub = Domain.createNewSub user uri filter
+        | AddNewSubscriptionCmd (uri, filter) ->
+            let newSub = createNewSub user uri filter
             { db with newSubscriptions = newSub :: db.newSubscriptions }
             , [ SendEvent <| NewSubscriptionCreated newSub
                 SendMessage (user, "Your subscription created") ]
-        | P.UnknownCmd -> 
+        | UnknownCmd -> 
             db
             , [ SendMessage (user, "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription\n/history [url] - show last snapshots for subscription with url") ]
 
@@ -134,23 +144,17 @@ module Updater =
         | SnapshotCreated snap ->
             match findUserBySnapshot state snap with
             | Some userId ->
-                updateUserState state userId @@ fun us -> 
-                    { us with snapshots = snap :: us.snapshots }, []
+                updateUserState state userId @@ fun us ->
+                    let snaps = snap :: us.snapshots
+                    { us with snapshots = snaps |> List.take (min 10 snaps.Length)}, []
             | None -> state, []
         | SubscriptionCreated sub ->
             updateUserState state sub.userId @@ fun us -> 
                 { us with subscriptions = sub :: us.subscriptions }, []
-        | NewSubscriptionCreated -> state, []
         | SubscriptionRemoved (_, ids) ->
-            { state with 
-                states =
-                    state.states
-                    |> Map.map @@ fun _ state ->
-                        { state with
-                            newSubscriptions = 
-                                state.newSubscriptions 
-                                |> List.filter (fun s -> not <| List.contains s.id ids) } }
+            { state with states = removeSubsWithIds state.states ids }
             , []
+        | NewSubscriptionCreated -> state, []
     
     let init = { states = Map.empty }, [ ReadNewMessage TextReceived ]
 

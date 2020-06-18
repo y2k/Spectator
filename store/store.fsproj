@@ -5,7 +5,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Infrastructure.fs" />
     <Compile Include="MiniKafka.fs" />
     <Compile Include="Persistent.fs" />
   </ItemGroup>

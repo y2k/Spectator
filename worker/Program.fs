@@ -6,7 +6,7 @@ open Spectator.Core
 module Domain =
     let toSubscription subResps (newSub : NewSubscription) =
         subResps
-        |> List.tryPick ^ fun ((id, uri), suc) ->
+        |> List.tryPick @@ fun ((id, uri), suc) ->
             match suc with
             | Ok suc -> if suc && uri = newSub.uri then Some id else None
             | Error _ -> None
@@ -19,13 +19,13 @@ module Domain =
 
     let mkSnapshots responses subs =
         subs
-        |> List.collect ^ fun sub ->
+        |> List.collect @@ fun sub ->
             responses
-            |> List.collect ^ fun ((p, u), snaps) ->
+            |> List.collect @@ fun ((p, u), snaps) ->
                 match snaps with
                 | Ok snaps -> if p = sub.provider && u = sub.uri then snaps else []
                 | Error _ -> []
-            |> List.map ^ fun x -> 
+            |> List.map @@ fun x -> 
                 { x with
                     created = x.created.ToUniversalTime()
                     subscriptionId = sub.id
@@ -97,7 +97,7 @@ module Services =
         | MkNewSnapshots ->
             let effects =
                 state.subscriptions
-                |> List.map ^ fun x -> x.provider, x.uri
+                |> List.map @@ fun x -> x.provider, x.uri
                 |> fun req -> [ LoadSnapshots (req, fun resp -> MkNewSnapshotsEnd (List.map2 pair req resp)) ]
             state, effects
         | MkNewSnapshotsEnd responses ->
@@ -115,15 +115,13 @@ module Services =
 module Effects =
     let runPlugin f (parsers : HtmlProvider.IParse list) requests =
         requests
-        |> List.map ^ fun (pluginId, uri) ->
+        |> List.map @@ fun (pluginId, uri) ->
             parsers
-            |> List.find ^ fun p -> p.id = pluginId
+            |> List.find @@ fun p -> p.id = pluginId
             |> fun p -> f p uri
             |> Async.catch
         |> Async.Sequential
         >>- List.ofArray
-
-type IParser = HtmlProvider.IParse
 
 let emptyState = Services.init |> fst
 
