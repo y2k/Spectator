@@ -27,7 +27,7 @@ module Parser =
         doc.XPathSelectElements("atom:feed//atom:entry", ns)
         |> Seq.map (fun e ->
                { subscriptionId = TypedId.empty ()
-                 created = failwith "???"
+                 created = e.XPathSelectElement("atom:updated", ns).Value |> DateTime.Parse
                  id = TypedId.empty ()
                  title = e.XPathSelectElement("atom:title", ns).Value
                  uri = e.XPathSelectElement("atom:link", ns).Attribute("href" |> XName.op_Implicit).Value |> Uri })

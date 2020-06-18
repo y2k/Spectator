@@ -6,10 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="BotTests.fs" />
     <Compile Include="Infrastructure.fs" />
-    <Compile Include="WorkerTests.fs" />
-    <Compile Include="Tests.fs" />
+    <Compile Include="ParseTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -20,8 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\worker\worker.fsproj" />
-    <ProjectReference Include="..\bot\bot.fsproj" />
+    <ProjectReference Include="..\application\application.fsproj" />
   </ItemGroup>
 
   <PropertyGroup>
