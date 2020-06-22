@@ -30,7 +30,7 @@ let executeEffect<'a> (insert : IInsert) delete event =
                 do! delete "subscriptions" id
         | SnapshotCreated snap ->
             do! insert.invoke "snapshots" snap
-        | NewSubscriptionCreated -> ()
+        | NewSubscriptionCreated _ -> ()
         return []
     }
 

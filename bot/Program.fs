@@ -154,7 +154,7 @@ module Updater =
         | SubscriptionRemoved (_, ids) ->
             { state with states = removeSubsWithIds state.states ids }
             , []
-        | NewSubscriptionCreated -> state, []
+        | NewSubscriptionCreated _ -> state, []
     
     let init = { states = Map.empty }, [ ReadNewMessage TextReceived ]
 
