@@ -11,6 +11,7 @@ type 'a TypedId = Guid
 module TypedId =
     let inline wrap<'b> (a : Guid) : 'b TypedId = (# "" a : TypedId<'b> #)
     let empty () = wrap Guid.Empty
+    let inline unwrap (x : _ TypedId) = (# "" x : Guid #)
 
 [<CLIMutable>]
 type Subscription =

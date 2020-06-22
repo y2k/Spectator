@@ -23,8 +23,8 @@ module Domain =
         | Regex "/ls" [] -> GetUserSubscriptionsCmd
         | Regex "/add ([^ ]+) ([^ ]+)" [ url; filter ] when isValidUri url -> AddNewSubscriptionCmd (Uri url, Some filter)
         | Regex "/add ([^ ]+)" [ url ] when isValidUri url -> AddNewSubscriptionCmd (Uri url, None)
-        | Regex "/rm ([^ ]+)" [ url ] -> DeleteSubscriptionCmd ^ Uri url
-        | Regex "/history ([^ ]+)" [ url ] -> History @@ Uri url
+        | Regex "/rm ([^ ]+)" [ url ] when isValidUri url -> DeleteSubscriptionCmd @@ Uri url
+        | Regex "/history ([^ ]+)" [ url ] when isValidUri url -> History @@ Uri url
         | _ -> UnknownCmd
 
     let snapshotsCount (snapshots : Snapshot list) subId =
@@ -163,6 +163,7 @@ module Updater =
         | EventsReceived e ->
             handleEvent state e
         | TextReceived (userId, message) ->
+            printfn "Telegram (%s) :: %s" userId message
             let state, cmd = updateUserState state userId (handleBotMessage userId message)
             state
             , ReadNewMessage TextReceived :: cmd

@@ -1,66 +1,40 @@
 module Spectator.Store.Persistent
 
-module private Inner =
-    open MongoDB.Bson
-    open MongoDB.Driver
-
-    let getDatabase mongoDomain database =
-        MongoDB.Driver
-            .MongoClient(sprintf "mongodb://%s" mongoDomain)
-            .GetDatabase(database)
-
-    let insert (db : IMongoDatabase) name item =
-        async {
-            let collection = db.GetCollection name
-            do! item.ToBsonDocument() |> collection.InsertOneAsync |> Async.AwaitTask
-        }
-
-    let delete (db : IMongoDatabase) name id = 
-        async {
-            let collection = db.GetCollection name
-            let query = BsonDocument.Create {| id = id |}
-            do! collection.DeleteOneAsync(FilterDefinition.op_Implicit query)
-                |> Async.AwaitTask |> Async.Ignore 
-        }
-
-    let forEach<'a> (db : IMongoDatabase) name f =
-        async {
-            do! db.GetCollection<'a>(name)
-                  .Find(FilterDefinition.op_Implicit "{}")
-                  .ForEachAsync(System.Action<_>(fun s -> f s))
-                |> Async.AwaitTask
-        }
-
 open Spectator.Core
 
-let private database = "spectator"
+type IInsert =
+    abstract invoke : string -> 'a -> unit Async
 
-let restoreState mongoDomain emptyState f =
+type IForEach =
+    abstract invoke : string -> ('a -> unit)-> unit Async
+
+let restoreState (forEach : IForEach) emptyState f =
     async {
         let state = ref emptyState
         let update e = state := f !state e
 
-        let db = Inner.getDatabase mongoDomain database
-        do! Inner.forEach db "subscriptions" (fun s -> update <| SubscriptionCreated s)
-        do! Inner.forEach db "snapshots" (fun s -> update <| SnapshotCreated s)
+        do! forEach.invoke "subscriptions" (fun s -> update <| SubscriptionCreated s)
+        do! forEach.invoke "snapshots" (fun s -> update <| SnapshotCreated s)
 
         return !state
     }
 
-let main mongoDomain receiveEvent =
-    let db = Inner.getDatabase mongoDomain database
+let executeEffect<'a> (insert : IInsert) delete event =
+    async {
+        match event with
+        | SubscriptionCreated sub ->
+            do! insert.invoke "subscriptions" sub
+        | SubscriptionRemoved (sids, _) ->
+            for id in sids do
+                let id : System.Guid = TypedId.unwrap id
+                do! delete "subscriptions" id
+        | SnapshotCreated snap ->
+            do! insert.invoke "snapshots" snap
+        | NewSubscriptionCreated -> ()
+        return []
+    }
 
-    let rec loop () =
-        async {
-            match! receiveEvent with
-            | SubscriptionCreated sub ->
-                do! Inner.insert db "subscriptions" sub
-            | SubscriptionRemoved (sids, _) ->
-                for id in sids do
-                    do! Inner.delete db "subscriptions" id
-            | SnapshotCreated snap ->
-                do! Inner.insert db "snapshots" snap
-            | NewSubscriptionCreated -> ()
-            do! loop ()
-        }
-    loop ()
+let main insert delete receiveEvent =
+    Tea.start () []
+        (fun s _ -> (), List.map (executeEffect insert delete) s)
+        List.singleton id receiveEvent

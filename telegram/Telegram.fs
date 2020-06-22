@@ -29,29 +29,15 @@ let sendToTelegramSingle telegramToken (user : string) message =
 
 let readMessage token =
     let bot = makeClient token
+    let rec tryRead offset =
+        async {
+            let! updates = bot.GetUpdatesAsync(offset = offset, limit = 1, timeout = 30) |> Async.AwaitTask
+            if Array.isEmpty updates then return! tryRead offset else return updates
+        }
     let offset = ref 0
     async {
-        let! updates = bot.GetUpdatesAsync(offset = !offset, limit = 1, timeout = Int32.MaxValue) |> Async.AwaitTask
+        let! updates = tryRead !offset
         let x = updates.[0]
         offset := x.Id + 1
         return string x.Message.From.Id, x.Message.Text
-    }
-
-let repl telegramToken f = 
-    async {
-        let bot = makeClient telegramToken
-        let disposable =
-            bot.OnUpdate
-            |> Observable.map @@ fun args -> 
-                string args.Update.Message.From.Id, args.Update.Message.Text ||| ""
-            |> Observable.subscribe ^ fun msg -> 
-                f msg
-                >>- fun r -> printfn "Telegram ::\n>>>\n%O\n<<<\n%s" msg r; r
-                >>= sendToTelegramSingle telegramToken (fst msg)
-                |> (Async.Ignore >> Async.Start)
-
-        bot.StartReceiving()
-
-        do! Async.OnCancel(fun () -> disposable.Dispose(); bot.StopReceiving()) |> Async.Ignore
-        do! Async.Sleep Int32.MaxValue
     }

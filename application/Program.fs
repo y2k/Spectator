@@ -35,13 +35,19 @@ let main args =
     let readMessage = Telegram.readMessage config.telegramToken
     let group = K.createGroup ()
 
+    let db = Store.MongoDb.getDatabase config.mongoDomain "spectator"
+    let forEach = { new Store.Persistent.IForEach with member _.invoke a b = Store.MongoDb.forEach db a b }
+    let insert = { new Store.Persistent.IInsert with member _.invoke a b = Store.MongoDb.insert db a b }
+    let delete = Store.MongoDb.delete db
+
+    printfn "Started..."
     async {
-      let! botState = Store.Persistent.restoreState config.mongoDomain Bot.App.emptyState Bot.App.restore
-      let! workerState = Store.Persistent.restoreState config.mongoDomain Worker.App.emptyState Worker.App.restore
-      let! notifyState = Store.Persistent.restoreState config.mongoDomain Notifications.emptyState Notifications.restore
+      let! botState = Store.Persistent.restoreState forEach Bot.App.emptyState Bot.App.restore
+      let! workerState = Store.Persistent.restoreState forEach Worker.App.emptyState Worker.App.restore
+      let! notifyState = Store.Persistent.restoreState forEach Notifications.emptyState Notifications.restore
 
       do! [ logEvents (K.createReader group)
-            Store.Persistent.main config.mongoDomain (K.createReader group)
+            Store.Persistent.main insert delete (K.createReader group)
             Bot.App.main botState (K.sendEvent group) (K.createReader group) sendToTelegramSingle readMessage
             Notifications.main notifyState (K.createReader group) sendToTelegramSingle
             Worker.App.main (TimeSpan.FromMinutes 1.) workerState parsers (K.sendEvent group) (K.createReader group) ]
