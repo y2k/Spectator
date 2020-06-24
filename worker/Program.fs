@@ -51,7 +51,7 @@ module Domain =
         |> List.filter @@ fun snap ->
             match Map.tryFind snap.subscriptionId lastUpdated with
             | Some date -> snap.created > date
-            | None -> true
+            | None -> false
 
     let udpateLastUpdates (lastUpdated : Map<Subscription TypedId, DateTime>) snapshots =
         snapshots
@@ -113,14 +113,12 @@ module Services =
                 |> fun req -> [ LoadSnapshots (req, fun resp -> MkNewSnapshotsEnd (List.map2 pair req resp)) ]
             state, effects
         | MkNewSnapshotsEnd responses ->
-            let newSnaps =
-                responses
-                |> Domain.mkSnapshots state.subscriptions
-                |> Domain.filterNewSnapshots state.lastUpdated
+            let snapshots = responses |> Domain.mkSnapshots state.subscriptions
+            let newSnaps = snapshots |> Domain.filterNewSnapshots state.lastUpdated
             let effects =
                 newSnaps
                 |> List.map @@ fun sn -> SendEvent (SnapshotCreated sn, always SendEventEnd)
-            { state with lastUpdated = Domain.udpateLastUpdates state.lastUpdated newSnaps }
+            { state with lastUpdated = Domain.udpateLastUpdates state.lastUpdated snapshots }
             , [ Delay (syncDelay, always MkNewSnapshots) ] @ effects
         | SendEventEnd -> state, []
 
