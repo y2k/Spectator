@@ -18,6 +18,11 @@ module Domain =
               filter = newSub.filter }
 
     let mkSnapshots responses subs =
+        let fixSnapshotFields (sub : Subscription) snap =
+            { snap with 
+                created = snap.created.ToUniversalTime()
+                subscriptionId = sub.id
+                id = TypedId.wrap <| Guid.NewGuid () }
         subs
         |> List.collect @@ fun sub ->
             responses
@@ -25,11 +30,7 @@ module Domain =
                 match snaps with
                 | Ok snaps -> if p = sub.provider && u = sub.uri then snaps else []
                 | Error _ -> []
-            |> List.map @@ fun x -> 
-                { x with
-                    created = x.created.ToUniversalTime()
-                    subscriptionId = sub.id
-                    id = TypedId.wrap <| Guid.NewGuid () }
+            |> List.map (fixSnapshotFields sub)
         |> List.sortBy @@ fun x -> x.created
 
     let removeSubs newSubscriptions (subs : Subscription list) =

@@ -6,10 +6,9 @@ open Spectator.Core
 type L = Log
 open Newtonsoft.Json
 
-type private SnapshotResponse = { title : string; author : string; id : string }
+type SnapshotResponse = { message : string; author : string; id : string; created : DateTime }
 
 let Parser restTelegramPassword restTelegramBaseUrl =
-    let toChatName (_ : Uri) : string = failwith "???"
     let getChatId (uri : Uri) = 
         uri.AbsoluteUri
         |> function
@@ -23,7 +22,7 @@ let Parser restTelegramPassword restTelegramBaseUrl =
             |> async.Return
         member __.getNodes uri =
             async {
-                let chat = toChatName uri
+                let chat = getChatId uri |> function Ok id -> id | Error e -> failwith e
                 let client = new HttpClient()
                 let auth =
                     sprintf "_:%s" restTelegramPassword
@@ -31,14 +30,14 @@ let Parser restTelegramPassword restTelegramBaseUrl =
                     |> Convert.ToBase64String
                 client.DefaultRequestHeaders.Authorization <- Headers.AuthenticationHeaderValue("Basic", auth)
                 let! json = 
-                    sprintf "%s/history?chat=%s" restTelegramBaseUrl (toChatName uri)
+                    sprintf "%s%s" restTelegramBaseUrl (Uri.EscapeDataString chat)
                     |> client.GetStringAsync
                 return
                     JsonConvert.DeserializeObject<SnapshotResponse[]> json
                     |> Seq.toList
                     |> List.map ^ fun x ->
                           { subscriptionId = TypedId.empty ()
-                            created = failwith "???"
+                            created = x.created
                             id = TypedId.empty ()
-                            title = x.title
-                            uri = Uri ^ sprintf "https://t.me/%s/%s" chat x.id } } }
+                            title = x.message
+                            uri = Uri <| sprintf "https://t.me/%s/%s" chat x.id } } }

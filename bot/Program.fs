@@ -36,7 +36,9 @@ module Domain =
         let provider =
             match sub.provider with
             | id when id = Guid "E5D3A9F2-325C-4CEF-BCA9-99D23F9E5AE5" -> "RSS"
-            | _ -> "?"
+            | id when id = Guid "3B26457E-8AB7-41AD-8DEC-11AF891A3052" -> "Telegram"
+            | id when id = Guid "AE4FEE1F-C08D-44B9-B526-4162FF1C328C" -> "HTML"
+            | id -> sprintf "Unknown (%s)" (id.ToString().Substring(0, 4))
         sprintf "[%s] %O '%s' (%i)" provider sub.uri sub.filter (snapshotsCount snapshots sub.id)
 
     let subListToMessageResponse (subscriptions : Subscription list) newSubscriptions userId snapshots =
