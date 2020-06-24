@@ -4,12 +4,10 @@ open System
 open Spectator.Core
 
 module Domain =
-
     type UserState =
         { subscriptions : Subscription list
           newSubscriptions : NewSubscription list
           snapshots : Snapshot list }
-
     type Cmd =
         | History of Uri
         | GetUserSubscriptionsCmd
@@ -17,11 +15,21 @@ module Domain =
         | AddNewSubscriptionCmd of Uri * string option
         | DeleteSubscriptionCmd of Uri
 
+    let isValidRegex pattern =
+        if String.IsNullOrEmpty pattern then false
+        else
+            try
+                Text.RegularExpressions.Regex.Match("", pattern) |> ignore
+                true
+            with 
+            _ -> false
+
     let parse (message : string) =
         let isValidUri url = Uri.IsWellFormedUriString(url, UriKind.Absolute)
         match message with
         | Regex "/ls" [] -> GetUserSubscriptionsCmd
-        | Regex "/add ([^ ]+) ([^ ]+)" [ url; filter ] when isValidUri url -> AddNewSubscriptionCmd (Uri url, Some filter)
+        | Regex "/add ([^ ]+) ([^ ]+)" [ url; filter ] when isValidUri url && isValidRegex filter -> 
+            AddNewSubscriptionCmd (Uri url, Some filter)
         | Regex "/add ([^ ]+)" [ url ] when isValidUri url -> AddNewSubscriptionCmd (Uri url, None)
         | Regex "/rm ([^ ]+)" [ url ] when isValidUri url -> DeleteSubscriptionCmd @@ Uri url
         | Regex "/history ([^ ]+)" [ url ] when isValidUri url -> History @@ Uri url

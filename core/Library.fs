@@ -41,6 +41,8 @@ module Prelude =
     module Pair =
         let inline map f (a, b) = f a, b
         let inline map2 f (a, b) = a, f b
+    module Result =
+        let toOption = function Ok x -> Some x | Error _ -> None
     type Log() =
         static member log (message : string,
                            [<System.Runtime.CompilerServices.CallerFilePath;

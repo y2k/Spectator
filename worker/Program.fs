@@ -17,20 +17,30 @@ module Domain =
               uri = newSub.uri
               filter = newSub.filter }
 
-    let mkSnapshots responses subs =
-        let fixSnapshotFields (sub : Subscription) snap =
+    let filterSnapshot (sub : Subscription) snap =
+        if String.IsNullOrEmpty sub.filter
+            then true
+            else Text.RegularExpressions.Regex.IsMatch (snap.title, sub.filter)
+
+    let mkSnapshots subs responses =
+        let fixSnapshotFields ((sub : Subscription), snap) =
             { snap with 
                 created = snap.created.ToUniversalTime()
                 subscriptionId = sub.id
                 id = TypedId.wrap <| Guid.NewGuid () }
-        subs
-        |> List.collect @@ fun sub ->
-            responses
-            |> List.collect @@ fun ((p, u), snaps) ->
-                match snaps with
-                | Ok snaps -> if p = sub.provider && u = sub.uri then snaps else []
-                | Error _ -> []
-            |> List.map (fixSnapshotFields sub)
+        let tryFindSub (p, u) =
+            subs |> List.filter @@ (fun sub -> p = sub.provider && u = sub.uri)
+        responses
+        |> List.choose @@ fun (id, result) -> 
+            result 
+            |> Result.toOption 
+            |> Option.map (fun snaps -> id, snaps)
+        |> List.collect @@ fun (id, snaps) ->
+            tryFindSub id |> List.map (fun sub -> sub, snaps)
+        |> List.collect @@ fun (sub, snaps) ->
+            snaps |> List.map (fun snap -> sub, snap)
+        |> List.filter (uncurry filterSnapshot)
+        |> List.map fixSnapshotFields
         |> List.sortBy @@ fun x -> x.created
 
     let removeSubs newSubscriptions (subs : Subscription list) =
@@ -99,12 +109,13 @@ module Services =
             let effects =
                 state.subscriptions
                 |> List.map @@ fun x -> x.provider, x.uri
+                |> List.distinct
                 |> fun req -> [ LoadSnapshots (req, fun resp -> MkNewSnapshotsEnd (List.map2 pair req resp)) ]
             state, effects
         | MkNewSnapshotsEnd responses ->
             let newSnaps =
-                state.subscriptions
-                |> Domain.mkSnapshots responses
+                responses
+                |> Domain.mkSnapshots state.subscriptions
                 |> Domain.filterNewSnapshots state.lastUpdated
             let effects =
                 newSnaps
