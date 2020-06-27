@@ -12,7 +12,8 @@ type Config =
       mongoDomain : string
       restTelegramPassword : string
       restTelegramBaseUrl : string
-      telegramToken : string }
+      telegramToken : string
+      updateTimeMinutes : float }
 
 let logEvents logReader =
     async {
@@ -51,7 +52,7 @@ let main args =
             Store.Persistent.main insert delete (K.createReader group)
             Bot.App.main botState (K.sendEvent group) (K.createReader group) sendToTelegramSingle readMessage
             Notifications.main notifyState (K.createReader group) sendToTelegramSingle
-            Worker.App.main (TimeSpan.FromMinutes 1.) workerState parsers (K.sendEvent group) (K.createReader group) ]
+            Worker.App.main (TimeSpan.FromMinutes config.updateTimeMinutes) workerState parsers (K.sendEvent group) (K.createReader group) ]
           |> Async.Parallel |> Async.Ignore
     } |> Async.RunSynchronously
     0
