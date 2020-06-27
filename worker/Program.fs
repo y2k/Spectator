@@ -53,7 +53,7 @@ module Domain =
             | Some date -> snap.created > date
             | None -> false
 
-    let udpateLastUpdates (lastUpdated : Map<Subscription TypedId, DateTime>) snapshots =
+    let updateLastUpdates (lastUpdated : Map<Subscription TypedId, DateTime>) snapshots =
         snapshots
         |> List.fold 
             (fun xs snap ->
@@ -97,7 +97,7 @@ module Services =
             | SubscriptionCreated sub ->
                 { state with subscriptions = sub :: state.subscriptions }, []
             | SnapshotCreated snap -> 
-                { state with lastUpdated = Domain.udpateLastUpdates state.lastUpdated [ snap ] }, []
+                { state with lastUpdated = Domain.updateLastUpdates state.lastUpdated [ snap ] }, []
         | MkSubscriptionsEnd (ns, subResps) ->
             match Domain.toSubscription subResps ns with
             | None -> state, [ SendEvent (SubscriptionRemoved ([], [ ns.id ]), always SendEventEnd) ]
@@ -118,7 +118,7 @@ module Services =
             let effects =
                 newSnaps
                 |> List.map @@ fun sn -> SendEvent (SnapshotCreated sn, always SendEventEnd)
-            { state with lastUpdated = Domain.udpateLastUpdates state.lastUpdated snapshots }
+            { state with lastUpdated = Domain.updateLastUpdates state.lastUpdated snapshots }
             , [ Delay (syncDelay, always MkNewSnapshots) ] @ effects
         | SendEventEnd -> state, []
 
