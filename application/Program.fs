@@ -5,7 +5,7 @@ open Spectator.Core
 let readConfig path =
     System.IO.File.ReadAllText path
     |> Legivel.Serialization.Deserialize
-    |> function [ Legivel.Serialization.Succes { Legivel.Serialization.Data = x } ] -> x | _ -> failwith "error"
+    |> function [ Legivel.Serialization.Succes { Legivel.Serialization.Data = x } ] -> x | e -> failwithf "Can't parse config: %O" e
 
 type Config =
     { filesDir : string
