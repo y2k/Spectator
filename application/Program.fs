@@ -13,7 +13,7 @@ type Config =
       restTelegramPassword : string
       restTelegramBaseUrl : string
       telegramToken : string
-      updateTimeMinutes : float }
+      updateTimeMinutes : int }
 
 let logEvents logReader =
     async {
@@ -52,7 +52,7 @@ let main args =
             Store.Persistent.main insert delete (K.createReader group)
             Bot.App.main botState (K.sendEvent group) (K.createReader group) sendToTelegramSingle readMessage
             Notifications.main notifyState (K.createReader group) sendToTelegramSingle
-            Worker.App.main (TimeSpan.FromMinutes config.updateTimeMinutes) workerState parsers (K.sendEvent group) (K.createReader group) ]
+            Worker.App.main (TimeSpan.FromMinutes <| float config.updateTimeMinutes) workerState parsers (K.sendEvent group) (K.createReader group) ]
           |> Async.Parallel |> Async.Ignore
     } |> Async.RunSynchronously
     0
