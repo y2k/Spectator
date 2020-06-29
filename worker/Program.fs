@@ -17,11 +17,6 @@ module Domain =
               uri = newSub.uri
               filter = newSub.filter }
 
-    let filterSnapshot (sub : Subscription) snap =
-        if String.IsNullOrEmpty sub.filter
-            then true
-            else Text.RegularExpressions.Regex.IsMatch (snap.title, sub.filter)
-
     let mkSnapshots subs responses =
         let fixSnapshotFields ((sub : Subscription), snap) =
             { snap with 
@@ -39,30 +34,36 @@ module Domain =
             tryFindSub id |> List.map (fun sub -> sub, snaps)
         |> List.collect @@ fun (sub, snaps) ->
             snaps |> List.map (fun snap -> sub, snap)
-        |> List.filter (uncurry filterSnapshot)
         |> List.map fixSnapshotFields
         |> List.sortBy @@ fun x -> x.created
 
-    let removeSubs newSubscriptions (subs : Subscription list) =
-        List.exceptBy subs (fun (ns : NewSubscription) sub -> ns.uri = sub.uri) newSubscriptions
+    let removeSubs (subscriptions : Subscription list) sids =
+        subscriptions |> List.filter (fun s -> not <| List.contains s.id sids)
 
-    let filterNewSnapshots (lastUpdated : Map<Subscription TypedId, DateTime>) snapshots =
-        snapshots
+    let filterSnapsthos lastUpdated subs snaps =
+        let filterSnapshot snap =
+            let sub = List.find (fun (sub : Subscription) -> snap.subscriptionId = sub.id) subs
+            if String.IsNullOrEmpty sub.filter
+                then true
+                else Text.RegularExpressions.Regex.IsMatch (snap.title, sub.filter)
+        snaps
+        |> List.filter filterSnapshot
         |> List.filter @@ fun snap ->
             match Map.tryFind snap.subscriptionId lastUpdated with
             | Some date -> snap.created > date
             | None -> false
 
+
     let updateLastUpdates (lastUpdated : Map<Subscription TypedId, DateTime>) snapshots =
         snapshots
         |> List.fold 
-            (fun xs snap ->
-                match Map.tryFind snap.subscriptionId xs with
-                | Some date -> Map.add snap.subscriptionId (max date snap.created) xs
-                | None -> Map.add snap.subscriptionId snap.created xs)
+            (fun lu snap ->
+                match Map.tryFind snap.subscriptionId lu with
+                | Some date -> Map.add snap.subscriptionId (max date snap.created) lu
+                | None -> Map.add snap.subscriptionId snap.created lu)
             lastUpdated
 
-module Services =
+module StateMachine =
     type Request = PluginId * Uri
     type State = { subscriptions : Subscription list; lastUpdated : Map<Subscription TypedId, DateTime> }
     type Msg = 
@@ -89,10 +90,7 @@ module Services =
                     |> List.map @@ fun id -> id, ns.uri
                 state, [ LoadSubscriptions (req, fun resp -> MkSubscriptionsEnd (ns, List.map2 pair req resp)) ]
             | SubscriptionRemoved (sids, _) ->
-                { state with
-                    subscriptions = 
-                        state.subscriptions 
-                        |> List.filter (fun s -> not <| List.contains s.id sids) }
+                { state with subscriptions = Domain.removeSubs state.subscriptions sids }
                 , []
             | SubscriptionCreated sub ->
                 { state with subscriptions = sub :: state.subscriptions }, []
@@ -114,7 +112,7 @@ module Services =
             state, effects
         | MkNewSnapshotsEnd responses ->
             let snapshots = responses |> Domain.mkSnapshots state.subscriptions
-            let newSnaps = snapshots |> Domain.filterNewSnapshots state.lastUpdated
+            let newSnaps = snapshots |> Domain.filterSnapsthos state.lastUpdated state.subscriptions
             let effects =
                 newSnaps
                 |> List.map @@ fun sn -> SendEvent (SnapshotCreated sn, always SendEventEnd)
@@ -122,7 +120,12 @@ module Services =
             , [ Delay (syncDelay, always MkNewSnapshots) ] @ effects
         | SendEventEnd -> state, []
 
-module Effects =
+let emptyState = StateMachine.init |> fst
+
+let restore state e =
+    StateMachine.update TimeSpan.Zero [] (StateMachine.EventReceived e) state |> fst
+
+let executeEffect parsers sendEvent eff =
     let runPlugin f (parsers : HtmlProvider.IParse list) requests =
         requests
         |> List.map @@ fun (pluginId, uri) ->
@@ -132,26 +135,20 @@ module Effects =
             |> Async.catch
         |> Async.Sequential
         >>- List.ofArray
-
-let emptyState = Services.init |> fst
-
-let restore state e =
-    Services.update TimeSpan.Zero [] (Services.EventReceived e) state |> fst
-
-let executeEffect parsers sendEvent = function
-    | Services.Delay (time, f) -> 
+    match eff with
+    | StateMachine.Delay (time, f) -> 
         Async.Sleep (int time.TotalMilliseconds) >>- f
-    | Services.LoadSubscriptions (requests, f) -> 
-        Effects.runPlugin (fun p uri -> p.isValid uri) parsers requests >>- f
-    | Services.LoadSnapshots (requests, f) -> 
-        Effects.runPlugin (fun p uri -> p.getNodes uri) parsers requests >>- f
-    | Services.SendEvent (e, f) ->
+    | StateMachine.LoadSubscriptions (requests, f) -> 
+        runPlugin (fun p uri -> p.isValid uri) parsers requests >>- f
+    | StateMachine.LoadSnapshots (requests, f) -> 
+        runPlugin (fun p uri -> p.getNodes uri) parsers requests >>- f
+    | StateMachine.SendEvent (e, f) ->
         sendEvent e >>- f
 
 let main syncDelay initState (parsers : HtmlProvider.IParse list) sendEvent readEvent =
     let update =
         parsers
         |> List.map @@ fun p -> p.id
-        |> Services.update syncDelay
+        |> StateMachine.update syncDelay
     let executeEffect = executeEffect parsers sendEvent
-    Tea.start initState (snd Services.init) update Services.EventReceived executeEffect readEvent
+    Tea.start initState (snd StateMachine.init) update StateMachine.EventReceived executeEffect readEvent
