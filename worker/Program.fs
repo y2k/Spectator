@@ -125,8 +125,8 @@ let emptyState = StateMachine.init |> fst
 let restore state e =
     StateMachine.update TimeSpan.Zero [] (StateMachine.EventReceived e) state |> fst
 
-let executeEffect parsers sendEvent eff =
-    let runPlugin f (parsers : HtmlProvider.IParse list) requests =
+let executeEffect (parsers : {| id : Guid; isValid : Uri -> bool Async; getNodes : Uri -> Snapshot list Async |} list) sendEvent eff =
+    let runPlugin f requests =
         requests
         |> List.map @@ fun (pluginId, uri) ->
             parsers
@@ -139,16 +139,16 @@ let executeEffect parsers sendEvent eff =
     | StateMachine.Delay (time, f) -> 
         Async.Sleep (int time.TotalMilliseconds) >>- f
     | StateMachine.LoadSubscriptions (requests, f) -> 
-        runPlugin (fun p uri -> p.isValid uri) parsers requests >>- f
+        runPlugin (fun p uri -> p.isValid uri) requests >>- f
     | StateMachine.LoadSnapshots (requests, f) -> 
-        runPlugin (fun p uri -> p.getNodes uri) parsers requests >>- f
+        runPlugin (fun p uri -> p.getNodes uri) requests >>- f
     | StateMachine.SendEvent (e, f) ->
         sendEvent e >>- f
 
-let main syncDelay initState (parsers : HtmlProvider.IParse list) sendEvent readEvent =
+let main syncDelay initState parsers sendEvent readEvent =
+    let executeEffect = executeEffect parsers sendEvent
     let update =
         parsers
         |> List.map @@ fun p -> p.id
         |> StateMachine.update syncDelay
-    let executeEffect = executeEffect parsers sendEvent
     Tea.start initState (snd StateMachine.init) update StateMachine.EventReceived executeEffect readEvent

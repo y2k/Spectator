@@ -29,9 +29,9 @@ let main args =
     let config : Config = readConfig args.[0]
 
     let parsers =
-        [ Worker.RssParser.RssParse
-          Worker.TelegramParser.Parser config.restTelegramPassword config.restTelegramBaseUrl
-          Worker.HtmlProvider.HtmlParse config.filesDir ]
+        [ Worker.RssParser.create
+          Worker.TelegramParser.create config.restTelegramPassword config.restTelegramBaseUrl
+          Worker.HtmlProvider.create config.filesDir ]
 
     let sendToTelegramSingle = Telegram.sendToTelegramSingle config.telegramToken
     let readMessage = Telegram.readMessage config.telegramToken

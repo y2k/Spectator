@@ -1,9 +1,9 @@
 module Spectator.Worker.RssParser
 
+open System
 open Spectator.Core
 
 module Parser =
-    open System
     open System.Xml
     open System.Xml.Linq
     open System.Xml.XPath
@@ -43,14 +43,15 @@ module Parser =
 module private Http =
     open System.Net.Http
 
-    let download (uri : System.Uri) = async {
-        use client = new HttpClient()
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/605.1.15 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/605.1 Edge/19.17763"
-        |> client.DefaultRequestHeaders.UserAgent.ParseAdd
-        return! client.GetStringAsync uri }
+    let download (uri : Uri) = 
+        async {
+            use client = new HttpClient()
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/605.1.15 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/605.1 Edge/19.17763"
+            |> client.DefaultRequestHeaders.UserAgent.ParseAdd
+            return! client.GetStringAsync uri 
+        }
 
-let RssParse =
-    { new Spectator.Worker.HtmlProvider.IParse with
-        member __.id = System.Guid.Parse "E5D3A9F2-325C-4CEF-BCA9-99D23F9E5AE5"
-        member __.isValid uri = uri |> Http.download >>- Parser.isValid
-        member __.getNodes uri = uri |> Http.download >>- Parser.getNodes }
+let create =
+    {| id = System.Guid.Parse "E5D3A9F2-325C-4CEF-BCA9-99D23F9E5AE5"
+       isValid = fun (uri : Uri) -> uri |> Http.download >>- Parser.isValid
+       getNodes = fun (uri : Uri) -> uri |> Http.download >>- Parser.getNodes |}

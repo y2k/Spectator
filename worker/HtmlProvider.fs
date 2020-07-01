@@ -26,15 +26,9 @@ module private ShinglesTester =
             (sourceContent |> (clear >> computeCodes))
             (destContent |> (clear >> computeCodes))
 
-open Spectator.Core
 open System
-
-type IParse =
-    abstract id : PluginId
-    abstract isValid : Uri -> bool Async
-    abstract getNodes : Uri -> Snapshot list Async
-
-type F = System.IO.File
+open Spectator.Core
+type F = IO.File
 
 let private mkFilePath dir (uri : Uri) =
     IO.Path.Combine(dir, sprintf "snapshot_%O.html" <| uri.GetHashCode())
@@ -58,21 +52,23 @@ let private download (uri : Uri) = async {
     r.RequestMessage.Headers.Accept.ParseAdd "text/html, application/xml;q=0.9, application/xhtml+xml, image/png, image/webp, image/jpeg, image/gif, image/x-xbitmap, */*;q=0.1"
     return! r.Content.ReadAsStringAsync() }
 
-let HtmlParse filesDir =
-    { new IParse with
-        member __.id = Guid.Parse "AE4FEE1F-C08D-44B9-B526-4162FF1C328C"
-        member __.isValid uri = async { return uri.IsAbsoluteUri && uri.Scheme = "https" }
-        member __.getNodes uri = async {
-            let! content = download uri
-            let! sim = compare filesDir uri content
-            if sim < 0.9 then
-                F.WriteAllText(mkFilePath filesDir uri, content)
-                let snap =
-                    { subscriptionId = TypedId.empty ()
-                      created = failwith "???"
-                      id = TypedId.empty ()
-                      title = getTitle content
-                      uri = uri }
-                return [ snap ]
-            else return [] } 
-    }
+let private getNodes filesDir uri =
+    async {
+        let! content = download uri
+        let! sim = compare filesDir uri content
+        if sim < 0.9 then
+            F.WriteAllText(mkFilePath filesDir uri, content)
+            let snap =
+                { subscriptionId = TypedId.empty ()
+                  created = failwith "???"
+                  id = TypedId.empty ()
+                  title = getTitle content
+                  uri = uri }
+            return [ snap ]
+        else return [] 
+    } 
+
+let create filesDir =
+    {| id = Guid.Parse "AE4FEE1F-C08D-44B9-B526-4162FF1C328C"
+       isValid = fun (uri : Uri) -> async { return uri.IsAbsoluteUri && uri.Scheme = "https" }
+       getNodes = getNodes filesDir |}
