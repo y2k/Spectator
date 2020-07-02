@@ -44,9 +44,10 @@ let main args =
 
     printfn "Started..."
     async {
-      let! botState = Store.Persistent.restoreState forEach Bot.App.emptyState Bot.App.restore
-      let! workerState = Store.Persistent.restoreState forEach Worker.App.emptyState Worker.App.restore
-      let! notifyState = Store.Persistent.restoreState forEach Notifications.emptyState Notifications.restore
+      let! (botState, workerState, notifyState) =
+          Store.Persistent.restoreState forEach
+              (Bot.App.emptyState, Worker.App.emptyState, Notifications.emptyState)
+              (fun (s1, s2, s3) e -> Bot.App.restore s1 e, Worker.App.restore s2 e, Notifications.restore s3 e)
 
       do! [ logEvents (K.createReader group)
             Store.Persistent.main insert delete (K.createReader group)
