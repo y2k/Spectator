@@ -8,10 +8,13 @@ module Parser =
     open System.Xml.Linq
     open System.Xml.XPath
 
-    let private ns = XmlNamespaceManager(NameTable())
+    let private nsHttp = XmlNamespaceManager(NameTable())
+    nsHttp.AddNamespace("media", "http://search.yahoo.com/mrss/")
+    nsHttp.AddNamespace("atom", "http://www.w3.org/2005/Atom")
 
-    ns.AddNamespace("media", "http://search.yahoo.com/mrss/")
-    ns.AddNamespace("atom", "http://www.w3.org/2005/Atom")
+    let private nsHttps = XmlNamespaceManager(NameTable())
+    nsHttps.AddNamespace("media", "http://search.yahoo.com/mrss/")
+    nsHttps.AddNamespace("atom", "https://www.w3.org/2005/Atom")
 
     let parseRss (doc : XDocument) =
         doc.XPathSelectElements "//channel/item"
@@ -23,7 +26,7 @@ module Parser =
                  uri = e.XPathSelectElement("link").Value |> Uri })
         |> Seq.toList
 
-    let parseAtom (doc : XDocument) =
+    let parseAtom (ns : XmlNamespaceManager) (doc : XDocument) =
         doc.XPathSelectElements("atom:feed//atom:entry", ns)
         |> Seq.map (fun e ->
                { subscriptionId = TypedId.empty ()
@@ -36,7 +39,7 @@ module Parser =
     let getNodes (html : string) =
         html
         |> XDocument.Parse
-        |> (fun doc -> parseRss doc @ parseAtom doc)
+        |> (fun doc -> parseRss doc @ parseAtom nsHttp doc @ parseAtom nsHttps doc)
 
     let isValid = getNodes >> List.isEmpty >> not
 

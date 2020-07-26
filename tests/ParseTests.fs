@@ -3,9 +3,18 @@ module Tests
 open System
 open Xunit
 open Spectator.Core
+open Swensen.Unquote
 
 module P = Spectator.Worker.RssParser
 module I = Infrastructure
+
+[<Fact>]
+let ``degoes xml`` () =
+  let xml = I.loadFromDisk "degoes.xml"
+  let actual = P.Parser.isValid xml
+  test <@ actual @>
+  let actual = P.Parser.getNodes xml |> List.length
+  test <@ 20 = actual @>
 
 [<Fact>]
 let ``parsing wikipedia atom is success``() =
