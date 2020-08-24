@@ -19,7 +19,7 @@ let restoreState (forEach : IForEach) emptyState f =
         return !state
     }
 
-let executeEffect<'a> (insert : IInsert) delete event =
+let executeEffect<'a> (insert : IInsert) delete event : 'a list Async =
     async {
         match event with
         | SubscriptionCreated sub ->
@@ -33,8 +33,3 @@ let executeEffect<'a> (insert : IInsert) delete event =
         | NewSubscriptionCreated _ -> ()
         return []
     }
-
-let main insert delete receiveEvent =
-    Tea.start () []
-        (fun s _ -> (), List.map (executeEffect insert delete) s)
-        List.singleton id receiveEvent

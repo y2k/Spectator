@@ -21,14 +21,14 @@ module Domain =
             try
                 Text.RegularExpressions.Regex.Match("", pattern) |> ignore
                 true
-            with 
+            with
             _ -> false
 
     let parse (message : string) =
         let isValidUri url = Uri.IsWellFormedUriString(url, UriKind.Absolute)
         match message with
         | Regex "/ls" [] -> GetUserSubscriptionsCmd
-        | Regex "/add ([^ ]+) ([^ ]+)" [ url; filter ] when isValidUri url && isValidRegex filter -> 
+        | Regex "/add ([^ ]+) ([^ ]+)" [ url; filter ] when isValidUri url && isValidRegex filter ->
             AddNewSubscriptionCmd (Uri url, Some filter)
         | Regex "/add ([^ ]+)" [ url ] when isValidUri url -> AddNewSubscriptionCmd (Uri url, None)
         | Regex "/rm ([^ ]+)" [ url ] when isValidUri url -> DeleteSubscriptionCmd @@ Uri url
@@ -50,8 +50,8 @@ module Domain =
         sprintf "[%s] %O '%s' (%i)" provider sub.uri sub.filter (snapshotsCount snapshots sub.id)
 
     let subListToMessageResponse (subscriptions : Subscription list) newSubscriptions userId snapshots =
-        let subs = 
-            subscriptions 
+        let subs =
+            subscriptions
             |> List.filter ^ fun x -> x.userId = userId
             |> List.map (subToString snapshots)
         newSubscriptions
@@ -77,7 +77,7 @@ module Domain =
         |> function
            | None -> "Not found subscription with this url"
            | Some sub ->
-               snapshots 
+               snapshots
                |> List.filter @@ fun sn -> sn.subscriptionId = sub.id
                |> List.fold (fun a x -> sprintf "%s\n- %O" a x.uri) "History:"
 
@@ -85,8 +85,8 @@ module Domain =
         states
         |> Map.map @@ fun _ state ->
             { state with
-                newSubscriptions = 
-                    state.newSubscriptions 
+                newSubscriptions =
+                    state.newSubscriptions
                     |> List.filter (fun s -> not <| List.contains s.id ids) }
 
 module Updater =
@@ -96,8 +96,8 @@ module Updater =
 
     let private findUserBySnapshot (state : State) (snap : Snapshot) : UserId option =
         state.states
-        |> Map.tryFindKey @@ fun _ v -> 
-            v.subscriptions 
+        |> Map.tryFindKey @@ fun _ v ->
+            v.subscriptions
             |> List.exists @@ fun sub -> sub.id = snap.subscriptionId
 
     let private updateUserState (state : State) (userId : UserId) (f : UserState -> UserState * 'a list) : State * 'a list =
@@ -120,7 +120,7 @@ module Updater =
 
     let private handleBotMessage (user : UserId) text (db : UserState) =
         match parse text with
-        | History url -> 
+        | History url ->
             db
             , [ SendMessage (user, getHistory db.snapshots db.subscriptions user url) ]
         | GetUserSubscriptionsCmd ->
@@ -128,15 +128,15 @@ module Updater =
             , [ SendMessage (user, subListToMessageResponse db.subscriptions db.newSubscriptions user db.snapshots) ]
         | DeleteSubscriptionCmd uri ->
             let (ns, ss) = deleteSubs db.subscriptions db.newSubscriptions user uri
-            let remSubs = 
+            let remSubs =
                 db.subscriptions
                 |> List.map @@ fun x -> x.id
-                |> List.filter @@ fun id -> 
+                |> List.filter @@ fun id ->
                     ss |> List.forall @@ fun si -> si.id <> id
             let rmNewSubs =
                 db.newSubscriptions
                 |> List.map @@ fun x -> x.id
-                |> List.filter @@ fun id -> 
+                |> List.filter @@ fun id ->
                     ns |> List.forall @@ fun nsi -> nsi.id <> id
             { db with subscriptions = ss; newSubscriptions = ns }
             , [ SendEvent <| SubscriptionRemoved (remSubs, rmNewSubs)
@@ -146,7 +146,7 @@ module Updater =
             { db with newSubscriptions = newSub :: db.newSubscriptions }
             , [ SendEvent <| NewSubscriptionCreated newSub
                 SendMessage (user, "Your subscription created") ]
-        | UnknownCmd -> 
+        | UnknownCmd ->
             db
             , [ SendMessage (user, "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription\n/history [url] - show last snapshots for subscription with url") ]
 
@@ -159,13 +159,13 @@ module Updater =
                     { us with snapshots = snaps |> List.take (min 10 snaps.Length)}, []
             | None -> state, []
         | SubscriptionCreated sub ->
-            updateUserState state sub.userId @@ fun us -> 
+            updateUserState state sub.userId @@ fun us ->
                 { us with subscriptions = sub :: us.subscriptions }, []
         | SubscriptionRemoved (_, ids) ->
             { state with states = removeSubsWithIds state.states ids }
             , []
         | NewSubscriptionCreated _ -> state, []
-    
+
     let init = { states = Map.empty }, [ ReadNewMessage TextReceived ]
 
     let update (msg : Msg) (state : State) =
@@ -191,7 +191,3 @@ let executeEffect sendToTelegram readFromTelegram sendEvent = function
         sendToTelegram userId text >>- always Updater.SendMessageEnd
     | Updater.SendEvent e ->
         sendEvent e >>- always Updater.SendEventEnd
-
-let main initState sendEvent receiveEvent sendToTelegram readFromTelegram =
-    let executeEffect = executeEffect sendToTelegram readFromTelegram sendEvent
-    Tea.start initState (snd Updater.init) Updater.update Updater.EventsReceived executeEffect receiveEvent

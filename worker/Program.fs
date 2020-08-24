@@ -19,16 +19,16 @@ module Domain =
 
     let mkSnapshots subs responses =
         let fixSnapshotFields ((sub : Subscription), snap) =
-            { snap with 
+            { snap with
                 created = snap.created.ToUniversalTime()
                 subscriptionId = sub.id
                 id = TypedId.wrap <| Guid.NewGuid () }
         let tryFindSub (p, u) =
             subs |> List.filter @@ (fun sub -> p = sub.provider && u = sub.uri)
         responses
-        |> List.choose @@ fun (id, result) -> 
-            result 
-            |> Result.toOption 
+        |> List.choose @@ fun (id, result) ->
+            result
+            |> Result.toOption
             |> Option.map (fun snaps -> id, snaps)
         |> List.collect @@ fun (id, snaps) ->
             tryFindSub id |> List.map (fun sub -> sub, snaps)
@@ -56,7 +56,7 @@ module Domain =
 
     let updateLastUpdates (lastUpdated : Map<Subscription TypedId, DateTime>) snapshots =
         snapshots
-        |> List.fold 
+        |> List.fold
             (fun lu snap ->
                 match Map.tryFind snap.subscriptionId lu with
                 | Some date -> Map.add snap.subscriptionId (max date snap.created) lu
@@ -66,10 +66,10 @@ module Domain =
 module StateMachine =
     type Request = PluginId * Uri
     type State = { subscriptions : Subscription list; lastUpdated : Map<Subscription TypedId, DateTime> }
-    type Msg = 
+    type Msg =
         | EventReceived of Events
         | MkSubscriptionsEnd of NewSubscription * (Request * Result<bool, exn>) list
-        | MkNewSnapshots 
+        | MkNewSnapshots
         | MkNewSnapshotsEnd of (Request * Result<Snapshot list, exn>) list
         | SendEventEnd
     type 'a Effect =
@@ -94,7 +94,7 @@ module StateMachine =
                 , []
             | SubscriptionCreated sub ->
                 { state with subscriptions = sub :: state.subscriptions }, []
-            | SnapshotCreated snap -> 
+            | SnapshotCreated snap ->
                 { state with lastUpdated = Domain.updateLastUpdates state.lastUpdated [ snap ] }, []
         | MkSubscriptionsEnd (ns, subResps) ->
             match Domain.toSubscription subResps ns with
@@ -136,19 +136,11 @@ let executeEffect (parsers : {| id : Guid; isValid : Uri -> bool Async; getNodes
         |> Async.Sequential
         >>- List.ofArray
     match eff with
-    | StateMachine.Delay (time, f) -> 
+    | StateMachine.Delay (time, f) ->
         Async.Sleep (int time.TotalMilliseconds) >>- f
-    | StateMachine.LoadSubscriptions (requests, f) -> 
+    | StateMachine.LoadSubscriptions (requests, f) ->
         runPlugin (fun p uri -> p.isValid uri) requests >>- f
-    | StateMachine.LoadSnapshots (requests, f) -> 
+    | StateMachine.LoadSnapshots (requests, f) ->
         runPlugin (fun p uri -> p.getNodes uri) requests >>- f
     | StateMachine.SendEvent (e, f) ->
         sendEvent e >>- f
-
-let main syncDelay initState parsers sendEvent readEvent =
-    let executeEffect = executeEffect parsers sendEvent
-    let update =
-        parsers
-        |> List.map @@ fun p -> p.id
-        |> StateMachine.update syncDelay
-    Tea.start initState (snd StateMachine.init) update StateMachine.EventReceived executeEffect readEvent

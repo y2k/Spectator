@@ -14,6 +14,7 @@ module Prelude =
                 let! c = mfb b
                 return c }
     let inline flip f a b = f b a
+    let inline apply x f = f x
     let inline curry f a b = f (a, b)
     let inline uncurry f (a, b) = f a b
     let inline uncurry' f (a, b, c) = f a b c
@@ -26,7 +27,7 @@ module Prelude =
     type Microsoft.FSharp.Control.AsyncBuilder with
         member __.Bind (t : System.Threading.Tasks.Task<'T>, f:'T -> Async<'R>) : Async<'R> =
             async.Bind(Async.AwaitTask t, f)
-        member __.ReturnFrom (t : System.Threading.Tasks.Task<'T>) : Async<'T> = 
+        member __.ReturnFrom (t : System.Threading.Tasks.Task<'T>) : Async<'T> =
             async.ReturnFrom(Async.AwaitTask t)
     let [<System.Obsolete>] TODO() = raise ^ System.NotImplementedException()
     let (|Regex|_|) pattern input =

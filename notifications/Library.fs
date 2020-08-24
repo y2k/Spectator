@@ -46,7 +46,3 @@ let executeEffect sendToTelegramSingle eff =
     | Domain.SendToTelegramSingle (u, msg) ->
         sendToTelegramSingle u msg
         >>- always Domain.SendToTelegramEnd
-
-let main initState readEvent sendToTelegramSingle =
-    let executeEffect = executeEffect sendToTelegramSingle
-    Tea.start initState [] Domain.update Domain.EventReceived executeEffect readEvent

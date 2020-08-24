@@ -23,6 +23,27 @@ let logEvents logReader =
     }
 
 module K = Store.MiniKafka
+module N = Notifications
+module W = Worker.App
+module B = Bot.App
+module P = Store.Persistent
+
+let workerMain syncDelay initState parsers sendEvent readEvent =
+    let executeEffect = W.executeEffect parsers sendEvent
+    let update =
+        parsers
+        |> List.map @@ fun p -> p.id
+        |> W.StateMachine.update syncDelay
+    Tea.start initState (snd W.StateMachine.init) update W.StateMachine.EventReceived executeEffect readEvent
+let notificationsMain initState sendToTelegramSingle readEvent =
+    let executeEffect = N.executeEffect sendToTelegramSingle
+    Tea.start initState [] N.Domain.update N.Domain.EventReceived executeEffect readEvent
+let botMain initState sendEvent receiveEvent sendToTelegram readFromTelegram =
+    let executeEffect = B.executeEffect sendToTelegram readFromTelegram sendEvent
+    Tea.start initState (snd B.Updater.init) B.Updater.update B.Updater.EventsReceived executeEffect receiveEvent
+let persistentMain insert delete receiveEvent =
+    let executeEffect = id
+    Tea.start () [] (fun s _ -> (), List.map (P.executeEffect insert delete) s) List.singleton executeEffect receiveEvent
 
 [<EntryPoint>]
 let main args =
@@ -50,10 +71,10 @@ let main args =
               (fun (s1, s2, s3) e -> Bot.App.restore s1 e, Worker.App.restore s2 e, Notifications.restore s3 e)
 
       do! [ logEvents (K.createReader group)
-            Store.Persistent.main insert delete (K.createReader group)
-            Bot.App.main botState (K.sendEvent group) (K.createReader group) sendToTelegramSingle readMessage
-            Notifications.main notifyState (K.createReader group) sendToTelegramSingle
-            Worker.App.main (TimeSpan.FromMinutes <| float config.updateTimeMinutes) workerState parsers (K.sendEvent group) (K.createReader group) ]
+            persistentMain insert delete (K.createReader group)
+            botMain botState (K.sendEvent group) (K.createReader group) sendToTelegramSingle readMessage
+            notificationsMain notifyState sendToTelegramSingle (K.createReader group)
+            workerMain (TimeSpan.FromMinutes <| float config.updateTimeMinutes) workerState parsers (K.sendEvent group) (K.createReader group) ]
           |> Async.Parallel |> Async.Ignore
     } |> Async.RunSynchronously
     0
