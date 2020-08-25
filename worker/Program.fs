@@ -53,7 +53,6 @@ module Domain =
             | Some date -> snap.created > date
             | None -> false
 
-
     let updateLastUpdates (lastUpdated : Map<Subscription TypedId, DateTime>) snapshots =
         snapshots
         |> List.fold
@@ -78,7 +77,9 @@ module StateMachine =
         | LoadSnapshots of Request list * (Result<Snapshot list, exn> list -> 'a)
         | SendEvent of Events * (unit -> 'a)
 
-    let init = { subscriptions = []; lastUpdated = Map.empty }, [ Delay (TimeSpan.Zero, always MkNewSnapshots) ]
+    let init =
+        { subscriptions = []; lastUpdated = Map.empty }
+        , [ Delay (TimeSpan.Zero, always MkNewSnapshots) ]
 
     let update syncDelay parserIds msg (state : State) =
         match msg with

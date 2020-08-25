@@ -35,15 +35,18 @@ let workerMain syncDelay initState parsers sendEvent readEvent =
         |> List.map @@ fun p -> p.id
         |> W.StateMachine.update syncDelay
     Tea.start initState (snd W.StateMachine.init) update W.StateMachine.EventReceived executeEffect readEvent
+
 let notificationsMain initState sendToTelegramSingle readEvent =
     let executeEffect = N.executeEffect sendToTelegramSingle
-    Tea.start initState [] N.Domain.update N.Domain.EventReceived executeEffect readEvent
-let botMain initState sendEvent receiveEvent sendToTelegram readFromTelegram =
+    Tea.start initState (snd N.Domain.init) N.Domain.update N.Domain.EventReceived executeEffect readEvent
+
+let botMain initState sendEvent sendToTelegram readFromTelegram readEvent =
     let executeEffect = B.executeEffect sendToTelegram readFromTelegram sendEvent
-    Tea.start initState (snd B.Updater.init) B.Updater.update B.Updater.EventsReceived executeEffect receiveEvent
-let persistentMain insert delete receiveEvent =
+    Tea.start initState (snd B.Updater.init) B.Updater.update B.Updater.EventsReceived executeEffect readEvent
+
+let persistentMain insert delete readEvent =
     let executeEffect = id
-    Tea.start () [] (fun s _ -> (), List.map (P.executeEffect insert delete) s) List.singleton executeEffect receiveEvent
+    Tea.start () [] (fun s _ -> (), List.map (P.executeEffect insert delete) s) List.singleton executeEffect readEvent
 
 [<EntryPoint>]
 let main args =
@@ -67,12 +70,12 @@ let main args =
     async {
       let! (botState, workerState, notifyState) =
           Store.Persistent.restoreState forEach
-              (Bot.App.emptyState, Worker.App.emptyState, Notifications.emptyState)
-              (fun (s1, s2, s3) e -> Bot.App.restore s1 e, Worker.App.restore s2 e, Notifications.restore s3 e)
+              (B.emptyState, W.emptyState, N.emptyState)
+              (fun (s1, s2, s3) e -> B.restore s1 e, W.restore s2 e, N.restore s3 e)
 
       do! [ logEvents (K.createReader group)
             persistentMain insert delete (K.createReader group)
-            botMain botState (K.sendEvent group) (K.createReader group) sendToTelegramSingle readMessage
+            botMain botState (K.sendEvent group) sendToTelegramSingle readMessage (K.createReader group)
             notificationsMain notifyState sendToTelegramSingle (K.createReader group)
             workerMain (TimeSpan.FromMinutes <| float config.updateTimeMinutes) workerState parsers (K.sendEvent group) (K.createReader group) ]
           |> Async.Parallel |> Async.Ignore
