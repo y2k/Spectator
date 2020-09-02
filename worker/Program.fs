@@ -4,19 +4,6 @@ open System
 open Spectator.Core
 
 module Domain =
-    let toSubscription subResps (newSub : NewSubscription) =
-        subResps
-        |> List.tryPick @@ fun ((id, uri), suc) ->
-            match suc with
-            | Ok suc -> if suc && uri = newSub.uri then Some id else None
-            | Error _ -> None
-        |> Option.map @@ fun providerId ->
-            { id = TypedId.wrap <| Guid.NewGuid()
-              userId = newSub.userId
-              provider = providerId
-              uri = newSub.uri
-              filter = newSub.filter }
-
     let mkSnapshots subs responses =
         let fixSnapshotFields ((sub : Subscription), snap) =
             { snap with
@@ -38,6 +25,9 @@ module Domain =
         |> List.sortBy @@ fun x -> x.created
 
     let removeSubs (subscriptions : Subscription list) sids =
+        subscriptions |> List.filter (fun s -> not <| List.contains s.id sids)
+
+    let removeNewSubs (subscriptions : NewSubscription list) sids =
         subscriptions |> List.filter (fun s -> not <| List.contains s.id sids)
 
     let filterSnapsthos lastUpdated subs snaps =
@@ -62,86 +52,101 @@ module Domain =
                 | None -> Map.add snap.subscriptionId snap.created lu)
             lastUpdated
 
+module StoreDomain =
+    type State =
+        { subscriptions : Subscription list
+          newSubscriptions : NewSubscription list
+          lastUpdated : Map<Subscription TypedId, DateTime> }
+
+    let init = { subscriptions = []; newSubscriptions = []; lastUpdated = Map.empty }
+
+    let update state event =
+        match event with
+        | NewSubscriptionCreated ns ->
+            { state with newSubscriptions = ns :: state.newSubscriptions }
+        | SubscriptionRemoved (sids, nsids) ->
+            { state with
+                subscriptions = Domain.removeSubs state.subscriptions sids
+                newSubscriptions = Domain.removeNewSubs state.newSubscriptions nsids }
+        | SubscriptionCreated sub ->
+            { state with subscriptions = sub :: state.subscriptions }
+        | SnapshotCreated snap ->
+            { state with lastUpdated = Domain.updateLastUpdates state.lastUpdated [ snap ] }
+
+module Module1 =
+    open StoreDomain
+
+    let mkSubscriptionsEnd (state : State) (results : list<(PluginId * Uri) * Result<bool, _>>) : Events list =
+        let findPlugin (ns : NewSubscription) : PluginId option =
+            results
+            |> List.tryPick @@ fun ((p, uri), r) ->
+                match r with Ok _ when uri = ns.uri -> Some p | _ -> None
+        let mkSubscription (newSub : NewSubscription) (p : PluginId) : Subscription =
+            { id = TypedId.wrap <| Guid.NewGuid()
+              userId = newSub.userId
+              provider = p
+              uri = newSub.uri
+              filter = newSub.filter }
+        state.newSubscriptions
+        |> List.collect @@ fun ns ->
+            findPlugin ns
+            |> Option.map @@ fun pid ->
+                [ mkSubscription ns pid |> SubscriptionCreated
+                  SubscriptionRemoved ([], [ ns.id ]) ]
+            |> Option.defaultValue []
+
 module StateMachine =
+    open StoreDomain
+
     type Request = PluginId * Uri
-    type State = { subscriptions : Subscription list; lastUpdated : Map<Subscription TypedId, DateTime> }
-    type Msg =
-        | EventReceived of Events
-        | MkSubscriptionsEnd of NewSubscription * (Request * Result<bool, exn>) list
-        | MkNewSnapshots
-        | MkNewSnapshotsEnd of (Request * Result<Snapshot list, exn>) list
-        | SendEventEnd
-    type 'a Effect =
-        | Delay of TimeSpan * (unit -> 'a)
-        | LoadSubscriptions of Request list * (Result<bool, exn> list -> 'a)
-        | LoadSnapshots of Request list * (Result<Snapshot list, exn> list -> 'a)
-        | SendEvent of Events * (unit -> 'a)
 
-    let init =
-        { subscriptions = []; lastUpdated = Map.empty }
-        , [ Delay (TimeSpan.Zero, always MkNewSnapshots) ]
+    let mkSubscription (parserIds : PluginId list) state =
+        let foo (ns : NewSubscription) =
+            parserIds
+            |> List.map @@ fun id -> id, ns.uri
+        state.newSubscriptions |> List.map foo |> List.concat
 
-    let update syncDelay parserIds msg (state : State) =
-        match msg with
-        | EventReceived event ->
-            match event with
-            | NewSubscriptionCreated ns ->
-                let req =
-                    parserIds
-                    |> List.map @@ fun id -> id, ns.uri
-                state, [ LoadSubscriptions (req, fun resp -> MkSubscriptionsEnd (ns, List.map2 pair req resp)) ]
-            | SubscriptionRemoved (sids, _) ->
-                { state with subscriptions = Domain.removeSubs state.subscriptions sids }
-                , []
-            | SubscriptionCreated sub ->
-                { state with subscriptions = sub :: state.subscriptions }, []
-            | SnapshotCreated snap ->
-                { state with lastUpdated = Domain.updateLastUpdates state.lastUpdated [ snap ] }, []
-        | MkSubscriptionsEnd (ns, subResps) ->
-            match Domain.toSubscription subResps ns with
-            | None -> state, [ SendEvent (SubscriptionRemoved ([], [ ns.id ]), always SendEventEnd) ]
-            | Some sub ->
-                state
-                , [ SendEvent (SubscriptionCreated sub, always SendEventEnd)
-                    SendEvent (SubscriptionRemoved ([], [ ns.id ]), always SendEventEnd) ]
-        | MkNewSnapshots ->
-            let effects =
-                state.subscriptions
-                |> List.map @@ fun x -> x.provider, x.uri
-                |> List.distinct
-                |> fun req -> [ LoadSnapshots (req, fun resp -> MkNewSnapshotsEnd (List.map2 pair req resp)) ]
-            state, effects
-        | MkNewSnapshotsEnd responses ->
-            let snapshots = responses |> Domain.mkSnapshots state.subscriptions
-            let newSnaps = snapshots |> Domain.filterSnapsthos state.lastUpdated state.subscriptions
-            let effects =
-                newSnaps
-                |> List.map @@ fun sn -> SendEvent (SnapshotCreated sn, always SendEventEnd)
-            { state with lastUpdated = Domain.updateLastUpdates state.lastUpdated snapshots }
-            , [ Delay (syncDelay, always MkNewSnapshots) ] @ effects
-        | SendEventEnd -> state, []
+    let mkNewSnapshots state =
+        state.subscriptions
+        |> List.map @@ fun x -> x.provider, x.uri
+        |> List.distinct
 
-let emptyState = StateMachine.init |> fst
+    let mkNewSnapshotsEnd responses state =
+        let snapshots = responses |> Domain.mkSnapshots state.subscriptions
+        let newSnaps = snapshots |> Domain.filterSnapsthos state.lastUpdated state.subscriptions
+        let effects =
+            newSnaps
+            |> List.map @@ fun sn -> sn
+        { state with lastUpdated = Domain.updateLastUpdates state.lastUpdated snapshots }
+        , effects |> List.map SnapshotCreated
 
-let restore state e =
-    StateMachine.update TimeSpan.Zero [] (StateMachine.EventReceived e) state |> fst
+let emptyState = StoreDomain.init
+let restore state e = StoreDomain.update state e
 
-let executeEffect (parsers : {| id : Guid; isValid : Uri -> bool Async; getNodes : Uri -> Snapshot list Async |} list) sendEvent eff =
-    let runPlugin f requests =
-        requests
-        |> List.map @@ fun (pluginId, uri) ->
-            parsers
-            |> List.find @@ fun p -> p.id = pluginId
-            |> fun p -> f p uri
-            |> Async.catch
-        |> Async.Sequential
-        >>- List.ofArray
-    match eff with
-    | StateMachine.Delay (time, f) ->
-        Async.Sleep (int time.TotalMilliseconds) >>- f
-    | StateMachine.LoadSubscriptions (requests, f) ->
-        runPlugin (fun p uri -> p.isValid uri) requests >>- f
-    | StateMachine.LoadSnapshots (requests, f) ->
-        runPlugin (fun p uri -> p.getNodes uri) requests >>- f
-    | StateMachine.SendEvent (e, f) ->
-        sendEvent e >>- f
+let main parserIds loadSubscriptions loadSnapshots (update : (_ -> _ * Events list) -> _ Async) =
+    async {
+        let! db = update (fun db -> db, [])
+        let reqs = StateMachine.mkSubscription parserIds db
+
+        let! responses =
+            reqs
+            |> List.map loadSubscriptions
+            |> Async.Sequential
+            |> Async.map (fun x -> Seq.zip reqs x |> Seq.toList)
+
+        let! _ = update @@ fun db -> db, Module1.mkSubscriptionsEnd db responses
+
+        let! snapReqs =
+            update @@ fun db -> db, []
+            |> Async.map @@ fun db -> StateMachine.mkNewSnapshots db
+
+        let! snapResp =
+            snapReqs
+            |> List.map loadSnapshots
+            |> Async.Sequential
+            |> Async.map (fun x -> Seq.zip snapReqs x |> Seq.toList)
+
+        let! _ = update @@ StateMachine.mkNewSnapshotsEnd snapResp
+
+        do! Async.Sleep 5_000
+    }

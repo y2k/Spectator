@@ -1,4 +1,5 @@
-open System
+module Spectator.Application
+
 open Spectator
 open Spectator.Core
 
@@ -28,56 +29,66 @@ module W = Worker.App
 module B = Bot.App
 module P = Store.Persistent
 
-let workerMain syncDelay initState parsers sendEvent readEvent =
-    let executeEffect = W.executeEffect parsers sendEvent
-    let update =
-        parsers
-        |> List.map @@ fun p -> p.id
-        |> W.StateMachine.update syncDelay
-    Tea.start initState (snd W.StateMachine.init) update W.StateMachine.EventReceived executeEffect readEvent
+let notificationsMain initState sendToTelegramSingle sendEvent readEvent =
+    Tea.runMain readEvent sendEvent initState N.restore (N.main sendToTelegramSingle)
 
-let notificationsMain initState sendToTelegramSingle readEvent =
-    let executeEffect = N.executeEffect sendToTelegramSingle
-    Tea.start initState (snd N.Domain.init) N.Domain.update N.Domain.EventReceived executeEffect readEvent
+let workerMain initState parsers sendEvent readEvent =
+    let parserIds = parsers |> List.map @@ fun (id, _, _) -> id
+    let loadSubscriptions (pid, u) =
+        parsers
+        |> List.find (fun (id, _, _) -> id = pid)
+        |> fun (_, ls, _) -> ls u |> Async.catch
+    let loadSnapshots (pid, u) =
+        parsers
+        |> List.find (fun (id, _, _) -> id = pid)
+        |> fun (_, _, ls) -> ls u |> Async.catch
+    Tea.runMain readEvent sendEvent initState W.restore (W.main parserIds loadSubscriptions loadSnapshots)
 
 let botMain initState sendEvent sendToTelegram readFromTelegram readEvent =
-    let executeEffect = B.executeEffect sendToTelegram readFromTelegram sendEvent
-    Tea.start initState (snd B.Updater.init) B.Updater.update B.Updater.EventsReceived executeEffect readEvent
+    Tea.runMain readEvent sendEvent initState B.restore (B.main readFromTelegram sendToTelegram)
 
 let persistentMain insert delete readEvent =
     let executeEffect = id
     Tea.start () [] (fun s _ -> (), List.map (P.executeEffect insert delete) s) List.singleton executeEffect readEvent
 
+let mkApplication sendToTelegram readFromTelegram mkPersistent restoreState =
+    let parsers =
+        [ (Worker.RssParser.create Worker.RssParser.Http.download)
+          (* Worker.TelegramParser.create config.restTelegramPassword config.restTelegramBaseUrl *)
+          (* Worker.HtmlProvider.create config.filesDir *) ]
+
+    let group = K.createGroup ()
+
+    async {
+        printfn "Started..."
+
+        let! (botState, workerState, notifyState) =
+            restoreState
+                (B.emptyState, W.emptyState, N.emptyState)
+                (fun (s1, s2, s3) e -> B.restore s1 e, W.restore s2 e, N.restore s3 e)
+
+        do! [ logEvents (K.createReader group)
+              mkPersistent (K.createReader group)
+              botMain botState (K.sendEvent group) sendToTelegram readFromTelegram (K.createReader group)
+              notificationsMain notifyState sendToTelegram (K.sendEvent group) (K.createReader group)
+              workerMain workerState parsers (K.sendEvent group) (K.createReader group) ]
+            |> Async.Parallel |> Async.Ignore
+    }
+
 [<EntryPoint>]
 let main args =
-    let config : Config = readConfig args.[0]
-
-    let parsers =
-        [ Worker.RssParser.create
-          Worker.TelegramParser.create config.restTelegramPassword config.restTelegramBaseUrl
-          Worker.HtmlProvider.create config.filesDir ]
-
+    let config: Config = readConfig args.[0]
     let sendToTelegramSingle = Telegram.sendToTelegramSingle config.telegramToken
     let readMessage = Telegram.readMessage config.telegramToken
-    let group = K.createGroup ()
 
     let db = Store.MongoDb.getDatabase config.mongoDomain "spectator"
     let forEach = { new Store.Persistent.IForEach with member _.invoke a b = Store.MongoDb.forEach db a b }
     let insert = { new Store.Persistent.IInsert with member _.invoke a b = Store.MongoDb.insert db a b }
     let delete = Store.MongoDb.delete db
 
-    printfn "Started..."
-    async {
-      let! (botState, workerState, notifyState) =
-          Store.Persistent.restoreState forEach
-              (B.emptyState, W.emptyState, N.emptyState)
-              (fun (s1, s2, s3) e -> B.restore s1 e, W.restore s2 e, N.restore s3 e)
+    let restoreState = Store.Persistent.restoreState forEach
+    let mkPersistent = persistentMain insert delete
 
-      do! [ logEvents (K.createReader group)
-            persistentMain insert delete (K.createReader group)
-            botMain botState (K.sendEvent group) sendToTelegramSingle readMessage (K.createReader group)
-            notificationsMain notifyState sendToTelegramSingle (K.createReader group)
-            workerMain (TimeSpan.FromMinutes <| float config.updateTimeMinutes) workerState parsers (K.sendEvent group) (K.createReader group) ]
-          |> Async.Parallel |> Async.Ignore
-    } |> Async.RunSynchronously
+    mkApplication sendToTelegramSingle readMessage mkPersistent restoreState
+    |> Async.RunSynchronously
     0

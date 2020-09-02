@@ -23,4 +23,28 @@ let start initState initCmd update mkMsg executeEffect readEvent =
               let! e = readEvent
               do! loopUpdate (mkMsg e) } ]
     |> Async.Parallel
-    |> Async.Ignore 
+    |> Async.Ignore
+
+let runMain (readEvent : 'e Async) (sendEvent : 'e -> unit Async) (initState : 's) updateStore f =
+    let state = ref initState
+    let syncState : unit Async =
+        async {
+            while true do
+                let! e = readEvent
+                state := updateStore !state e
+        }
+    let syncRunLoop : unit Async =
+        let update g =
+            async {
+                let (s2, es : _ list) = g !state
+                let oldState = !state
+                state := s2
+                for e in es do
+                    do! sendEvent e
+                return oldState
+            }
+        async {
+            while true do
+                do! f update
+        }
+    Async.Parallel [ syncState; syncRunLoop ] |> Async.Ignore

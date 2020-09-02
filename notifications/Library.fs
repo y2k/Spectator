@@ -34,41 +34,59 @@ module InnerDomain =
     let main sendToTelegramSingle state =
         { state with queue = []; initialized = true }
         , state.queue |> List.map sendToTelegramSingle
+    let main' state =
+        { state with queue = []; initialized = true }
+        , state.queue
 
-module Domain =
-    open System
-    open InnerDomain
-    open StoreDomain
-    type R = Text.RegularExpressions.Regex
+// module Domain =
+//     open System
+//     open InnerDomain
+//     open StoreDomain
+//     type R = Text.RegularExpressions.Regex
 
-    type 'a Eff =
-        | SendToTelegramSingle of UserId * string
-        | Delay of TimeSpan * 'a
+//     type 'a Eff =
+//         | SendToTelegramSingle of UserId * string
+//         | Delay of TimeSpan * 'a
 
-    type Msg =
-        | EventReceived of Events
-        | SendToTelegramEnd
-        | StartMsg
+//     type Msg =
+//         | EventReceived of Events
+//         | SendToTelegramEnd
+//         | StartMsg
 
-    let init : State * Msg Eff list =
-        StoreDomain.init, [ Delay (TimeSpan.Zero, StartMsg) ]
+//     let init : State * Msg Eff list =
+//         StoreDomain.init, [ Delay (TimeSpan.Zero, StartMsg) ]
 
-    let update e state =
-        match e with
-        | StartMsg ->
-            let (state, effs) = main SendToTelegramSingle state
-            state, effs |> List.append [ Delay (TimeSpan.FromSeconds 30., StartMsg) ]
-        | SendToTelegramEnd -> state, []
-        | EventReceived e -> update state e, []
+//     let update e state =
+//         match e with
+//         | StartMsg ->
+//             let (state, effs) = main SendToTelegramSingle state
+//             state, effs |> List.append [ Delay (TimeSpan.FromSeconds 30., StartMsg) ]
+//         | SendToTelegramEnd -> state, []
+//         | EventReceived e -> update state e, []
 
 let emptyState = StoreDomain.init
 
 let restore state e = StoreDomain.update state e
 
-let executeEffect sendToTelegramSingle eff =
-    match eff with
-    | Domain.Delay (time, m) ->
-        Async.Sleep (int time.TotalMilliseconds) >>- always m
-    | Domain.SendToTelegramSingle (u, msg) ->
-        sendToTelegramSingle u msg
-        >>- always Domain.SendToTelegramEnd
+// let executeEffect sendToTelegramSingle eff =
+//     match eff with
+//     | Domain.Delay (time, m) ->
+//         Async.Sleep (int time.TotalMilliseconds) >>- always m
+//     | Domain.SendToTelegramSingle (u, msg) ->
+//         sendToTelegramSingle u msg
+//         >>- always Domain.SendToTelegramEnd
+
+let main sendToTelegramSingle update =
+    async {
+        let! state =
+            update @@ fun state ->
+                let a = fst <| InnerDomain.main' state
+                a, []
+        let effs = snd <| InnerDomain.main' state
+
+        for x in effs do
+            let! _ = x ||> sendToTelegramSingle
+            ()
+
+        do! Async.Sleep 30_000
+    }
