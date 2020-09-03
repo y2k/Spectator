@@ -25,11 +25,13 @@ module Prelude =
     let inline (|||) a b =
         if String.IsNullOrEmpty a then b else a
     type Microsoft.FSharp.Control.AsyncBuilder with
-        member __.Bind (t : System.Threading.Tasks.Task<'T>, f:'T -> Async<'R>) : Async<'R> =
+        member __.Bind (t : Threading.Tasks.Task<'T>, f:'T -> Async<'R>) : Async<'R> =
             async.Bind(Async.AwaitTask t, f)
-        member __.ReturnFrom (t : System.Threading.Tasks.Task<'T>) : Async<'T> =
+        member __.Bind (t : Threading.Tasks.ValueTask<'T>, f:'T -> Async<'R>) : Async<'R> =
+            async.Bind(Async.AwaitTask <| t.AsTask(), f)
+        member __.ReturnFrom (t : Threading.Tasks.Task<'T>) : Async<'T> =
             async.ReturnFrom(Async.AwaitTask t)
-    let [<System.Obsolete>] TODO() = raise ^ System.NotImplementedException()
+    let [<Obsolete>] TODO() = raise ^ NotImplementedException()
     let (|Regex|_|) pattern input =
         let m = System.Text.RegularExpressions.Regex.Match(input, pattern)
         if m.Success then Some(List.tail [ for g in m.Groups -> g.Value ])
@@ -46,33 +48,21 @@ module Prelude =
         let toOption = function Ok x -> Some x | Error _ -> None
     type Log() =
         static member log (message : string,
-                           [<System.Runtime.CompilerServices.CallerFilePath;
-                             System.Runtime.InteropServices.Optional;
-                             System.Runtime.InteropServices.DefaultParameterValue("")>] file : string,
-                           [<System.Runtime.CompilerServices.CallerLineNumber;
-                             System.Runtime.InteropServices.Optional;
-                             System.Runtime.InteropServices.DefaultParameterValue(0)>] line : int) =
+                           [<Runtime.CompilerServices.CallerFilePath;
+                             Runtime.InteropServices.Optional;
+                             Runtime.InteropServices.DefaultParameterValue("")>] file : string,
+                           [<Runtime.CompilerServices.CallerLineNumber;
+                             Runtime.InteropServices.Optional;
+                             Runtime.InteropServices.DefaultParameterValue(0)>] line : int) =
             printfn "LOG %s:%i :: %s" file line message
         static member elog (message : string,
-                           [<System.Runtime.CompilerServices.CallerFilePath;
-                             System.Runtime.InteropServices.Optional;
-                             System.Runtime.InteropServices.DefaultParameterValue("")>] file : string,
-                           [<System.Runtime.CompilerServices.CallerLineNumber;
-                             System.Runtime.InteropServices.Optional;
-                             System.Runtime.InteropServices.DefaultParameterValue(0)>] line : int) =
+                           [<Runtime.CompilerServices.CallerFilePath;
+                             Runtime.InteropServices.Optional;
+                             Runtime.InteropServices.DefaultParameterValue("")>] file : string,
+                           [<Runtime.CompilerServices.CallerLineNumber;
+                             Runtime.InteropServices.Optional;
+                             Runtime.InteropServices.DefaultParameterValue(0)>] line : int) =
             eprintfn "LOG (ERROR) %s:%i :: %s" file line message
-
-module Async =
-    let wrapTask (f : unit -> System.Threading.Tasks.Task) = async {
-        do! f() |> Async.AwaitTask }
-    let rec seq =
-        function
-        | [] -> async.Return []
-        | h :: t ->
-            async {
-                let! b = h |> Async.Catch >>- function | Choice1Of2 x -> Ok x | Choice2Of2 x -> Error x
-                let! c = seq t
-                return b :: c }
 
 module String =
     let isNullOrEmpty = String.IsNullOrEmpty

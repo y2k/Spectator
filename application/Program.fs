@@ -51,9 +51,9 @@ let persistentMain insert delete readEvent =
     let executeEffect = id
     Tea.start () [] (fun s _ -> (), List.map (P.executeEffect insert delete) s) List.singleton executeEffect readEvent
 
-let mkApplication sendToTelegram readFromTelegram mkPersistent restoreState =
+let mkApplication sendToTelegram readFromTelegram mkPersistent restoreState downloadString =
     let parsers =
-        [ (Worker.RssParser.create Worker.RssParser.Http.download)
+        [ (Worker.RssParser.create downloadString)
           (* Worker.TelegramParser.create config.restTelegramPassword config.restTelegramBaseUrl *)
           (* Worker.HtmlProvider.create config.filesDir *) ]
 
@@ -89,6 +89,6 @@ let main args =
     let restoreState = Store.Persistent.restoreState forEach
     let mkPersistent = persistentMain insert delete
 
-    mkApplication sendToTelegramSingle readMessage mkPersistent restoreState
+    mkApplication sendToTelegramSingle readMessage mkPersistent restoreState Worker.RssParser.Http.download
     |> Async.RunSynchronously
     0
