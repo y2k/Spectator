@@ -64,10 +64,6 @@ module Domain =
     let createNewSub user uri filter =
         { id = TypedId.wrap <| Guid.NewGuid (); userId = user; uri = uri; filter = Option.defaultValue "" filter }
 
-    let add newSubscriptions user uri filter =
-        let sub = createNewSub user uri filter
-        sub :: newSubscriptions
-
     let getHistory (snapshots : Snapshot list) (subs : Subscription list) userId uri =
         subs
         |> List.tryFind @@ fun sub -> sub.uri = uri && sub.userId = userId
@@ -153,62 +149,27 @@ module HandleTelegramMessage =
     let invoke (user : UserId) text (db : UserState) =
         match P.parse text with
         | P.History url ->
-            // db
             ((user, D.getHistory db.snapshots db.subscriptions user url)
             , [])
         | P.GetUserSubscriptionsCmd ->
-            // db
             ((user, D.subListToMessageResponse db.subscriptions db.newSubscriptions user db.snapshots)
             , [])
         | P.DeleteSubscriptionCmd uri ->
-            // let (ns, ss) = D.deleteSubs db.subscriptions db.newSubscriptions user uri
             let (remSubs, rmNewSubs) =
                 D.deleteSubs db.subscriptions db.newSubscriptions user uri
                 ||> D.removeSubs db.subscriptions db.newSubscriptions
-            // { db with subscriptions = ss; newSubscriptions = ns }
             ((user, "Your subscription deleted")
             , [ SubscriptionRemoved (remSubs, rmNewSubs) ])
         | P.AddNewSubscriptionCmd (uri, filter) ->
             let newSub = D.createNewSub user uri filter
-            // { db with newSubscriptions = newSub :: db.newSubscriptions }
             ((user, "Your subscription created")
             , [ NewSubscriptionCreated newSub ])
         | P.UnknownCmd ->
-            // db
             ((user, "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription\n/history [url] - show last snapshots for subscription with url")
             , [])
 
-// module Updater2 =
-//     open Store
-
-//     let update sendEvent sendMessage state (userId, message) =
-//         printfn "Telegram (%s) :: %s" userId message
-//         let state, (r, cmd) = updateUserState state userId (HandleTelegramMessage.invoke userId message)
-//         state, sendMessage r :: (cmd |> List.map sendEvent)
-
 module Updater =
     open Store
-
-    // type Msg =
-    //     | EventsReceived of Events
-    //     | TextReceived of UserId * string
-    //     | SendMessageEnd
-    //     | SendEventEnd
-
-// type Cmd =
-// | ReadNewMessage of (UserId * string -> Msg)
-// | SendEvent of Events
-// | SendMessage of UserId * string
-
-    // let main readMessage sendEvent sendMessage state =
-    //     readMessage (fun (user, msg) ->
-    //         let (_s, xs) = Updater2.update sendEvent sendMessage state (user, msg)
-    //         xs)
-
-    // let update sendEvent sendMessage state (userId, message) =
-    //     printfn "Telegram (%s) :: %s" userId message
-    //     let state, (r, cmd) = updateUserState state userId (HandleTelegramMessage.invoke userId message)
-    //     state, sendMessage r :: (cmd |> List.map sendEvent)
 
     let main readMessage sendMessage updateState =
         async {
@@ -227,59 +188,5 @@ module Updater =
         }
 
 let emptyState = StoreUpdater.init
-
 let restore = StoreUpdater.update
-
 let main = Updater.main
-
-    // let runMain (readEvent : 'e Async) (sendEvent : 'e -> unit Async) (initState : 's) updateStore f =
-    //     let state = ref initState
-    //     let syncState : unit Async =
-    //         async {
-    //             while true do
-    //                 let! e = readEvent
-    //                 state := updateStore !state e
-    //         }
-    //     let syncRunLoop : unit Async =
-    //         let foo g =
-    //             async {
-    //                 let (s2, es : _ list, x) = g !state
-    //                 state := s2
-    //                 for e in es do
-    //                     do! sendEvent e
-    //                 return x
-    //             }
-    //         async {
-    //             while true do
-    //                 f foo
-    //         }
-    //     Async.Parallel [ syncState; syncRunLoop ] |> Async.Ignore
-
-    // let runRunMain readEvent sendEvent initState readMessage sendMessage =
-    //     async {
-    //         let f = main readMessage sendMessage
-    //         do! runMain readEvent sendEvent initState TimeSpan.Zero f
-    //     }
-
-    // let wrapMain (readMessage : Async<UserId * string>) (sendEvent : Events -> _ Async) (sendMessage : UserId * string -> _ Async) state =
-    //     ()
-
-    // let init readNewMessage = StoreUpdater.init, [ readNewMessage TextReceived ]
-
-    // let update sendEvent sendMessage (msg : Msg) (state : State) =
-    //     match msg with
-    //     | EventsReceived e -> StoreUpdater.invoke state e, []
-    //     | TextReceived (userId, message) -> Updater2.update sendEvent sendMessage state (userId, message)
-    //     | SendMessageEnd | SendEventEnd -> state, []
-
-// let emptyState = StoreUpdater.init
-// let restore state e = StoreUpdater.invoke state e
-
-// let executeEffect _ _ _ eff = eff
-    // function
-    // | Updater.ReadNewMessage f ->
-    //     readFromTelegram >>- f
-    // | Updater.SendMessage (userId, text) ->
-    //     sendToTelegram userId text >>- always Updater.SendMessageEnd
-    // | Updater.SendEvent e ->
-    //     sendEvent e >>- always Updater.SendEventEnd

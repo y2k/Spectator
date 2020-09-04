@@ -16,77 +16,44 @@ module StoreDomain =
         | _ -> sprintf "%s\n\n<a href=\"%O\">[ OPEN ]</a>" snap.title snap.uri
 
     let update state = function
-        | SnapshotCreated snap ->
-            if state.initialized then
-                match Map.tryFind snap.subscriptionId state.users with
-                | Some userId -> { state with queue = (userId, formatSnapshot snap) :: state.queue }
-                | None -> state
-            else state
         | SubscriptionCreated sub ->
             { state with users = Map.add sub.id sub.userId state.users }
         | SubscriptionRemoved (subId, _) ->
             { state with
                 users = state.users
                         |> Map.filter @@ fun k _ -> not @@ List.contains k subId }
-        | _ -> state
+        | SnapshotCreated snap ->
+            if state.initialized then
+                match Map.tryFind snap.subscriptionId state.users with
+                | Some userId -> { state with queue = (userId, formatSnapshot snap) :: state.queue }
+                | None -> state
+            else state
+        | NewSubscriptionCreated _ -> state
 
-module InnerDomain =
-    let main sendToTelegramSingle state =
-        { state with queue = []; initialized = true }
-        , state.queue |> List.map sendToTelegramSingle
-    let main' state =
-        { state with queue = []; initialized = true }
-        , state.queue
-
-// module Domain =
-//     open System
-//     open InnerDomain
-//     open StoreDomain
-//     type R = Text.RegularExpressions.Regex
-
-//     type 'a Eff =
-//         | SendToTelegramSingle of UserId * string
-//         | Delay of TimeSpan * 'a
-
-//     type Msg =
-//         | EventReceived of Events
-//         | SendToTelegramEnd
-//         | StartMsg
-
-//     let init : State * Msg Eff list =
-//         StoreDomain.init, [ Delay (TimeSpan.Zero, StartMsg) ]
-
-//     let update e state =
-//         match e with
-//         | StartMsg ->
-//             let (state, effs) = main SendToTelegramSingle state
-//             state, effs |> List.append [ Delay (TimeSpan.FromSeconds 30., StartMsg) ]
-//         | SendToTelegramEnd -> state, []
-//         | EventReceived e -> update state e, []
+module Module1 =
+    let main state =
+        if state.initialized
+            then { state with queue = [] }, state.queue
+            else { state with queue = []; initialized = true }, []
 
 let emptyState = StoreDomain.init
+let restore = StoreDomain.update
 
-let restore state e = StoreDomain.update state e
-
-// let executeEffect sendToTelegramSingle eff =
-//     match eff with
-//     | Domain.Delay (time, m) ->
-//         Async.Sleep (int time.TotalMilliseconds) >>- always m
-//     | Domain.SendToTelegramSingle (u, msg) ->
-//         sendToTelegramSingle u msg
-//         >>- always Domain.SendToTelegramEnd
+let private localUpdate update f =
+    async {
+        let! db = update <| fun db -> (fst <| f db), []
+        let db = fst <| f db
+        return snd <| f db
+    }
 
 let main sendToTelegramSingle update =
     async {
-        let! state =
-            update @@ fun state ->
-                let a = fst <| InnerDomain.main' state
-                a, []
-        let effs = snd <| InnerDomain.main' state
+        let! updates = localUpdate update Module1.main
 
-        for x in effs do
-            let! _ = x ||> sendToTelegramSingle
-            ()
+        do! updates
+            |> List.map (uncurry sendToTelegramSingle)
+            |> Async.Sequential
+            |> Async.Ignore
 
-        do! Async.Sleep 30_000
+        do! Async.Sleep 1_000
     }

@@ -4,7 +4,7 @@ open System
 open Swensen.Unquote
 open Spectator.Core
 
-let assertBot (input : Threading.Channels.Channel<string>) (output : Threading.Channels.Channel<string>) m expected =
+let assertBot (input : Threading.Channels.Channel<string>) (output : Threading.Channels.Channel<string>) msg expected =
     let rec flaky count f  =
         async {
             try
@@ -18,8 +18,9 @@ let assertBot (input : Threading.Channels.Channel<string>) (output : Threading.C
                     else raise e
         }
 
-    flaky 15 (async {
-        input.Writer.WriteAsync m |> ignore
+    flaky 20 (async {
+        if not <| String.IsNullOrEmpty msg then
+            input.Writer.WriteAsync msg |> ignore
         let! actual = output.Reader.ReadAsync().AsTask() |> Async.AwaitTask
         test <@ expected = actual @>
     })
@@ -55,17 +56,24 @@ let test () =
     async {
         let! _ = app |> Async.StartChild
 
-        input.Writer.WriteAsync "/add https://degoes.net/feed.xml" |> ignore
-        input.Writer.WriteAsync "/ls" |> ignore
+        // input.Writer.WriteAsync "/add https://degoes.net/feed.xml" |> ignore
+        // input.Writer.WriteAsync "/ls" |> ignore
 
-        let! message = output.Reader.ReadAsync()
-        test <@ "Your subscription created" = message @>
-        let! message = output.Reader.ReadAsync()
-        test <@ "Your subscriptions: \n- [Processing...] https://degoes.net/feed.xml ''" = message @>
+        // let! message = output.Reader.ReadAsync()
+        // test <@ "Your subscription created" = message @>
+        // let! message = output.Reader.ReadAsync()
+        // test <@ "Your subscriptions: \n- [Processing...] https://degoes.net/feed.xml ''" = message @>
 
+        do! assertBot "/ls" "Your subscriptions: "
+        do! assertBot "/add https://degoes.net/feed.xml" "Your subscription created"
+        do! assertBot "/ls" "Your subscriptions: \n- [Processing...] https://degoes.net/feed.xml ''"
         do! assertBot "/ls" "Your subscriptions: \n- [RSS] https://degoes.net/feed.xml '' (0)"
 
         downloadString := mkDownloadString 1
 
+        do! assertBot "" "Effect Tracking Is Commercially Worthless\n\n<a href=\"https://degoes.net/articles/no-effect-tracking\">[ OPEN ]</a>"
+
         do! assertBot "/ls" "Your subscriptions: \n- [RSS] https://degoes.net/feed.xml '' (1)"
+        do! assertBot "/rm https://degoes.net/feed.xml" "Your subscription deleted"
+        do! assertBot "/ls" "Your subscriptions: "
     } |> Async.RunSynchronously
