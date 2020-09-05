@@ -25,8 +25,13 @@ module StoreDomain =
         | SnapshotCreated snap ->
             if state.initialized then
                 match Map.tryFind snap.subscriptionId state.users with
-                | Some userId -> { state with queue = (userId, formatSnapshot snap) :: state.queue }
-                | None -> state
+                | Some userId ->
+                    let out = { state with queue = (userId, formatSnapshot snap) :: state.queue }
+                    printfn "1) NOT::UPD = %A | %A | %A" state snap out
+                    out
+                | None ->
+                    printfn "2) NOT::UPD = %A | %A" state snap
+                    state
             else state
         | NewSubscriptionCreated _ -> state
 

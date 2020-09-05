@@ -56,14 +56,6 @@ let test () =
     async {
         let! _ = app |> Async.StartChild
 
-        // input.Writer.WriteAsync "/add https://degoes.net/feed.xml" |> ignore
-        // input.Writer.WriteAsync "/ls" |> ignore
-
-        // let! message = output.Reader.ReadAsync()
-        // test <@ "Your subscription created" = message @>
-        // let! message = output.Reader.ReadAsync()
-        // test <@ "Your subscriptions: \n- [Processing...] https://degoes.net/feed.xml ''" = message @>
-
         do! assertBot "/ls" "Your subscriptions: "
         do! assertBot "/add https://degoes.net/feed.xml" "Your subscription created"
         do! assertBot "/ls" "Your subscriptions: \n- [Processing...] https://degoes.net/feed.xml ''"
