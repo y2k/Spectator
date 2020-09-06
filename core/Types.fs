@@ -43,6 +43,6 @@ type Events =
     | NewSubscriptionCreated of NewSubscription
     | SubscriptionCreated of Subscription
     | SubscriptionRemoved of Subscription TypedId list * NewSubscription TypedId list
-    | SnapshotCreated of Snapshot
+    | SnapshotCreated of isNew : bool * Snapshot
 
 type Filter = NoneFilter | UserFilter of string

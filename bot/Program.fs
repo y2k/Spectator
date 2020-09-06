@@ -32,25 +32,24 @@ module Parser =
         | _ -> UnknownCmd
 
 module Domain =
-    let snapshotsCount (snapshots : Snapshot list) subId =
-        snapshots
-        |> List.filter @@ fun sn -> sn.subscriptionId = subId
-        |> List.length
+    let private snapshotsCount counts subId =
+        Map.tryFind subId counts
+        |> Option.defaultValue 0
 
-    let subToString snapshots (sub : Subscription) =
+    let subToString counts (sub : Subscription) =
         let provider =
             match sub.provider with
             | id when id = Guid "E5D3A9F2-325C-4CEF-BCA9-99D23F9E5AE5" -> "RSS"
             | id when id = Guid "3B26457E-8AB7-41AD-8DEC-11AF891A3052" -> "Telegram"
             | id when id = Guid "AE4FEE1F-C08D-44B9-B526-4162FF1C328C" -> "HTML"
             | id -> sprintf "Unknown (%s)" (id.ToString().Substring(0, 4))
-        sprintf "[%s] %O '%s' (%i)" provider sub.uri sub.filter (snapshotsCount snapshots sub.id)
+        sprintf "[%s] %O '%s' (%i)" provider sub.uri sub.filter (snapshotsCount counts sub.id)
 
-    let subListToMessageResponse (subscriptions : Subscription list) newSubscriptions userId snapshots =
+    let subListToMessageResponse counts (subscriptions : Subscription list) newSubscriptions userId =
         let subs =
             subscriptions
             |> List.filter ^ fun x -> x.userId = userId
-            |> List.map (subToString snapshots)
+            |> List.map (subToString counts)
         newSubscriptions
         |> List.filter ^ fun x -> x.userId = userId
         |> List.map ^ fun x -> sprintf "[Processing...] %O '%s'" x.uri x.filter
@@ -90,6 +89,7 @@ module Domain =
 module Store =
     type UserState =
         { subscriptions : Subscription list
+          counts : Map<Subscription TypedId, int>
           newSubscriptions : NewSubscription list
           snapshots : Snapshot list }
 
@@ -98,7 +98,7 @@ module Store =
     let updateUserState (state : State) (userId : UserId) (f : UserState -> UserState * _) : State * _ =
         let us =
             Map.tryFind userId state.states
-            |> Option.defaultValue { snapshots = []; subscriptions = []; newSubscriptions = [] }
+            |> Option.defaultValue { counts = Map.empty; snapshots = []; subscriptions = []; newSubscriptions = [] }
         let (us, effs) = f us
         { state with states = Map.add userId us state.states }, effs
 
@@ -124,13 +124,19 @@ module StoreUpdater =
                     state.newSubscriptions
                     |> List.filter (fun s -> not <| List.contains s.id ids) }
 
+    let private incrimentCount (counts : Map<Subscription TypedId, int>) (snap : Snapshot) =
+        let count = Map.tryFind snap.subscriptionId counts
+        Map.add snap.subscriptionId ((count |> Option.defaultValue 0) + 1) counts
+
     let update state = function
-        | SnapshotCreated snap ->
+        | SnapshotCreated (_, snap) ->
             match findUserBySnapshot state snap with
             | Some userId ->
                 updateUserStateSafe state userId @@ fun us ->
                     let snaps = snap :: us.snapshots
-                    { us with snapshots = snaps |> List.take (min 10 snaps.Length) }
+                    { us with
+                        snapshots = snaps |> List.take (min 10 snaps.Length)
+                        counts = incrimentCount us.counts snap }
             | None -> state
         | SubscriptionCreated sub ->
             updateUserStateSafe state sub.userId @@ fun us ->
@@ -149,24 +155,24 @@ module HandleTelegramMessage =
     let invoke (user : UserId) text (db : UserState) =
         match P.parse text with
         | P.History url ->
-            ((user, D.getHistory db.snapshots db.subscriptions user url)
-            , [])
+            (user, D.getHistory db.snapshots db.subscriptions user url)
+            , []
         | P.GetUserSubscriptionsCmd ->
-            ((user, D.subListToMessageResponse db.subscriptions db.newSubscriptions user db.snapshots)
-            , [])
+            (user, D.subListToMessageResponse db.counts db.subscriptions db.newSubscriptions user)
+            , []
         | P.DeleteSubscriptionCmd uri ->
             let (remSubs, rmNewSubs) =
                 D.deleteSubs db.subscriptions db.newSubscriptions user uri
                 ||> D.removeSubs db.subscriptions db.newSubscriptions
-            ((user, "Your subscription deleted")
-            , [ SubscriptionRemoved (remSubs, rmNewSubs) ])
+            (user, "Your subscription deleted")
+            , [ SubscriptionRemoved (remSubs, rmNewSubs) ]
         | P.AddNewSubscriptionCmd (uri, filter) ->
             let newSub = D.createNewSub user uri filter
-            ((user, "Your subscription created")
-            , [ NewSubscriptionCreated newSub ])
+            (user, "Your subscription created")
+            , [ NewSubscriptionCreated newSub ]
         | P.UnknownCmd ->
-            ((user, "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription\n/history [url] - show last snapshots for subscription with url")
-            , [])
+            (user, "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription\n/history [url] - show last snapshots for subscription with url")
+            , []
 
 module Updater =
     open Store

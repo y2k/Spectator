@@ -31,17 +31,20 @@ module Domain =
         subscriptions |> List.filter (fun s -> not <| List.contains s.id sids)
 
     let filterSnapsthos lastUpdated subs snaps =
-        let filterSnapshot snap =
+        let applyUserFilter snap =
             let sub = List.find (fun (sub : Subscription) -> snap.subscriptionId = sub.id) subs
             if String.IsNullOrEmpty sub.filter
                 then true
                 else Text.RegularExpressions.Regex.IsMatch (snap.title, sub.filter)
         snaps
-        |> List.filter filterSnapshot
-        |> List.filter @@ fun snap ->
+        |> List.filter applyUserFilter
+        |> List.choose @@ fun snap ->
             match Map.tryFind snap.subscriptionId lastUpdated with
-            | Some date -> snap.created > date
-            | None -> false
+            | Some date ->
+                if snap.created > date
+                    then Some (true, snap)
+                    else None
+            | None -> Some (false, snap)
 
     let updateLastUpdates (lastUpdated : Map<Subscription TypedId, DateTime>) snapshots =
         snapshots
@@ -70,7 +73,7 @@ module StoreDomain =
                 newSubscriptions = Domain.removeNewSubs state.newSubscriptions nsids }
         | SubscriptionCreated sub ->
             { state with subscriptions = sub :: state.subscriptions }
-        | SnapshotCreated snap ->
+        | SnapshotCreated (_, snap) ->
             { state with lastUpdated = Domain.updateLastUpdates state.lastUpdated [ snap ] }
 
 module Module1 =
@@ -113,10 +116,7 @@ module StateMachine =
 
     let mkNewSnapshotsEnd responses state =
         let snapshots = responses |> Domain.mkSnapshots state.subscriptions
-        let newSnaps = snapshots |> Domain.filterSnapsthos state.lastUpdated state.subscriptions
-        let effects =
-            newSnaps
-            |> List.map @@ fun sn -> sn
+        let effects = snapshots |> Domain.filterSnapsthos state.lastUpdated state.subscriptions
         { state with lastUpdated = Domain.updateLastUpdates state.lastUpdated snapshots }
         , effects |> List.map SnapshotCreated
 
@@ -125,14 +125,15 @@ let restore state e = StoreDomain.update state e
 
 let main parserIds loadSubscriptions loadSnapshots (update : (_ -> _ * Events list) -> _ Async) =
     async {
-        let! db = update (fun db -> db, [])
-        let reqs = StateMachine.mkSubscription parserIds db
+        let! reqs =
+            update @@ fun db -> db, []
+            |> Async.map @@ fun db -> StateMachine.mkSubscription parserIds db
 
         let! responses =
             reqs
             |> List.map loadSubscriptions
             |> Async.Sequential
-            |> Async.map (fun x -> Seq.zip reqs x |> Seq.toList)
+            |> Async.map @@ fun x -> Seq.zip reqs x |> Seq.toList
 
         let! _ = update @@ fun db -> db, Module1.mkSubscriptionsEnd db responses
 
@@ -144,7 +145,7 @@ let main parserIds loadSubscriptions loadSnapshots (update : (_ -> _ * Events li
             snapReqs
             |> List.map loadSnapshots
             |> Async.Sequential
-            |> Async.map (fun x -> Seq.zip snapReqs x |> Seq.toList)
+            |> Async.map @@ fun x -> Seq.zip snapReqs x |> Seq.toList
 
         let! _ = update @@ StateMachine.mkNewSnapshotsEnd snapResp
 
