@@ -32,7 +32,7 @@ module P = Store.Persistent
 let notificationsMain initState sendToTelegramSingle sendEvent readEvent =
     Tea.runMain readEvent sendEvent initState N.restore (N.main sendToTelegramSingle)
 
-let workerMain initState parsers sendEvent readEvent =
+let workerMainSub initState parsers sendEvent readEvent =
     let parserIds = parsers |> List.map @@ fun (id, _, _) -> id
     let loadSubscriptions (pid, u) =
         parsers
@@ -42,7 +42,18 @@ let workerMain initState parsers sendEvent readEvent =
         parsers
         |> List.find (fun (id, _, _) -> id = pid)
         |> fun (_, _, ls) -> ls u |> Async.catch
-    Tea.runMain readEvent sendEvent initState W.restore (W.main parserIds loadSubscriptions loadSnapshots)
+    Tea.runMain readEvent sendEvent initState W.Subscriptions.restore (W.Subscriptions.main parserIds loadSubscriptions)
+
+let workerMainSnap initState parsers sendEvent readEvent =
+    let loadSubscriptions (pid, u) =
+        parsers
+        |> List.find (fun (id, _, _) -> id = pid)
+        |> fun (_, ls, _) -> ls u |> Async.catch
+    let loadSnapshots (pid, u) =
+        parsers
+        |> List.find (fun (id, _, _) -> id = pid)
+        |> fun (_, _, ls) -> ls u |> Async.catch
+    Tea.runMain readEvent sendEvent initState W.Snapshots.restore (W.Snapshots.main loadSnapshots)
 
 let botMain initState sendEvent sendToTelegram readFromTelegram readEvent =
     Tea.runMain readEvent sendEvent initState B.restore (B.main readFromTelegram sendToTelegram)
@@ -51,7 +62,7 @@ let persistentMain insert delete readEvent =
     let executeEffect = id
     Tea.start () [] (fun s _ -> (), List.map (P.executeEffect insert delete) s) List.singleton executeEffect readEvent
 
-let mkApplication sendToTelegram readFromTelegram mkPersistent restoreState downloadString =
+let mkApplication sendToTelegram readFromTelegram mkPersistent restoreState downloadString enableLogs =
     let parsers =
         [ (Worker.RssParser.create downloadString)
           (* Worker.TelegramParser.create config.restTelegramPassword config.restTelegramBaseUrl *)
@@ -64,15 +75,16 @@ let mkApplication sendToTelegram readFromTelegram mkPersistent restoreState down
 
         let! (botState, workerState, notifyState) =
             restoreState
-                (B.emptyState, W.emptyState, N.emptyState)
-                (fun (s1, s2, s3) e -> B.restore s1 e, W.restore s2 e, N.restore s3 e)
+                (B.emptyState, W.Subscriptions.emptyState, N.emptyState)
+                (fun (s1, s2, s3) e -> B.restore s1 e, W.Subscriptions.restore s2 e, N.restore s3 e)
 
-        do! [ logEvents (K.createReader group)
-              mkPersistent (K.createReader group)
-              botMain botState (K.sendEvent group) sendToTelegram readFromTelegram (K.createReader group)
-              notificationsMain notifyState sendToTelegram (K.sendEvent group) (K.createReader group)
-              workerMain workerState parsers (K.sendEvent group) (K.createReader group) ]
-            |> Async.Parallel |> Async.Ignore
+        do! [ if enableLogs then yield logEvents (K.createReader group)
+              yield mkPersistent (K.createReader group)
+              yield botMain botState (K.sendEvent group) sendToTelegram readFromTelegram (K.createReader group)
+              yield notificationsMain notifyState sendToTelegram (K.sendEvent group) (K.createReader group)
+              yield workerMainSub workerState parsers (K.sendEvent group) (K.createReader group)
+              yield workerMainSnap workerState parsers (K.sendEvent group) (K.createReader group)
+            ] |> Async.Parallel |> Async.Ignore
     }
 
 [<EntryPoint>]
@@ -89,6 +101,6 @@ let main args =
     let restoreState = Store.Persistent.restoreState forEach
     let mkPersistent = persistentMain insert delete
 
-    mkApplication sendToTelegramSingle readMessage mkPersistent restoreState Worker.RssParser.Http.download
+    mkApplication sendToTelegramSingle readMessage mkPersistent restoreState Worker.RssParser.Http.download true
     |> Async.RunSynchronously
     0

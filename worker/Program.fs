@@ -120,34 +120,44 @@ module StateMachine =
         { state with lastUpdated = Domain.updateLastUpdates state.lastUpdated snapshots }
         , effects |> List.map SnapshotCreated
 
-let emptyState = StoreDomain.init
-let restore state e = StoreDomain.update state e
+module Subscriptions =
+    let emptyState = StoreDomain.init
+    let restore state e = StoreDomain.update state e
 
-let main parserIds loadSubscriptions loadSnapshots (update : (_ -> _ * Events list) -> _ Async) =
-    async {
-        let! reqs =
-            update @@ fun db -> db, []
-            |> Async.map @@ fun db -> StateMachine.mkSubscription parserIds db
+    let main parserIds loadSubscriptions (update : (_ -> _ * Events list) -> _ Async) =
+        async {
+            let! reqs =
+                update @@ fun db -> db, []
+                |> Async.map @@ fun db -> StateMachine.mkSubscription parserIds db
 
-        let! responses =
-            reqs
-            |> List.map loadSubscriptions
-            |> Async.Sequential
-            |> Async.map @@ fun x -> Seq.zip reqs x |> Seq.toList
+            let! responses =
+                reqs
+                |> List.map loadSubscriptions
+                |> Async.Sequential
+                |> Async.map @@ fun x -> Seq.zip reqs x |> Seq.toList
 
-        let! _ = update @@ fun db -> db, Module1.mkSubscriptionsEnd db responses
+            let! _ = update @@ fun db -> db, Module1.mkSubscriptionsEnd db responses
 
-        let! snapReqs =
-            update @@ fun db -> db, []
-            |> Async.map @@ fun db -> StateMachine.mkNewSnapshots db
+            do! Async.Sleep 1_000
+        }
 
-        let! snapResp =
-            snapReqs
-            |> List.map loadSnapshots
-            |> Async.Sequential
-            |> Async.map @@ fun x -> Seq.zip snapReqs x |> Seq.toList
+module Snapshots =
+    let emptyState = StoreDomain.init
+    let restore state e = StoreDomain.update state e
 
-        let! _ = update @@ StateMachine.mkNewSnapshotsEnd snapResp
+    let main loadSnapshots (update : (_ -> _ * Events list) -> _ Async) =
+        async {
+            let! snapReqs =
+                update @@ fun db -> db, []
+                |> Async.map @@ fun db -> StateMachine.mkNewSnapshots db
 
-        do! Async.Sleep 5_000
-    }
+            let! snapResp =
+                snapReqs
+                |> List.map loadSnapshots
+                |> Async.Sequential
+                |> Async.map @@ fun x -> Seq.zip snapReqs x |> Seq.toList
+
+            let! _ = update @@ StateMachine.mkNewSnapshotsEnd snapResp
+
+            do! Async.Sleep 1_000
+        }

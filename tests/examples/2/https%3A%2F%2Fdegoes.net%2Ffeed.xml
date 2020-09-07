@@ -15,6 +15,230 @@
 
 
 <entry>
+  <title type="html"><![CDATA[Effect Tracking Is Commercially Worthless]]></title>
+  <link rel="alternate" type="text/html" href="https://degoes.net/articles/no-effect-tracking" />
+  <id>https://degoes.net/articles/no-effect-tracking</id>
+  <published>2020-05-03T00:00:00-06:00</published>
+  <updated>2020-05-03T00:00:00-06:00</updated>
+  <author>
+    <name>John A De Goes</name>
+    <uri>https://degoes.net</uri>
+    <email>john@degoes.net</email>
+  </author>
+  <content type="html">&lt;p&gt;Effect tracking is not a valid reason to use functional effect systems, because effect tracking is commercially worthless.&lt;/p&gt;
+
+&lt;p&gt;More precisely, companies that pay their software developers to “track effects” will not obtain a return on this investment, but rather, will lose money.&lt;/p&gt;
+
+&lt;p&gt;In this post, I’ll explain why.&lt;/p&gt;
+
+&lt;h2 id=&quot;side-effects&quot;&gt;Side Effects&lt;/h2&gt;
+
+&lt;p&gt;The whole notion of “effects” doesn’t make a lot of sense outside &lt;em&gt;functional programming&lt;/em&gt;.&lt;/p&gt;
+
+&lt;p&gt;In functional programming, we try to build our software from deterministic, pure functions. These functions are like the ones most of us learned about in high school:&lt;/p&gt;
+
+&lt;pre&gt;
+f(x) = x * x
+&lt;/pre&gt;
+
+&lt;p&gt;Such functions are said to be “free of side-effects”, meaning their only effect is combining and transforming inputs to produce an output.&lt;/p&gt;
+
+&lt;p&gt;Pure functions don’t do anything &lt;em&gt;on the side&lt;/em&gt;—they don’t do anything that could be observed from outside the function, like operating system calls or mutating the heap.&lt;/p&gt;
+
+&lt;h2 id=&quot;discovering-purity&quot;&gt;Discovering Purity&lt;/h2&gt;
+
+&lt;p&gt;When developers first discover functional programming, they believe that it’s &lt;em&gt;useless&lt;/em&gt; for real world applications.&lt;/p&gt;
+
+&lt;p&gt;I had the same response when I first heard about programming without procedural statements, assignments, or loops.&lt;/p&gt;
+
+&lt;p&gt;After all, procedures that compute random numbers, call databases, and or invoke web APIs, all perform “side-effects”.&lt;/p&gt;
+
+&lt;p&gt;These procedures are not deterministic, pure functions that just combine and transform inputs to produce outputs. Yet they are the &lt;em&gt;cornerstone&lt;/em&gt; of building applications that solve real business problems.&lt;/p&gt;
+
+&lt;p&gt;Eventually, of course, I discovered that in purely functional languages like Haskell, functions that interact with the outside world all return values of a mysterious &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt; data type.&lt;/p&gt;
+
+&lt;p&gt;This discovery feeds a myth that’s pervasive among even experienced Haskell programmers.&lt;/p&gt;
+
+&lt;p&gt;The myth of &lt;em&gt;effect tracking&lt;/em&gt;.&lt;/p&gt;
+
+&lt;h2 id=&quot;effect-tracking&quot;&gt;Effect Tracking&lt;/h2&gt;
+
+&lt;p&gt;It’s extraordinarily common for developers who have encountered Haskell’s &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt; data type to explain it as follows:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Impure functions return &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt;&lt;/li&gt;
+  &lt;li&gt;Pure functions don’t return &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;According to this explanation, one can determine whether or not a function is effectful merely by examining the return type. The &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt; type therefore “tracks” the presence of side-effects… hence, &lt;em&gt;effect tracking&lt;/em&gt;.&lt;/p&gt;
+
+&lt;p&gt;Consequently, many developers now believe that Haskell uses the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt; type to track effects, to mark them as being “impure”—that Haskell’s type system is being recruited to help us ascertain purity.&lt;/p&gt;
+
+&lt;p&gt;There’s just one &lt;em&gt;tiny&lt;/em&gt; little problem with this explanation.&lt;/p&gt;
+
+&lt;p&gt;It’s totally and completely wrong!&lt;/p&gt;
+
+&lt;h2 id=&quot;myth-busting&quot;&gt;Myth Busting&lt;/h2&gt;
+
+&lt;p&gt;In point of fact, a Haskell function that returns &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt; &lt;strong&gt;is&lt;/strong&gt; pure: it’s deterministic and entirely free of side-effects, merely transforming and combining inputs to produce an output.&lt;/p&gt;
+
+&lt;p&gt;For example, take the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;putStrLn&lt;/code&gt; function:&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-haskell&quot; data-lang=&quot;haskell&quot;&gt;&lt;span class=&quot;n&quot;&gt;putStrLn&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;::&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;IO&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;()&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt;&lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;putStrLn&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;line&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;IO&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;IOException&lt;/span&gt;, &lt;span class=&quot;kt&quot;&gt;Unit&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;This function takes a string, and returns an &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt; value. It does not actually &lt;em&gt;perform&lt;/em&gt; any effects, and if given the same string, it will return the ‘same’ &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt; value. Moreover, the value that it returns is &lt;em&gt;totally immutable&lt;/em&gt;, like all values in Haskell.&lt;/p&gt;
+
+&lt;p&gt;These guarantees hold not just for &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;putStrLn&lt;/code&gt;, but for all functions that return &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt; values (unless they cheat by using &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;unsafePerformIO&lt;/code&gt; or similar).&lt;/p&gt;
+
+&lt;p&gt;Stated more forcefully, functions that return &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt; values are &lt;em&gt;no different&lt;/em&gt; than functions that do &lt;strong&gt;not&lt;/strong&gt; return &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt; values: they are pure, and their type signature does not reveal the presence or absence of side-effects, because there are no side-effects at all.&lt;/p&gt;
+
+&lt;p&gt;Now, eventually one learns that &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt; is a data type, whose immutable values &lt;em&gt;model&lt;/em&gt; some sequence of interactions with the outside world (mutable heap, sockets, files, databases, and the like).&lt;/p&gt;
+
+&lt;p&gt;So, even though a function like &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;putStrLn&lt;/code&gt; does not &lt;em&gt;perform&lt;/em&gt; any side-effects, the value it returns &lt;em&gt;describes&lt;/em&gt; a side-effect.&lt;/p&gt;
+
+&lt;p&gt;However, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt; is not magical in this regard. Indeed, entirely without &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt;, we can easily construct a simple model of interaction with the outside world, like sockets:&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-haskell&quot; data-lang=&quot;haskell&quot;&gt;&lt;span class=&quot;kr&quot;&gt;data&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;SocketIO&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;a&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 
+  &lt;span class=&quot;kt&quot;&gt;ReadByte&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;Byte&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;SocketIO&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;a&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;|&lt;/span&gt;
+  &lt;span class=&quot;kt&quot;&gt;WriteByte&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Byte&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;SocketIO&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;a&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt;&lt;span class=&quot;k&quot;&gt;sealed&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;trait&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;SocketIO&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;+A&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;]&lt;/span&gt;
+&lt;span class=&quot;nc&quot;&gt;final&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;case&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;class&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;ReadByte&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;A&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;](&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;withByteDo&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Byte&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;SocketIO&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;A&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;])&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;extends&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;SocketIO&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;A&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;]&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;final&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;case&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;class&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;WriteByte&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;A&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;](&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;byte&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Byte&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;andThenDo&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;SocketIO&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;A&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;])&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;extends&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;SocketIO&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;A&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;Now one can write functions that return &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;SocketIO&lt;/code&gt; values.&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt; values are no less pure than &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;SocketIO&lt;/code&gt; values—literally the only distinction between them is that, in Haskell, your main function may return an &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt; value, and if it does, the data structure will be translated by the Haskell runtime into the side-effects that it models.&lt;/p&gt;
+
+&lt;p&gt;But we could easily do that ourselves for &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;SocketIO&lt;/code&gt;, by having an interpreter that is built on &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;unsafePerformIO&lt;/code&gt;!&lt;/p&gt;
+
+&lt;h2 id=&quot;effect-tracking-1&quot;&gt;Effect Tracking?&lt;/h2&gt;
+
+&lt;p&gt;So effect tracking—the ability to “track effects” in the type system—is a gigantic misnomer, because the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt; type does not track side-effects.&lt;/p&gt;
+
+&lt;p&gt;There are no side-effects in Haskell programs (&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;unsafePerformIO&lt;/code&gt; and friends notwithstanding).&lt;/p&gt;
+
+&lt;p&gt;There are only data types, some of which model interaction with the outside world. However, even a list of bytes can model interaction with the outside world. In fact, a binary program is nothing more than a list of bytes, which models interaction with the outside world using machine code instruction sets!&lt;/p&gt;
+
+&lt;p&gt;That said, if we ignore the technical sense in which there is no such thing as “effect tracking” in Haskell, can we say that having “tracked effects” is a good reason to use data types like &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt;?&lt;/p&gt;
+
+&lt;p&gt;The answer is no, because effect tracking can be done without &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt;!&lt;/p&gt;
+
+&lt;h2 id=&quot;effect-tracked-java&quot;&gt;Effect-Tracked Java™&lt;/h2&gt;
+
+&lt;p&gt;If, by &lt;em&gt;effect tracking&lt;/em&gt;, we mean that we can know, looking only at the signature of a function, whether or not the method models or performs side-effects, then allow me to introduce to you &lt;em&gt;Effect-Tracked Java™&lt;/em&gt;!&lt;/p&gt;
+
+&lt;p&gt;In Effect-Tracked Java™ (a feasible thought experiment for now), every method is annotated with either &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;@Pure&lt;/code&gt; or &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;@Impure&lt;/code&gt;. For example:&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-java&quot; data-lang=&quot;java&quot;&gt;&lt;span class=&quot;nd&quot;&gt;@Impure&lt;/span&gt;
+&lt;span class=&quot;kd&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Config&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;loadAppConfig&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+  &lt;span class=&quot;o&quot;&gt;...&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;nd&quot;&gt;@Pure&lt;/span&gt;
+&lt;span class=&quot;kd&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Config&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;mergeConfigs&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;defaults:&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Config&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nl&quot;&gt;priority:&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Config&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+  &lt;span class=&quot;o&quot;&gt;...&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;Let’s assume that all the “root” methods in the Java standard library, together with JNI methods, have been ascribed these annotations, which are stored in a data file accessible to our build.&lt;/p&gt;
+
+&lt;p&gt;This information allows a “purity” annotation processor, which we would run as part of our build process, to verify that all our annotations are correct.&lt;/p&gt;
+
+&lt;p&gt;For example, if we call &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;System.currentTimeMillis()&lt;/code&gt; inside a function annotated &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;@Pure&lt;/code&gt;,  we will get an error, and we will have to fix the error by changing the annotation to &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;@Impure&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;Presto, instant effect tracking, without esoteric “monads” or any of that pesky functional programming!&lt;/p&gt;
+
+&lt;p&gt;Further, we don’t have to stop at such coarse-grained effect tracking. If we like, we can allow &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;@Impure&lt;/code&gt; annotations to introduce labels, which we could mistakenly call “algebras”.&lt;/p&gt;
+
+&lt;p&gt;This would give us (let’s call it) &lt;em&gt;Tagless-Final Effect-Tracked Java™&lt;/em&gt;, which would look something like this:&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-java&quot; data-lang=&quot;java&quot;&gt;&lt;span class=&quot;nd&quot;&gt;@Impure&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;({&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;FileSystemAlgebra&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;EnvironmentVariablesAlgebra&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;})&lt;/span&gt;
+&lt;span class=&quot;kd&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Config&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;loadAppConfig&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+  &lt;span class=&quot;o&quot;&gt;...&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;As before, our annotation processor would enforce correctness. So if we accidentally called &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;System.currentTimeMillis()&lt;/code&gt; inside a function annotated &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;@Impure()&lt;/code&gt;, we would be forced to change this annotation to &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;@Impure({&quot;ClockAlgebra&quot;})&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;With these “improvements”, we could tell not only which methods are pure and impure, but for the impure methods, we could tell which “algebras” they use—and all of this is tracked statically!&lt;/p&gt;
+
+&lt;p&gt;Have we just discovered a way to radically boost developer productivity for all Java developers everywhere?!?&lt;/p&gt;
+
+&lt;p&gt;Read on for my unexpected and totally surprising answer!&lt;/p&gt;
+
+&lt;h2 id=&quot;worthless-effect-tracking&quot;&gt;Worthless Effect Tracking&lt;/h2&gt;
+
+&lt;p&gt;Effect tracking, whether at the coarse or fine-grained level, is simply not commercially valuable. If it were, not only would there exist popular annotation processors for it, but the Java language itself would probably have the feature.&lt;/p&gt;
+
+&lt;p&gt;Instead, while the feature can be found as one of many features in the &lt;a href=&quot;https://checkerframework.org/manual/#purity-checker&quot;&gt;Checker Framework&lt;/a&gt;, it has no commercial traction.&lt;/p&gt;
+
+&lt;p&gt;Moreover, early versions of PureScript used row types to provide statically-checked and fine-grained “effect tracking”, but the feature was &lt;a href=&quot;https://github.com/purescript-deprecated/purescript-eff&quot;&gt;quickly abandoned&lt;/a&gt;, as it provided no commercial value, but rather slowed down feature development without benefit.&lt;/p&gt;
+
+&lt;p&gt;Contrast these results with lambdas (anonymous functions), which have made their way into every programming language because of the unquestionably positive effects they have on productivity.&lt;/p&gt;
+
+&lt;p&gt;It’s my contention that effect tracking is worthless precisely because if a developer has &lt;em&gt;any&lt;/em&gt; idea about what a function is intended to do, then they already know with a high degree of certainty whether or not the function performs side-effects (assuming, of course, they are taught what it means for something to “perform side-effects”).&lt;/p&gt;
+
+&lt;p&gt;No developer who knows what side-effects are is surprised that &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;System.currentTimeMillis()&lt;/code&gt; performs a side-effect, because they already know what the function is intended to do. Indeed, many language features and best practices (as well as IDE features!) are designed &lt;em&gt;precisely&lt;/em&gt; to give developers a better idea of what functions are supposed to do.&lt;/p&gt;
+
+&lt;p&gt;Given a rudimentary understanding of what a function’s purpose, the purity of the function can be predicted with high probability (violations, like &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;java.net.URL#hashCode/equals&lt;/code&gt;, become legendary!). However, given the purity of a function, this information by itself does not convey any useful information on the function’s purpose.&lt;/p&gt;
+
+&lt;p&gt;Stated simply, effect tracking isn’t incredibly useful in practice, because when it matters (and it doesn’t always matter), we already know roughly what functions do, and therefore, whether or not they perform side-effects.&lt;/p&gt;
+
+&lt;p&gt;Whatever benefit effect tracking would have would be overwhelmed by the cost of ceremony and boilerplate—this is doubly-true for the “fine-grained” variants.&lt;/p&gt;
+
+&lt;p&gt;Moreover, even assuming, evidence to the contrary notwithstanding, that effect tracking &lt;em&gt;was&lt;/em&gt; a killer feature, it could be baked into an IDE without any modifications to a language’s syntax or semantics.&lt;/p&gt;
+
+&lt;p&gt;One could imagine clicking on an “interactions” button next to a function, and seeing what external (and side-effecting) systems each function interacts with. A pure tooling solution like this would have only upside, because it would not require mindless and verbose boilerplate and ceremony.&lt;/p&gt;
+
+&lt;h2 id=&quot;why-io&quot;&gt;Why IO?&lt;/h2&gt;
+
+&lt;p&gt;If effect tracking is commercially useless, then why use &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt; data types?&lt;/p&gt;
+
+&lt;p&gt;If you’re in Haskell, you don’t have a choice: if you want to get useful work done, then you will use &lt;em&gt;some&lt;/em&gt; model of interaction with the outside world, and it may as well be &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt;, which is industry-proven and adopted extensively.&lt;/p&gt;
+
+&lt;p&gt;If you’re in Scala, however, you &lt;em&gt;do&lt;/em&gt; have a choice: you can write plain vanilla Scala code, and perform side-effects anywhere that you want. Or you can grab one of the functional effect systems like &lt;a href=&quot;https://zio.dev&quot;&gt;ZIO&lt;/a&gt;, and create and compose values that &lt;em&gt;model&lt;/em&gt; side-effects instead.&lt;/p&gt;
+
+&lt;p&gt;The greatest reason to use a functional effect system like ZIO is that it makes side-effects &lt;em&gt;first-class values&lt;/em&gt;. Values are things you can accept and return from functions. You can store them in data structures. You can write your own operators, which accept functional effects, and which transform or combine them in custom ways.&lt;/p&gt;
+
+&lt;p&gt;All of these abilities let you make your own control flow structures and factor out kinds of duplication you can’t avoid when you solve problems using side-effecting code (take a look at some of my talks for examples).&lt;/p&gt;
+
+&lt;p&gt;ZIO goes beyond providing first-class effects, and delivers additional valuable features, including:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Highly-scalable fiber-based runtime&lt;/li&gt;
+  &lt;li&gt;Resource-safety across asynchronous and concurrent effects&lt;/li&gt;
+  &lt;li&gt;Declarative concurrency without locks and condition variables&lt;/li&gt;
+  &lt;li&gt;Easy and safe parallelism&lt;/li&gt;
+  &lt;li&gt;Context propagation and dependency injection&lt;/li&gt;
+  &lt;li&gt;Execution traces that work across async and concurrent boundaries&lt;/li&gt;
+  &lt;li&gt;Fiber-dumps that show the runtime graph of your application&lt;/li&gt;
+  &lt;li&gt;Powerful operators that allow you to snap together solutions to complex problems quickly&lt;/li&gt;
+  &lt;li&gt;Type-safety and user-friendliness&lt;/li&gt;
+  &lt;li&gt;Features for making user-land code fully testable&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;The real reason for using ZIO or other functional effect &lt;strong&gt;isn’t&lt;/strong&gt; effect tracking: it’s everything else!&lt;/p&gt;
+
+&lt;h2 id=&quot;summary&quot;&gt;Summary&lt;/h2&gt;
+
+&lt;p&gt;Effect tracking isn’t a good reason to use an &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt; like data type, in Scala or any other programming language. That’s because effect tracking (which is actually a misnomer!) isn’t commercially useful.&lt;/p&gt;
+
+&lt;p&gt;If we have a vague idea about what functions do, then we generally have a really good idea about whether they perform side-effects, and compiler-enforced effect tracking would add overhead that wouldn’t pay for itself (assuming our only tangible benefit were “effect tracking”). Also, if we wanted effect tracking, we could always obtain the feature with non-invasive tooling, which could give us the same insight into function interactions without overhead.&lt;/p&gt;
+
+&lt;p&gt;Instead, functional effect systems like ZIO (and Haskell’s &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;IO&lt;/code&gt; data type) let us take side-effects and make them more useful, by turning them into values, which we can transform and compose, solving complex problems with easy and type-safe combinators that simply can’t exist for side-effecting statements.&lt;/p&gt;
+
+&lt;p&gt;Beyond this ability, ZIO in particular gives us new superpowers, like easy and safe concurrency, parallelism, resource handling, dependency injection, diagnostic and debugging information, testability, and type-safety.&lt;/p&gt;
+
+&lt;p&gt;In summary, &lt;em&gt;don’t&lt;/em&gt; use ZIO or IO or any functional effect system for effect tracking, because that benefit alone cannot pay for the cost.&lt;/p&gt;
+
+&lt;p&gt;Instead, if you decide to use functional effect systems, then use them to become a more powerful and productive programmer!&lt;/p&gt;
+
+  &lt;p&gt;&lt;a href=&quot;https://degoes.net/articles/no-effect-tracking&quot;&gt;Effect Tracking Is Commercially Worthless&lt;/a&gt; was originally published by John A De Goes at &lt;a href=&quot;https://degoes.net&quot;&gt;John <em>A</em> <strong>De Goes</strong>&lt;/a&gt; on May 03, 2020.&lt;/p&gt;</content>
+</entry>
+
+
+<entry>
   <title type="html"><![CDATA[A Brief History of ZIO]]></title>
   <link rel="alternate" type="text/html" href="https://degoes.net/articles/zio-history" />
   <id>https://degoes.net/articles/zio-history</id>

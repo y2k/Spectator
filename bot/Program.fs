@@ -54,7 +54,8 @@ module Domain =
         |> List.filter ^ fun x -> x.userId = userId
         |> List.map ^ fun x -> sprintf "[Processing...] %O '%s'" x.uri x.filter
         |> List.append subs
-        |> List.fold (sprintf "%s\n- %s") "Your subscriptions: "
+        |> List.fold (sprintf "%s\n- %s")  ""
+        |> fun x -> "Your subscriptions:" + x
 
     let deleteSubs (subscriptions : Subscription list) newSubscriptions userId uri =
         newSubscriptions |> List.filter ^ fun x -> x.userId <> userId || x.uri <> uri
@@ -116,13 +117,16 @@ module StoreUpdater =
             v.subscriptions
             |> List.exists @@ fun sub -> sub.id = snap.subscriptionId
 
-    let private removeSubsWithIds states ids =
+    let private removeSubsWithIds states sIds nsIds =
         states
         |> Map.map @@ fun _ state ->
             { state with
+                subscriptions =
+                    state.subscriptions
+                    |> List.filter (fun s -> not <| List.contains s.id sIds)
                 newSubscriptions =
                     state.newSubscriptions
-                    |> List.filter (fun s -> not <| List.contains s.id ids) }
+                    |> List.filter (fun s -> not <| List.contains s.id nsIds) }
 
     let private incrimentCount (counts : Map<Subscription TypedId, int>) (snap : Snapshot) =
         let count = Map.tryFind snap.subscriptionId counts
@@ -141,8 +145,8 @@ module StoreUpdater =
         | SubscriptionCreated sub ->
             updateUserStateSafe state sub.userId @@ fun us ->
                 { us with subscriptions = sub :: us.subscriptions }
-        | SubscriptionRemoved (_, ids) ->
-            { state with states = removeSubsWithIds state.states ids }
+        | SubscriptionRemoved (sIds, nsIds) ->
+            { state with states = removeSubsWithIds state.states sIds nsIds }
         | NewSubscriptionCreated ns ->
             updateUserStateSafe state ns.userId @@ fun us ->
                 { us with newSubscriptions = ns :: us.newSubscriptions }

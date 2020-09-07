@@ -36,8 +36,8 @@ let runMain (readEvent : 'e Async) (sendEvent : 'e -> unit Async) (initState : '
     let syncRunLoop : unit Async =
         let update g =
             async {
-                let (s2, es : _ list) = g !state
                 let oldState = !state
+                let (s2, es : _ list) = g oldState
                 state := s2
                 for e in es do
                     do! sendEvent e

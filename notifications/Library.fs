@@ -7,13 +7,14 @@ type State =
       queue : (UserId * string) list
       initialized : bool }
 
-module StoreDomain =
-    let init = { users = Map.empty; queue = []; initialized = false }
-
-    let private formatSnapshot snap =
+module Module2 =
+    let formatSnapshot snap =
         match snap.uri.ToString() with
         | Regex "https://t.me/.+" [] -> sprintf "%O" snap.uri
         | _ -> sprintf "%s\n\n<a href=\"%O\">[ OPEN ]</a>" snap.title snap.uri
+
+module StoreDomain =
+    let init = { users = Map.empty; queue = []; initialized = false }
 
     let update state = function
         | SubscriptionCreated sub ->
@@ -26,7 +27,7 @@ module StoreDomain =
             if state.initialized then
                 match Map.tryFind snap.subscriptionId state.users with
                 | Some userId ->
-                    { state with queue = (userId, formatSnapshot snap) :: state.queue }
+                    { state with queue = (userId, Module2.formatSnapshot snap) :: state.queue }
                 | None ->
                     state
             else state
@@ -45,7 +46,6 @@ let restore = StoreDomain.update
 let private localUpdate update f =
     async {
         let! db = update <| fun db -> (fst <| f db), []
-        let db = fst <| f db
         return snd <| f db
     }
 
