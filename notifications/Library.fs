@@ -43,12 +43,6 @@ module Module1 =
 let emptyState = StoreDomain.init
 let restore = StoreDomain.update
 
-let private localUpdate update f =
-    async {
-        let! db = update <| fun db -> (fst <| f db), []
-        return snd <| f db
-    }
-
 let main sendToTelegramSingle (update : EffectReducer<_, _>) =
     async {
         let! updates = update.invoke Module1.main

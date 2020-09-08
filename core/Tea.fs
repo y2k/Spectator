@@ -17,7 +17,7 @@ let make (initState : 'state) (merge : 'state -> 'event -> 'state) (f : EffectRe
                                    do! updateAll (fun updateOther ->
                                        let (a, b, c) = g !state
                                        state := a
-                                       updateOther b
+                                       if List.isNotEmpty b then updateOther b
                                        result := Some c
                                    )
                                    return !result |> Option.get
@@ -34,11 +34,7 @@ let run (xs : 'e t list) =
                 do! x.effect (fun _c ->
                     async {
                         do! mutex.WaitAsync () |> Async.AwaitTask
-
-                        _c (fun events ->
-                                for e in xs do
-                                    e.update events)
-
+                        _c (fun events -> for e in xs do e.update events)
                         mutex.Release () |> ignore
                     }) })
     |> Async.Parallel
