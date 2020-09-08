@@ -124,11 +124,11 @@ module Subscriptions =
     let emptyState = StoreDomain.init
     let restore state e = StoreDomain.update state e
 
-    let main parserIds loadSubscriptions (update : (_ -> _ * Events list) -> _ Async) =
+    let main parserIds loadSubscriptions (update : EffectReducer<_, _>) =
         async {
             let! reqs =
-                update @@ fun db -> db, []
-                |> Async.map @@ fun db -> StateMachine.mkSubscription parserIds db
+                update.invoke @@ fun db ->
+                    db, [], StateMachine.mkSubscription parserIds db
 
             let! responses =
                 reqs
@@ -136,7 +136,9 @@ module Subscriptions =
                 |> Async.Sequential
                 |> Async.map @@ fun x -> Seq.zip reqs x |> Seq.toList
 
-            let! _ = update @@ fun db -> db, Module1.mkSubscriptionsEnd db responses
+            do! update.invoke @@ fun db ->
+                let es = Module1.mkSubscriptionsEnd db responses
+                db, es, ()
 
             do! Async.Sleep 1_000
         }
@@ -145,11 +147,11 @@ module Snapshots =
     let emptyState = StoreDomain.init
     let restore state e = StoreDomain.update state e
 
-    let main loadSnapshots (update : (_ -> _ * Events list) -> _ Async) =
+    let main loadSnapshots (update : EffectReducer<_, _>) =
         async {
             let! snapReqs =
-                update @@ fun db -> db, []
-                |> Async.map @@ fun db -> StateMachine.mkNewSnapshots db
+                update.invoke @@ fun db ->
+                    db, [], StateMachine.mkNewSnapshots db
 
             let! snapResp =
                 snapReqs
@@ -157,7 +159,9 @@ module Snapshots =
                 |> Async.Sequential
                 |> Async.map @@ fun x -> Seq.zip snapReqs x |> Seq.toList
 
-            let! _ = update @@ StateMachine.mkNewSnapshotsEnd snapResp
+            do! update.invoke @@ fun db ->
+                let (db, es) = StateMachine.mkNewSnapshotsEnd snapResp db
+                db, es, ()
 
             do! Async.Sleep 1_000
         }

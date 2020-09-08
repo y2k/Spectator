@@ -37,8 +37,8 @@ module StoreDomain =
 module Module1 =
     let main state =
         if state.initialized
-            then { state with queue = [] }, state.queue
-            else { state with queue = []; initialized = true }, []
+            then { state with queue = [] }, [], state.queue
+            else { state with queue = []; initialized = true }, [], []
 
 let emptyState = StoreDomain.init
 let restore = StoreDomain.update
@@ -49,9 +49,9 @@ let private localUpdate update f =
         return snd <| f db
     }
 
-let main sendToTelegramSingle update =
+let main sendToTelegramSingle (update : EffectReducer<_, _>) =
     async {
-        let! updates = localUpdate update Module1.main
+        let! updates = update.invoke Module1.main
 
         do! updates
             |> List.map (uncurry sendToTelegramSingle)

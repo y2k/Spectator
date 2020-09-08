@@ -5,7 +5,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="MiniKafka.fs" />
     <Compile Include="Persistent.fs" />
     <Compile Include="MongoDb.fs" />
   </ItemGroup>

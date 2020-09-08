@@ -181,17 +181,15 @@ module HandleTelegramMessage =
 module Updater =
     open Store
 
-    let main readMessage sendMessage updateState =
+    let main readMessage sendMessage (update : EffectReducer<_, _>) =
         async {
             let! (user, msg) = readMessage
 
-            let! db =
-                updateState @@ fun db ->
-                    let (a, b) = snd <| updateUserState db user (fun db -> db, HandleTelegramMessage.invoke user msg db)
-                    db, b
-
-            let telegramMsg =
-                fst @@ snd @@ updateUserState db user (fun db -> db, HandleTelegramMessage.invoke user msg db)
+            let! telegramMsg =
+                update.invoke @@ fun db ->
+                    let (db, (result, events)) =
+                        updateUserState db user (fun db -> db, HandleTelegramMessage.invoke user msg db)
+                    db, events, result
 
             let! _ = telegramMsg ||> sendMessage
             return ()

@@ -1,50 +1,45 @@
 module Spectator.Core.Tea
 
-let start initState initCmd update mkMsg executeEffect readEvent =
+type t<'e> =
+    { update : 'e list -> unit
+      effect : ((('e list -> unit) -> unit) -> unit Async) -> unit Async }
+
+let make (initState : 'state) (merge : 'state -> 'event -> 'state) (f : EffectReducer<'state, 'event> -> unit Async) =
     let state = ref initState
+    { update = fun (es : 'event list) ->
+                   for e in es do state := merge !state e
+      effect = fun (updateAll : (('event list -> unit) -> unit) -> unit Async) ->
+                   let er =
+                       { new EffectReducer<'state, 'event> with
+                             member __.invoke g =
+                               async {
+                                   let result = ref None
+                                   do! updateAll (fun updateOther ->
+                                       let (a, b, c) = g !state
+                                       state := a
+                                       updateOther b
+                                       result := Some c
+                                   )
+                                   return !result |> Option.get
+                               }
+                       }
+                   f er }
 
-    let rec loopUpdate msg =
+let run (xs : 'e t list) =
+    let mutex = new System.Threading.SemaphoreSlim 1
+    xs
+    |> List.map (fun x ->
         async {
-            let (s2, effs) = update msg !state
-            state := s2
-            do! effs
-                |> List.map (executeEffect >=> loopUpdate)
-                |> Async.Parallel
-                |> Async.Ignore
-        }
+            while true do
+                do! x.effect (fun _c ->
+                    async {
+                        do! mutex.WaitAsync () |> Async.AwaitTask
 
-    [ async {
-          let cmd = initCmd
-          for eff in cmd do
-              let! msg = executeEffect eff
-              do! loopUpdate msg }
-      async {
-          while true do
-              let! e = readEvent
-              do! loopUpdate (mkMsg e) } ]
+                        _c (fun events ->
+                                for e in xs do
+                                    e.update events)
+
+                        mutex.Release () |> ignore
+                    }) })
     |> Async.Parallel
     |> Async.Ignore
-
-let runMain (readEvent : 'e Async) (sendEvent : 'e -> unit Async) (initState : 's) updateStore f =
-    let state = ref initState
-    let syncState : unit Async =
-        async {
-            while true do
-                let! e = readEvent
-                state := updateStore !state e
-        }
-    let syncRunLoop : unit Async =
-        let update g =
-            async {
-                let oldState = !state
-                let (s2, es : _ list) = g oldState
-                state := s2
-                for e in es do
-                    do! sendEvent e
-                return oldState
-            }
-        async {
-            while true do
-                do! f update
-        }
-    Async.Parallel [ syncState; syncRunLoop ] |> Async.Ignore

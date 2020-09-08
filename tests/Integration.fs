@@ -34,7 +34,7 @@ module Framework =
             if repeat && not <| String.IsNullOrEmpty msg then
                 input.Writer.WriteAsync msg |> ignore
             let actual = read ()
-            printfn "\n\nLOG :: %O\n\n" actual
+            // printfn "\nLOG :: %O\n" actual
             test <@ expected = actual @>
         })
 
@@ -62,7 +62,7 @@ module Framework =
                     let! m = input.Reader.ReadAsync()
                     return "0", m
                 })
-                (fun _ -> async.Zero ())
+                (Tea.make () (fun x _ -> x) (fun _ -> Async.Sleep 1_000))
                 (fun s _ -> async.Return s)
                 (fun url -> !downloadString url)
                 false
@@ -71,7 +71,7 @@ module Framework =
             do! f assertBot assertBotOnce assertBotNone downloadString
         } |> Async.RunSynchronously
 
-// [<Xunit.Fact>]
+[<Xunit.Fact>]
 let ``simple rss test`` () =
     Framework.run @@ fun assertBot assertBotOnce assertBotNone downloadString -> async {
         do! assertBot "/ls" "Your subscriptions:"
@@ -90,7 +90,7 @@ let ``simple rss test`` () =
         do! assertBot "/ls" "Your subscriptions:"
     }
 
-// [<Xunit.Fact>]
+[<Xunit.Fact>]
 let ``simple jr test`` () =
     Framework.run @@ fun assertBot assertOnce _ _ -> async {
         do! assertOnce "/add http://joyreactor.cc/rss/tag/котэ" "Your subscription created"

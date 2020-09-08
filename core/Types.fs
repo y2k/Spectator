@@ -46,3 +46,6 @@ type Events =
     | SnapshotCreated of isNew : bool * Snapshot
 
 type Filter = NoneFilter | UserFilter of string
+
+type EffectReducer<'state, 'e> =
+  abstract member invoke : ('state -> 'state * 'e list * 'out) -> 'out Async
