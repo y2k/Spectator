@@ -44,6 +44,7 @@ type Events =
     | SubscriptionCreated of Subscription
     | SubscriptionRemoved of Subscription TypedId list * NewSubscription TypedId list
     | SnapshotCreated of isNew : bool * Snapshot
+    | HealthCheckRequested
 
 type Filter = NoneFilter | UserFilter of string
 

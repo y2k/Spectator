@@ -56,6 +56,25 @@ let botMain initState sendToTelegram readFromTelegram =
 let persistentMain insert delete =
     Tea.make P.initState P.restore (P.main insert delete)
 
+module HealthCheck =
+    open System.Net
+    open System.Text
+
+    let main (er : EffectReducer<unit, Events>) =
+        let listener = new HttpListener()
+        listener.Prefixes.Add "http://localhost:8888/"
+        listener.Start()
+
+        while true do
+            let ctx = listener.GetContext()
+
+            er.invoke (fun _ -> (), [ HealthCheckRequested ], ())
+            |> ignore
+
+            let bytes = Encoding.UTF8.GetBytes "ok"
+            ctx.Response.OutputStream.Write(bytes, 0, bytes.Length)
+            ctx.Response.Close()
+
 let mkApplication sendToTelegram readFromTelegram mkPersistent restoreState downloadString enableLogs =
     let parsers =
         [ (Worker.RssParser.create downloadString)
