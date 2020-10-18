@@ -32,7 +32,7 @@ module StoreDomain =
                     state
             else state
         | SnapshotCreated (false, _) -> state
-        | NewSubscriptionCreated _ -> state
+        | NewSubscriptionCreated _ | HealthCheckRequested _ -> state
 
 module Module1 =
     let main state =

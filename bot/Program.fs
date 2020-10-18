@@ -150,6 +150,7 @@ module StoreUpdater =
         | NewSubscriptionCreated ns ->
             updateUserStateSafe state ns.userId @@ fun us ->
                 { us with newSubscriptions = ns :: us.newSubscriptions }
+        | HealthCheckRequested _ -> state
 
 module HandleTelegramMessage =
     open Store

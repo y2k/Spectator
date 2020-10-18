@@ -65,8 +65,8 @@ let private getNodes filesDir uri =
                   title = getTitle content
                   uri = uri }
             return [ snap ]
-        else return [] 
-    } 
+        else return []
+    }
 
 let create filesDir =
     {| id = Guid.Parse "AE4FEE1F-C08D-44B9-B526-4162FF1C328C"

@@ -75,6 +75,7 @@ module StoreDomain =
             { state with subscriptions = sub :: state.subscriptions }
         | SnapshotCreated (_, snap) ->
             { state with lastUpdated = Domain.updateLastUpdates state.lastUpdated [ snap ] }
+        | HealthCheckRequested _ -> state
 
 module Module1 =
     open StoreDomain

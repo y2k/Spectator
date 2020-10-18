@@ -27,6 +27,8 @@ module Prelude =
     type Microsoft.FSharp.Control.AsyncBuilder with
         member __.Bind (t : Threading.Tasks.Task<'T>, f:'T -> Async<'R>) : Async<'R> =
             async.Bind(Async.AwaitTask t, f)
+        // member __.Bind (t : Threading.Tasks.Task, f:unit -> Async<'R>) : Async<'R> =
+        //     async.Bind(Async.AwaitTask t, f)
         member __.Bind (t : Threading.Tasks.ValueTask<'T>, f:'T -> Async<'R>) : Async<'R> =
             async.Bind(Async.AwaitTask <| t.AsTask(), f)
         member __.ReturnFrom (t : Threading.Tasks.Task<'T>) : Async<'T> =

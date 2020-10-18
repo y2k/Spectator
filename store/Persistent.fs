@@ -38,7 +38,7 @@ let main (insert : IInsert) delete  (reducer : EffectReducer<_, _>) =
                     do! delete "subscriptions" id
             | SnapshotCreated (_, snap) ->
                 do! insert.invoke "snapshots" snap
-            | NewSubscriptionCreated _ -> ()
+            | NewSubscriptionCreated _ | HealthCheckRequested _ -> ()
 
         do! Async.Sleep 1_000
     }
@@ -54,6 +54,6 @@ let executeEffect<'a> (insert : IInsert) delete event : 'a list Async =
                 do! delete "subscriptions" id
         | SnapshotCreated (_, snap) ->
             do! insert.invoke "snapshots" snap
-        | NewSubscriptionCreated _ -> ()
+        | NewSubscriptionCreated _ | HealthCheckRequested _ -> ()
         return []
     }
