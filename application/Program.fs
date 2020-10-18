@@ -71,8 +71,9 @@ let mkApplication sendToTelegram readFromTelegram mkPersistent restoreState down
                 (fun (s1, s2, s3) e -> B.restore s1 e, W.Subscriptions.restore s2 e, N.restore s3 e)
 
         do! Tea.run [
-              if enableLogs then yield mkLog
-              yield HealthCheck.main Tea.make HealthCheck.startServer HealthCheck.sendText
+              if enableLogs then
+                  yield mkLog
+                  yield HealthCheck.main Tea.make HealthCheck.startServer HealthCheck.sendText
               yield mkPersistent
               yield botMain botState sendToTelegram readFromTelegram
               yield notificationsMain notifyState sendToTelegram
