@@ -4,11 +4,11 @@ open Spectator.Core
 open System.Net
 open System.Text
 
-type State = { healthCheckRequested: bool }
+type State = { healthCheckComplete: bool }
 
 let private updatePing state =
     function
-    | HealthCheckRequested -> { healthCheckRequested = true }
+    | HealthCheckRequested -> { healthCheckComplete = true }
     | NewSubscriptionCreated _ | SubscriptionCreated _ | SubscriptionRemoved _ | SnapshotCreated _ -> state
 
 type t = { ctx : HttpListenerContext }
@@ -36,7 +36,7 @@ let main make startServer sendText =
             async {
                 let stop = ref false
                 while !stop do
-                    let! breakLoop = er.invoke (fun db -> db, [], db.healthCheckRequested)
+                    let! breakLoop = er.invoke (fun db -> db, [], db.healthCheckComplete)
                     stop := breakLoop
                     if not breakLoop then do! Async.Sleep 1_000
             }
@@ -45,9 +45,9 @@ let main make startServer sendText =
             while true do
                 let! ctx = ctxFactory
 
-                do! er.invoke (fun db -> { healthCheckRequested = false }, [ HealthCheckRequested ], ())
+                do! er.invoke (fun db -> { healthCheckComplete = false }, [ HealthCheckRequested ], ())
                 do! waitForPong
 
                 do! sendText ctx "OK"
         }
-    make { healthCheckRequested = false } updatePing main'
+    make { healthCheckComplete = false } updatePing main'
