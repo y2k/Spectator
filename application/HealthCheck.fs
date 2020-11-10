@@ -31,12 +31,14 @@ let sendText { ctx = ctx } (text : string) =
     }
 
 let main make startServer sendText =
-    let main' (er: EffectReducer<State, Events>) =
+    let main' er =
         let waitForPong =
             async {
                 let stop = ref false
                 while !stop do
-                    let! breakLoop = er.invoke (fun db -> db, [], db.healthCheckComplete)
+                    let! breakLoop =
+                        er (fun db -> db, [])
+                        >>- fun db -> db.healthCheckComplete
                     stop := breakLoop
                     if not breakLoop then do! Async.Sleep 1_000
             }
@@ -45,7 +47,8 @@ let main make startServer sendText =
             while true do
                 let! ctx = ctxFactory
 
-                do! er.invoke (fun db -> { healthCheckComplete = false }, [ HealthCheckRequested ], ())
+                do! er (fun db -> { healthCheckComplete = false }, [ HealthCheckRequested ])
+                    |> Async.Ignore
                 do! waitForPong
 
                 do! sendText ctx "OK"

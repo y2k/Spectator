@@ -179,23 +179,22 @@ module HandleTelegramMessage =
             (user, "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription\n/history [url] - show last snapshots for subscription with url")
             , []
 
-module Updater =
-    open Store
-
-    let main readMessage sendMessage (update : EffectReducer<_, _>) =
-        async {
-            let! (user, msg) = readMessage
-
-            let! telegramMsg =
-                update.invoke @@ fun db ->
-                    let (db, (result, events)) =
-                        updateUserState db user (fun db -> db, HandleTelegramMessage.invoke user msg db)
-                    db, events, result
-
-            let! _ = telegramMsg ||> sendMessage
-            return ()
-        }
-
 let emptyState = StoreUpdater.init
 let restore = StoreUpdater.update
-let main = Updater.main
+
+open Store
+
+let main readMessage sendMessage update =
+    async {
+        let! (user, msg) = readMessage
+
+        let! db =
+            update @@ fun db ->
+                let (db, (_, events)) =
+                    updateUserState db user (fun db -> db, HandleTelegramMessage.invoke user msg db)
+                db, events
+        let (_, (telegramMsg, _)) =
+            updateUserState db user (fun db -> db, HandleTelegramMessage.invoke user msg db)
+
+        do!  telegramMsg ||> sendMessage |> Async.Ignore
+    }

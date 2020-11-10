@@ -34,18 +34,22 @@ module StoreDomain =
         | SnapshotCreated (false, _) -> state
         | NewSubscriptionCreated _ | HealthCheckRequested _ -> state
 
-module Module1 =
-    let main state =
+module private Module1 =
+    let main' state =
         if state.initialized
-            then { state with queue = [] }, [], state.queue
-            else { state with queue = []; initialized = true }, [], []
+            then { state with queue = [] }, []
+            else { state with queue = []; initialized = true }, []
+    let main'' state =
+        if state.initialized then state.queue else []
 
 let emptyState = StoreDomain.init
 let restore = StoreDomain.update
 
-let main sendToTelegramSingle (update : EffectReducer<_, _>) =
+let main sendToTelegramSingle update =
     async {
-        let! updates = update.invoke Module1.main
+        let! updates =
+            update Module1.main'
+            >>- Module1.main''
 
         do! updates
             |> List.map (uncurry sendToTelegramSingle)

@@ -23,11 +23,13 @@ type State = { queue : Events list }
 
 let initState = { queue = [] }
 
-let restore s e = { queue = e :: s.queue}
+let restore s e = { queue = e :: s.queue }
 
-let main (insert : IInsert) delete  (reducer : EffectReducer<_, _>) =
+let main (insert : IInsert) delete reducer =
     async {
-        let! queue = reducer.invoke @@ fun db -> { queue = []}, [], db.queue
+        let! queue =
+            reducer @@ fun db -> { queue = [] }, []
+            >>- fun db -> db.queue
         for e in queue |> List.rev do
             match e with
             | SubscriptionCreated sub ->
@@ -41,19 +43,4 @@ let main (insert : IInsert) delete  (reducer : EffectReducer<_, _>) =
             | NewSubscriptionCreated _ | HealthCheckRequested _ -> ()
 
         do! Async.Sleep 1_000
-    }
-
-let executeEffect<'a> (insert : IInsert) delete event : 'a list Async =
-    async {
-        match event with
-        | SubscriptionCreated sub ->
-            do! insert.invoke "subscriptions" sub
-        | SubscriptionRemoved (sids, _) ->
-            for id in sids do
-                let id : System.Guid = TypedId.unwrap id
-                do! delete "subscriptions" id
-        | SnapshotCreated (_, snap) ->
-            do! insert.invoke "snapshots" snap
-        | NewSubscriptionCreated _ | HealthCheckRequested _ -> ()
-        return []
     }
