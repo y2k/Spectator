@@ -4,14 +4,19 @@ open Spectator.Core
 open System.Net
 open System.Text
 
-type State = { healthCheckComplete: bool }
+type State =
+    { healthCheckComplete: bool }
+    static member Empty = { healthCheckComplete = false }
 
-let private updatePing state =
+let updatePing state =
     function
     | HealthCheckRequested -> { healthCheckComplete = true }
-    | NewSubscriptionCreated _ | SubscriptionCreated _ | SubscriptionRemoved _ | SnapshotCreated _ -> state
+    | NewSubscriptionCreated _
+    | SubscriptionCreated _
+    | SubscriptionRemoved _
+    | SnapshotCreated _ -> state
 
-type t = { ctx : HttpListenerContext }
+type t = { ctx: HttpListenerContext }
 
 let startServer url =
     let listener = new HttpListener()
@@ -22,7 +27,7 @@ let startServer url =
         return { ctx = ctx }
     }
 
-let sendText { ctx = ctx } (text : string) =
+let sendText { ctx = ctx } (text: string) =
     async {
         let bytes = Encoding.UTF8.GetBytes text
         do! ctx.Response.OutputStream.WriteAsync(bytes, 0, bytes.Length)
@@ -30,27 +35,28 @@ let sendText { ctx = ctx } (text : string) =
         ctx.Response.Close()
     }
 
-let main make startServer sendText =
-    let main' er =
-        let waitForPong =
-            async {
-                let stop = ref false
-                while !stop do
-                    let! breakLoop =
-                        er (fun db -> db, [])
-                        >>- fun db -> db.healthCheckComplete
-                    stop := breakLoop
-                    if not breakLoop then do! Async.Sleep 1_000
-            }
+let main startServer sendText update =
+    let waitForPong =
         async {
-            let ctxFactory = startServer "http://localhost:8888/"
-            while true do
-                let! ctx = ctxFactory
+            let stop = ref false
+            while !stop do
+                let! breakLoop =
+                    update (fun db -> db, [])
+                    >>- fun db -> db.healthCheckComplete
 
-                do! er (fun db -> { healthCheckComplete = false }, [ HealthCheckRequested ])
-                    |> Async.Ignore
-                do! waitForPong
-
-                do! sendText ctx "OK"
+                stop := breakLoop
+                if not breakLoop then do! Async.Sleep 1_000
         }
-    make { healthCheckComplete = false } updatePing main'
+
+    async {
+        let ctxFactory = startServer "http://localhost:8888/"
+        while true do
+            let! ctx = ctxFactory
+
+            do! update (fun db -> { healthCheckComplete = false }, [ HealthCheckRequested ])
+                |> Async.Ignore
+
+            do! waitForPong
+
+            do! sendText ctx "OK"
+    }

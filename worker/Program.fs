@@ -60,8 +60,23 @@ module StoreDomain =
         { subscriptions : Subscription list
           newSubscriptions : NewSubscription list
           lastUpdated : Map<Subscription TypedId, DateTime> }
+        with
+            static member Empty = { subscriptions = []; newSubscriptions = []; lastUpdated = Map.empty }
+            static member Reduce (state, event) =
+                match event with
+                | NewSubscriptionCreated ns ->
+                    { state with newSubscriptions = ns :: state.newSubscriptions }
+                | SubscriptionRemoved (sids, nsids) ->
+                    { state with
+                        subscriptions = Domain.removeSubs state.subscriptions sids
+                        newSubscriptions = Domain.removeNewSubs state.newSubscriptions nsids }
+                | SubscriptionCreated sub ->
+                    { state with subscriptions = sub :: state.subscriptions }
+                | SnapshotCreated (_, snap) ->
+                    { state with lastUpdated = Domain.updateLastUpdates state.lastUpdated [ snap ] }
+                | HealthCheckRequested _ -> state
 
-    let init = { subscriptions = []; newSubscriptions = []; lastUpdated = Map.empty }
+    let init = State.Empty
 
     let update state event =
         match event with
@@ -145,7 +160,7 @@ module Subscriptions =
 
 module Snapshots =
     let emptyState = StoreDomain.init
-    let restore state e = StoreDomain.update state e
+    let restore = StoreDomain.update
 
     let main loadSnapshots update =
         async {

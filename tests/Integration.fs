@@ -62,7 +62,7 @@ module Framework =
                     let! m = input.Reader.ReadAsync()
                     return "0", m
                 })
-                (Tea.make () (fun x _ -> x) (fun _ -> Async.Sleep 1_000))
+                (fun _ -> Async.Sleep 1_000)
                 (fun s _ -> async.Return s)
                 (fun url -> !downloadString url)
                 false

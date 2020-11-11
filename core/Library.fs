@@ -43,6 +43,16 @@ module Prelude =
     module Async =
         let inline map f a = async.Bind(a, f >> async.Return)
         let inline catch a = a |> Async.Catch |> map (function Choice1Of2 x -> Ok x | Choice2Of2 e -> Error e)
+        let loopAll axs =
+            let loop a =
+                async {
+                    while true do
+                        do! a
+                }
+            axs
+            |> List.map loop
+            |> Async.Parallel
+            |> Async.Ignore
     module Pair =
         let inline map f (a, b) = f a, b
         let inline map2 f (a, b) = a, f b

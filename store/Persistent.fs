@@ -2,45 +2,68 @@ module Spectator.Store.Persistent
 
 open Spectator.Core
 
-type IInsert =
-    abstract invoke : string -> 'a -> unit Async
+module P = Spectator.Core.Tea.Persistent
 
-type IForEach =
-    abstract invoke : string -> ('a -> unit)-> unit Async
+// type IInsert =
+//     abstract invoke : string -> 'a -> unit Async
 
-let restoreState (forEach : IForEach) emptyState f =
+// type IForEach =
+//     abstract invoke : string -> ('a -> unit)-> unit Async
+
+// let restoreState (forEach : IForEach) emptyState f =
+//     async {
+//         let state = ref emptyState
+//         let update e = state := f !state e
+
+//         do! forEach.invoke "subscriptions" (fun (s : Subscription) -> update <| SubscriptionCreated s)
+//         do! forEach.invoke "snapshots" (fun (s : Snapshot) -> update <| SnapshotCreated (false, s))
+
+//         return !state
+//     }
+
+// type State = { queue : Events list }
+
+// let initState = { queue = [] }
+
+// let restore s e = { queue = e :: s.queue }
+
+let applyEvent (insert: P.IInsert) delete e =
     async {
-        let state = ref emptyState
-        let update e = state := f !state e
-
-        do! forEach.invoke "subscriptions" (fun (s : Subscription) -> update <| SubscriptionCreated s)
-        do! forEach.invoke "snapshots" (fun (s : Snapshot) -> update <| SnapshotCreated (false, s))
-
-        return !state
+        match e with
+        | SubscriptionCreated sub -> do! insert.invoke "subscriptions" sub
+        | SubscriptionRemoved (sids, _) ->
+            for id in sids do
+                let id: System.Guid = TypedId.unwrap id
+                do! delete "subscriptions" id
+        | SnapshotCreated (_, snap) -> do! insert.invoke "snapshots" snap
+        | NewSubscriptionCreated _
+        | HealthCheckRequested _ -> ()
     }
 
-type State = { queue : Events list }
-
-let initState = { queue = [] }
-
-let restore s e = { queue = e :: s.queue }
-
-let main (insert : IInsert) delete reducer =
+let applyObj (forEach: P.IForEach) update =
     async {
-        let! queue =
-            reducer @@ fun db -> { queue = [] }, []
-            >>- fun db -> db.queue
-        for e in queue |> List.rev do
-            match e with
-            | SubscriptionCreated sub ->
-                do! insert.invoke "subscriptions" sub
-            | SubscriptionRemoved (sids, _) ->
-                for id in sids do
-                    let id : System.Guid = TypedId.unwrap id
-                    do! delete "subscriptions" id
-            | SnapshotCreated (_, snap) ->
-                do! insert.invoke "snapshots" snap
-            | NewSubscriptionCreated _ | HealthCheckRequested _ -> ()
-
-        do! Async.Sleep 1_000
+        do! forEach.invoke "subscriptions" (fun (s: Subscription) -> update <| SubscriptionCreated s)
+        do! forEach.invoke "snapshots" (fun (s: Snapshot) -> update <| SnapshotCreated(false, s))
     }
+
+let restoreState forEach = P.restoreState applyObj forEach
+
+let main (insert: P.IInsert) delete reducer = P.main applyEvent insert delete reducer
+// async {
+//     let! queue =
+//         reducer @@ fun db -> { queue = [] }, []
+//         >>- fun db -> db.queue
+//     for e in queue |> List.rev do
+//         match e with
+//         | SubscriptionCreated sub ->
+//             do! insert.invoke "subscriptions" sub
+//         | SubscriptionRemoved (sids, _) ->
+//             for id in sids do
+//                 let id : System.Guid = TypedId.unwrap id
+//                 do! delete "subscriptions" id
+//         | SnapshotCreated (_, snap) ->
+//             do! insert.invoke "snapshots" snap
+//         | NewSubscriptionCreated _ | HealthCheckRequested _ -> ()
+
+//     do! Async.Sleep 1_000
+// }
