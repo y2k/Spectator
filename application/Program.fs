@@ -7,8 +7,8 @@ module N = Notifications
 module W = Worker.App
 module B = Bot.App
 module P = Store.Persistent
-module T = Tea.Persistent
 module TP = Tea.Tea
+module M = Store.MongoDb
 
 let workerMainSub parsers =
     let parserIds =
@@ -39,7 +39,7 @@ let workerMainSnap parsers =
 
     W.Snapshots.main loadSnapshots
 
-let mkApplication sendToTelegram readFromTelegram db downloadString enableLogs =
+let mkApplication sendToTelegram readFromTelegram downloadString enableLogs insert delete queryAll =
     (* Worker.TelegramParser.create config.restTelegramPassword config.restTelegramBaseUrl *)
     (* Worker.HtmlProvider.create config.filesDir *)
 
@@ -47,28 +47,40 @@ let mkApplication sendToTelegram readFromTelegram db downloadString enableLogs =
         [ (Worker.RssParser.create downloadString) ]
 
     async {
-        printfn "Started..."
-
-        let! (botState, workerState, notifyState) =
-            T.restoreState (P.applyObj db) (B.emptyState, W.Subscriptions.emptyState, N.emptyState) (fun (s1, s2, s3) e ->
-                B.restore s1 e, W.Subscriptions.restore s2 e, N.restore s3 e)
+        printfn "Restore state..."
 
         let store = TP.init ()
+
+        let a =
+            TP.make store W.Subscriptions.emptyState W.Subscriptions.restore
+
+        let b =
+            TP.make store W.Subscriptions.emptyState W.Snapshots.restore
+
+        let c = TP.make store B.emptyState B.restore
+        let d = TP.make store N.emptyState N.restore
+
+        do! P.restore queryAll (TP.make store () (fun _ _ -> ()))
+
+        let e = TP.make store P.State.Empty P.update
 
         let logTasks =
             if enableLogs then
                 ignore (TP.make store () (fun _ e -> printfn "LOG event ::\n%O" e))
+
                 [ TP.make store HealthCheck.State.Empty HealthCheck.updatePing
                   |> HealthCheck.main HealthCheck.startServer HealthCheck.sendText ]
             else
                 []
 
+        printfn "Started..."
+
         do! Async.loopAll [ yield! logTasks
-                            yield workerMainSub parsers (TP.make store workerState W.Subscriptions.restore)
-                            yield workerMainSnap parsers (TP.make store workerState W.Snapshots.restore)
-                            yield B.main readFromTelegram sendToTelegram (TP.make store botState B.restore)
-                            yield N.main sendToTelegram (TP.make store notifyState N.restore)
-                            yield T.main (P.applyEvent db) (TP.make store T.initState T.restore) ]
+                            yield workerMainSub parsers a
+                            yield workerMainSnap parsers b
+                            yield B.main readFromTelegram sendToTelegram c
+                            yield N.main sendToTelegram d
+                            yield P.main insert delete e ]
     }
 
 [<EntryPoint>]
@@ -84,6 +96,14 @@ let main args =
     let db =
         Store.MongoDb.make config.mongoDomain "spectator"
 
-    mkApplication sendToTelegramSingle readMessage db Worker.RssParser.Http.download true
+    mkApplication
+        sendToTelegramSingle
+        readMessage
+        Worker.RssParser.Http.download
+        true
+        (M.insert db)
+        (M.delete db)
+        (M.queryAll db)
     |> Async.RunSynchronously
+
     0

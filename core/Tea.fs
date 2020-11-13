@@ -34,30 +34,3 @@ module Tea =
                 t.mutex.Release() |> ignore
                 return oldState
             }
-
-module Persistent =
-    let restoreState applyObj emptyState f =
-        async {
-            let state = ref emptyState
-            let update e = state := f !state e
-
-            do! applyObj update
-
-            return !state
-        }
-
-    type 'e State = { queue: 'e list }
-
-    let initState = { queue = [] }
-
-    let restore s e = { queue = e :: s.queue }
-
-    let main applyEvent reducer =
-        async {
-            let! db = reducer (fun db -> { queue = [] }, [])
-
-            for e in db.queue |> List.rev do
-                do! applyEvent e
-
-            do! Async.Sleep 1_000
-        }

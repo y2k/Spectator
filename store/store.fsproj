@@ -5,8 +5,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="MongoDb.fs" />
     <Compile Include="Persistent.fs" />
+    <Compile Include="MongoDb.fs" />
   </ItemGroup>
 
   <ItemGroup>
