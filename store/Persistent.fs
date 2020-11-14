@@ -56,6 +56,8 @@ let main insert delete reducer =
             do! match e with
                 | Insert (col, i) -> insert col i
                 | Delete (col, id) -> delete col id
+
+        do! Async.Sleep 1_000
     }
 
 let restore query recuder =

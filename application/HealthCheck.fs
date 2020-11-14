@@ -22,6 +22,7 @@ let startServer url =
     let listener = new HttpListener()
     listener.Prefixes.Add url
     listener.Start()
+
     async {
         let! ctx = listener.GetContextAsync()
         return { ctx = ctx }
@@ -30,8 +31,10 @@ let startServer url =
 let sendText { ctx = ctx } (text: string) =
     async {
         let bytes = Encoding.UTF8.GetBytes text
+
         do! ctx.Response.OutputStream.WriteAsync(bytes, 0, bytes.Length)
             |> Async.AwaitTask
+
         ctx.Response.Close()
     }
 
@@ -39,6 +42,7 @@ let main startServer sendText update =
     let waitForPong =
         async {
             let stop = ref false
+
             while !stop do
                 let! breakLoop =
                     update (fun db -> db, [])
@@ -50,6 +54,7 @@ let main startServer sendText update =
 
     async {
         let ctxFactory = startServer "http://localhost:8888/"
+
         while true do
             let! ctx = ctxFactory
 

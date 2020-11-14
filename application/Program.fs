@@ -51,18 +51,13 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
 
         let store = TP.init ()
 
-        let a =
-            TP.make store W.Subscriptions.emptyState W.Subscriptions.restore
-
-        let b =
-            TP.make store W.Subscriptions.emptyState W.Snapshots.restore
-
-        let c = TP.make store B.emptyState B.restore
-        let d = TP.make store N.emptyState N.restore
+        let tasks =
+            [ workerMainSub parsers (TP.make store W.Subscriptions.emptyState W.Subscriptions.restore)
+              workerMainSnap parsers (TP.make store W.Subscriptions.emptyState W.Snapshots.restore)
+              B.main readFromTelegram sendToTelegram (TP.make store B.emptyState B.restore)
+              N.main sendToTelegram (TP.make store N.emptyState N.restore) ]
 
         do! P.restore queryAll (TP.make store () (fun _ _ -> ()))
-
-        let e = TP.make store P.State.Empty P.update
 
         let logTasks =
             if enableLogs then
@@ -76,11 +71,8 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
         printfn "Started..."
 
         do! Async.loopAll [ yield! logTasks
-                            yield workerMainSub parsers a
-                            yield workerMainSnap parsers b
-                            yield B.main readFromTelegram sendToTelegram c
-                            yield N.main sendToTelegram d
-                            yield P.main insert delete e ]
+                            yield! tasks
+                            yield P.main insert delete (TP.make store P.State.Empty P.update) ]
     }
 
 [<EntryPoint>]
