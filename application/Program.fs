@@ -7,7 +7,7 @@ module N = Notifications
 module W = Worker.App
 module B = Bot.App
 module P = Store.Persistent
-module TP = Tea.Tea
+module TP = EventPersistent.Tea
 module M = Store.MongoDb
 
 let workerMainSub parsers =
@@ -87,18 +87,12 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
 let main args =
     let config = Config.readConfig args.[0]
 
-    let sendToTelegramSingle =
-        Telegram.sendToTelegramSingle config.telegramToken
-
-    let readMessage =
-        Telegram.readMessage config.telegramToken
-
     let db =
         Store.MongoDb.make config.mongoDomain "spectator"
 
     mkApplication
-        sendToTelegramSingle
-        readMessage
+        (Telegram.sendToTelegramSingle config.telegramToken)
+        (Telegram.readMessage config.telegramToken)
         Worker.RssParser.Http.download
         true
         (M.insert db)
