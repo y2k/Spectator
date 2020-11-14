@@ -10,6 +10,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="y2k.prelude" Version="0.2.10" />
     <PackageReference Include="y2k.event-persistent" Version="0.2.0" />
   </ItemGroup>
 
