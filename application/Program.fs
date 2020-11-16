@@ -4,7 +4,8 @@ open Spectator
 open Spectator.Core
 
 module N = Notifications
-module W = Worker.App
+module SN = Worker.SnapshotsMain
+module SU = Worker.SubscriptionsMain
 module B = Bot.App
 module P = Store.Persistent
 module TP = EventPersistent.Tea
@@ -24,7 +25,7 @@ let workerMainSub parsers =
         |> List.find (fun (id, _, _) -> id = pid)
         |> fun (_, _, ls) -> ls u |> Async.catch
 
-    W.Subscriptions.main parserIds loadSubscriptions
+    SU.main parserIds loadSubscriptions
 
 let workerMainSnap parsers =
     let loadSubscriptions (pid, u) =
@@ -37,7 +38,7 @@ let workerMainSnap parsers =
         |> List.find (fun (id, _, _) -> id = pid)
         |> fun (_, _, ls) -> ls u |> Async.catch
 
-    W.Snapshots.main loadSnapshots
+    SN.main loadSnapshots
 
 let mkApplication sendToTelegram readFromTelegram downloadString enableLogs insert delete queryAll =
     (* Worker.TelegramParser.create config.restTelegramPassword config.restTelegramBaseUrl *)
@@ -52,10 +53,10 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
         let store = TP.init ()
 
         let tasks =
-            [ workerMainSub parsers (TP.make store W.Subscriptions.emptyState W.Subscriptions.restore)
-              workerMainSnap parsers (TP.make store W.Subscriptions.emptyState W.Snapshots.restore)
-              B.main readFromTelegram sendToTelegram (TP.make store B.emptyState B.restore)
-              N.main sendToTelegram (TP.make store N.emptyState N.restore) ]
+            [ workerMainSub parsers (TP.make store SU.State.Empty SU.restore)
+              workerMainSnap parsers (TP.make store SN.State.Empty SN.restore)
+              B.main readFromTelegram sendToTelegram (TP.make store B.State.Empty B.restore)
+              N.main sendToTelegram (TP.make store N.State.Empty N.restore) ]
 
         do! P.restore queryAll (TP.make store () (fun _ _ -> ()))
 

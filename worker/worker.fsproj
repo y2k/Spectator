@@ -12,7 +12,8 @@
     <Compile Include="HtmlProvider.fs" />
     <Compile Include="RssParser.fs" />
     <Compile Include="TelegramParser.fs" />
-    <Compile Include="Program.fs" />
+    <Compile Include="SnapshotsMain.fs" />
+    <Compile Include="SubscriptionsMain.fs" />
   </ItemGroup>
 
   <ItemGroup>

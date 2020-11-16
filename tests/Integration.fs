@@ -5,6 +5,12 @@ open Swensen.Unquote
 open Spectator.Core
 
 module Framework =
+    type Env =
+        { assertBot: string -> string -> unit Async
+          assertBotOnce: string -> string -> unit Async
+          assertBotNone: string -> unit Async
+          downloadString: ref<Uri -> Async<string>> }
+
     let assertBot repeat
                   (input: Threading.Channels.Channel<string>)
                   (output: Threading.Channels.Channel<string>)
@@ -85,54 +91,71 @@ module Framework =
 
         async {
             let! _ = app |> Async.StartChild
-            do! f assertBot assertBotOnce assertBotNone downloadString
+
+            do! f
+                    { assertBot = assertBot
+                      assertBotOnce = assertBotOnce
+                      assertBotNone = assertBotNone
+                      downloadString = downloadString }
         }
         |> Async.RunSynchronously
 
 [<Xunit.Fact>]
+let ``save and restore state`` () =
+    Framework.run
+    <| fun env ->
+        async {
+            do! env.assertBot "/ls" "Your subscriptions:"
+            do! env.assertBotOnce "/add https://degoes.net/feed.xml" "Your subscription created"
+
+            env.downloadString := Framework.mkDownloadString 1
+            do! env.assertBotNone "A Brief History of ZIO\n\n<a href=\"https://degoes.net/articles/zio-history\">[ OPEN ]</a>"
+        }
+
+[<Xunit.Fact>]
 let ``simple rss test`` () =
     Framework.run
-    @@ fun assertBot assertBotOnce assertBotNone downloadString ->
+    <| fun env ->
         async {
-            do! assertBot "/ls" "Your subscriptions:"
-            do! assertBotOnce "/add https://degoes.net/feed.xml" "Your subscription created"
-            do! assertBot "/ls" "Your subscriptions:\n- [RSS] https://degoes.net/feed.xml '' (18)"
+            do! env.assertBot "/ls" "Your subscriptions:"
+            do! env.assertBotOnce "/add https://degoes.net/feed.xml" "Your subscription created"
+            do! env.assertBot "/ls" "Your subscriptions:\n- [RSS] https://degoes.net/feed.xml '' (18)"
 
-            downloadString := Framework.mkDownloadString 1
+            env.downloadString := Framework.mkDownloadString 1
 
-            do! assertBotNone "A Brief History of ZIO\n\n<a href=\"https://degoes.net/articles/zio-history\">[ OPEN ]</a>"
-            do! assertBot "/ls" "Your subscriptions:\n- [RSS] https://degoes.net/feed.xml '' (19)"
+            do! env.assertBotNone "A Brief History of ZIO\n\n<a href=\"https://degoes.net/articles/zio-history\">[ OPEN ]</a>"
+            do! env.assertBot "/ls" "Your subscriptions:\n- [RSS] https://degoes.net/feed.xml '' (19)"
 
-            downloadString := Framework.mkDownloadString 2
+            env.downloadString := Framework.mkDownloadString 2
 
-            do! assertBotNone "Effect Tracking Is Commercially Worthless\n\n<a href=\"https://degoes.net/articles/no-effect-tracking\">[ OPEN ]</a>"
-            do! assertBot "/ls" "Your subscriptions:\n- [RSS] https://degoes.net/feed.xml '' (20)"
+            do! env.assertBotNone "Effect Tracking Is Commercially Worthless\n\n<a href=\"https://degoes.net/articles/no-effect-tracking\">[ OPEN ]</a>"
+            do! env.assertBot "/ls" "Your subscriptions:\n- [RSS] https://degoes.net/feed.xml '' (20)"
 
-            do! assertBotOnce "/rm https://degoes.net/feed.xml" "Your subscription deleted"
-            do! assertBot "/ls" "Your subscriptions:"
+            do! env.assertBotOnce "/rm https://degoes.net/feed.xml" "Your subscription deleted"
+            do! env.assertBot "/ls" "Your subscriptions:"
         }
 
 [<Xunit.Fact>]
 let ``simple jr test`` () =
     Framework.run
-    @@ fun assertBot assertOnce _ _ ->
+    <| fun env ->
         async {
-            do! assertOnce "/add http://joyreactor.cc/rss/tag/котэ" "Your subscription created"
-            do! assertBot "/ls" "Your subscriptions:\n- [RSS] http://joyreactor.cc/rss/tag/котэ '' (10)"
+            do! env.assertBotOnce "/add http://joyreactor.cc/rss/tag/котэ" "Your subscription created"
+            do! env.assertBot "/ls" "Your subscriptions:\n- [RSS] http://joyreactor.cc/rss/tag/котэ '' (10)"
 
-            do! assertBot "/history http://joyreactor.cc/rss/tag/котэ" "History:\n- http://joyreactor.cc/post/4495852\n- http://joyreactor.cc/post/4495800\n- http://joyreactor.cc/post/4495765\n- http://joyreactor.cc/post/4495758\n- http://joyreactor.cc/post/4495699\n- http://joyreactor.cc/post/4495573\n- http://joyreactor.cc/post/4495568\n- http://joyreactor.cc/post/4495511\n- http://joyreactor.cc/post/4495353\n- http://joyreactor.cc/post/4494565"
+            do! env.assertBot "/history http://joyreactor.cc/rss/tag/котэ" "History:\n- http://joyreactor.cc/post/4495852\n- http://joyreactor.cc/post/4495800\n- http://joyreactor.cc/post/4495765\n- http://joyreactor.cc/post/4495758\n- http://joyreactor.cc/post/4495699\n- http://joyreactor.cc/post/4495573\n- http://joyreactor.cc/post/4495568\n- http://joyreactor.cc/post/4495511\n- http://joyreactor.cc/post/4495353\n- http://joyreactor.cc/post/4494565"
         }
 
 [<Xunit.Fact>]
 let ``add and remove other test`` () =
     Framework.run
-    @@ fun assertBot assertOnce _ _ ->
+    <| fun env ->
         async {
-            do! assertOnce "/add https://degoes.net/feed.xml" "Your subscription created"
-            do! assertOnce "/add http://joyreactor.cc/rss/tag/котэ" "Your subscription created"
+            do! env.assertBotOnce "/add https://degoes.net/feed.xml" "Your subscription created"
+            do! env.assertBotOnce "/add http://joyreactor.cc/rss/tag/котэ" "Your subscription created"
 
-            do! assertBot "/ls" "Your subscriptions:\n- [RSS] http://joyreactor.cc/rss/tag/котэ '' (10)\n- [RSS] https://degoes.net/feed.xml '' (18)"
+            do! env.assertBot "/ls" "Your subscriptions:\n- [RSS] http://joyreactor.cc/rss/tag/котэ '' (10)\n- [RSS] https://degoes.net/feed.xml '' (18)"
 
-            do! assertOnce "/rm https://degoes.net/feed.xml" "Your subscription deleted"
-            do! assertBot "/ls" "Your subscriptions:\n- [RSS] http://joyreactor.cc/rss/tag/котэ '' (10)"
+            do! env.assertBotOnce "/rm https://degoes.net/feed.xml" "Your subscription deleted"
+            do! env.assertBot "/ls" "Your subscriptions:\n- [RSS] http://joyreactor.cc/rss/tag/котэ '' (10)"
         }

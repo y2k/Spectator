@@ -9,9 +9,14 @@ module Prelude =
                     while true do
                         do! a
                 }
+
             axs
             |> List.map loop
             |> Async.Parallel
             |> Async.Ignore
+
     module Result =
-        let toOption = function Ok x -> Some x | Error _ -> None
+        let toOption =
+            function
+            | Ok x -> Some x
+            | Error _ -> None

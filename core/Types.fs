@@ -7,43 +7,61 @@ type PluginId = Guid
 
 [<MeasureAnnotatedAbbreviation>]
 type 'a TypedId = Guid
+
 #nowarn "42"
+
 module TypedId =
-    let inline wrap<'b> (a : Guid) : 'b TypedId = (# "" a : TypedId<'b> #)
+    let inline wrap<'b> (a: Guid): 'b TypedId = (# "" a : TypedId<'b> #)
     let empty () = wrap Guid.Empty
-    let inline unwrap (x : _ TypedId) = (# "" x : Guid #)
+    let inline unwrap (x: _ TypedId) = (# "" x : Guid #)
 
 [<CLIMutable>]
 type Subscription =
-    { id : Subscription TypedId
-      userId : UserId
-      provider : PluginId
-      uri : Uri
-      filter : string }
-    static member empty = { id = TypedId.wrap Guid.Empty; userId = ""; provider = Guid.Empty; uri = null; filter = "" }
+    { id: Subscription TypedId
+      userId: UserId
+      provider: PluginId
+      uri: Uri
+      filter: string }
+    static member empty =
+        { id = TypedId.wrap Guid.Empty
+          userId = ""
+          provider = Guid.Empty
+          uri = null
+          filter = "" }
 
 [<CLIMutable>]
 type NewSubscription =
-    { id : NewSubscription TypedId
-      userId : UserId
-      uri : Uri
-      filter : string }
-      static member empty = { id = TypedId.wrap Guid.Empty; userId = ""; uri = null; filter = "" }
+    { id: NewSubscription TypedId
+      userId: UserId
+      uri: Uri
+      filter: string }
+    static member empty =
+        { id = TypedId.wrap Guid.Empty
+          userId = ""
+          uri = null
+          filter = "" }
 
 [<CLIMutable>]
 type Snapshot =
-    { subscriptionId : Subscription TypedId
-      created : DateTime
-      id : Snapshot TypedId
-      title : string
-      uri : Uri }
-    static member empty = { subscriptionId = TypedId.wrap Guid.Empty; created = DateTime.MinValue; id = TypedId.wrap Guid.Empty; title = ""; uri = null }
+    { subscriptionId: Subscription TypedId
+      created: DateTime
+      id: Snapshot TypedId
+      title: string
+      uri: Uri }
+    static member empty =
+        { subscriptionId = TypedId.wrap Guid.Empty
+          created = DateTime.MinValue
+          id = TypedId.wrap Guid.Empty
+          title = ""
+          uri = null }
 
 type Events =
     | NewSubscriptionCreated of NewSubscription
     | SubscriptionCreated of Subscription
     | SubscriptionRemoved of Subscription TypedId list * NewSubscription TypedId list
-    | SnapshotCreated of isNew : bool * Snapshot
+    | SnapshotCreated of isNew: bool * Snapshot
     | HealthCheckRequested
 
-type Filter = NoneFilter | UserFilter of string
+type Filter =
+    | NoneFilter
+    | UserFilter of string
