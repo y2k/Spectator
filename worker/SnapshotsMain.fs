@@ -105,7 +105,7 @@ let main loadSnapshots update =
     async {
         let! snapReqs =
             update (fun db -> db, [])
-            >>- fun db -> StoreDomain.mkNewSnapshots db
+            >>- StoreDomain.mkNewSnapshots
 
         let! snapResp =
             snapReqs
@@ -115,6 +115,4 @@ let main loadSnapshots update =
 
         do! update (StoreDomain.mkNewSnapshotsEnd snapResp)
             |> Async.Ignore
-
-        do! Async.Sleep 1_000
     }

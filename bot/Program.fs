@@ -224,11 +224,11 @@ let main readMessage sendMessage update =
 
         let! db =
             update
-            @@ fun db ->
-                let (db, (_, events)) =
-                    Store.updateUserState db user (fun db -> db, HandleTelegramMessage.invoke user msg db)
+                (fun db ->
+                    let (db, (_, events)) =
+                        Store.updateUserState db user (fun db -> db, HandleTelegramMessage.invoke user msg db)
 
-                db, events
+                    db, events)
 
         let (_, (telegramMsg, _)) =
             Store.updateUserState db user (fun db -> db, HandleTelegramMessage.invoke user msg db)

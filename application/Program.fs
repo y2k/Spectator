@@ -1,5 +1,6 @@
 module Spectator.Application
 
+open System
 open Spectator
 open Spectator.Core
 
@@ -10,6 +11,7 @@ module B = Bot.App
 module P = Store.Persistent
 module TP = EventPersistent.Tea
 module M = Store.MongoDb
+module H = HealthCheck
 
 let workerMainSub parsers =
     let parserIds =
@@ -20,19 +22,9 @@ let workerMainSub parsers =
         |> List.find (fun (id, _, _) -> id = pid)
         |> fun (_, ls, _) -> ls u |> Async.catch
 
-    let loadSnapshots (pid, u) =
-        parsers
-        |> List.find (fun (id, _, _) -> id = pid)
-        |> fun (_, _, ls) -> ls u |> Async.catch
-
     SU.main parserIds loadSubscriptions
 
 let workerMainSnap parsers =
-    let loadSubscriptions (pid, u) =
-        parsers
-        |> List.find (fun (id, _, _) -> id = pid)
-        |> fun (_, ls, _) -> ls u |> Async.catch
-
     let loadSnapshots (pid, u) =
         parsers
         |> List.find (fun (id, _, _) -> id = pid)
@@ -51,21 +43,20 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
         printfn "Restore state..."
 
         let store = TP.init ()
+        let delayAfterTask = Async.andWait (TimeSpan.FromSeconds 1.0)
 
         let tasks =
-            [ workerMainSub parsers (TP.make store SU.State.Empty SU.restore)
-              workerMainSnap parsers (TP.make store SN.State.Empty SN.restore)
+            [ delayAfterTask (workerMainSub parsers (TP.make store SU.State.Empty SU.restore))
+              delayAfterTask (workerMainSnap parsers (TP.make store SN.State.Empty SN.restore))
               B.main readFromTelegram sendToTelegram (TP.make store B.State.Empty B.restore)
-              N.main sendToTelegram (TP.make store N.State.Empty N.restore) ]
+              delayAfterTask (N.main sendToTelegram (TP.make store N.State.Empty N.restore)) ]
 
         do! P.restore queryAll (TP.make store () (fun _ _ -> ()))
 
         let logTasks =
             if enableLogs then
                 ignore (TP.make store () (fun _ e -> printfn "LOG event ::\n%O" e))
-
-                [ TP.make store HealthCheck.State.Empty HealthCheck.updatePing
-                  |> HealthCheck.main HealthCheck.startServer HealthCheck.sendText ]
+                [ H.main H.startServer H.sendText (TP.make store H.State.Empty H.updatePing) ]
             else
                 []
 
@@ -73,7 +64,9 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
 
         do! Async.loopAll [ yield! logTasks
                             yield! tasks
-                            yield P.main insert delete (TP.make store P.State.Empty P.update) ]
+                            yield
+                                P.main insert delete (TP.make store P.State.Empty P.update)
+                                |> delayAfterTask ]
     }
 
 [<EntryPoint>]

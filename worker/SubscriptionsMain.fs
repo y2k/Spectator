@@ -74,6 +74,4 @@ let main parserIds loadSubscriptions update =
 
         do! update (fun db -> db, Domain.mkSubscriptionsEnd db responses)
             |> Async.Ignore
-
-        do! Async.Sleep 1_000
     }

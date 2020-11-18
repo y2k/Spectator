@@ -3,6 +3,12 @@ namespace Spectator.Core
 [<AutoOpen>]
 module Prelude =
     module Async =
+        let andWait (timeout: System.TimeSpan) a =
+            async {
+                do! a
+                do! Async.Sleep timeout
+            }
+
         let loopAll axs =
             let loop a =
                 async {

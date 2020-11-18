@@ -64,6 +64,4 @@ let main sendToTelegramSingle update =
             |> List.map (uncurry sendToTelegramSingle)
             |> Async.Sequential
             |> Async.Ignore
-
-        do! Async.Sleep 1_000
     }
