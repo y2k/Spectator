@@ -79,14 +79,12 @@ module Domain =
 
     let getHistory (snapshots: Snapshot list) (subs: Subscription list) userId uri =
         subs
-        |> List.tryFind
-           @@ fun sub -> sub.uri = uri && sub.userId = userId
+        |> List.tryFind (fun sub -> sub.uri = uri && sub.userId = userId)
         |> function
         | None -> "Not found subscription with this url"
         | Some sub ->
             snapshots
-            |> List.filter
-               @@ fun sn -> sn.subscriptionId = sub.id
+            |> List.filter (fun sn -> sn.subscriptionId = sub.id)
             |> List.fold (fun a x -> sprintf "%s\n- %O" a x.uri) "History:"
 
     let removeSubs (subscriptions: Subscription list)
@@ -114,11 +112,33 @@ type UserState =
       newSubscriptions: NewSubscription list
       snapshots: Snapshot list }
 
+module HandleTelegramMessage =
+    module D = Domain
+    module P = Parser
+
+    let invoke (user: UserId) text (db: UserState) =
+        match P.parse text with
+        | P.History url -> D.getHistory db.snapshots db.subscriptions user url, []
+        | P.GetUserSubscriptionsCmd ->
+            (D.subListToMessageResponse db.counts db.subscriptions db.newSubscriptions user), []
+        | P.DeleteSubscriptionCmd uri ->
+            let (remSubs, rmNewSubs) =
+                D.deleteSubs db.subscriptions db.newSubscriptions user uri
+                ||> D.removeSubs db.subscriptions db.newSubscriptions
+
+            "Your subscription deleted", [ SubscriptionRemoved(remSubs, rmNewSubs) ]
+        | P.AddNewSubscriptionCmd (uri, filter) ->
+            let newSub = D.createNewSub user uri filter
+            "Your subscription created", [ NewSubscriptionCreated newSub ]
+        | P.UnknownCmd ->
+            "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription\n/history [url] - show last snapshots for subscription with url",
+            []
+
 type State =
     { states: Map<UserId, UserState> }
     static member Empty = { states = Map.empty }
 
-module Store =
+module State =
     let updateUserState (state: State) (userId: UserId) (f: UserState -> UserState * _): State * _ =
         let us =
             Map.tryFind userId state.states
@@ -135,7 +155,7 @@ module Store =
         effs
 
 module StoreUpdater =
-    open Store
+    open State
 
     let private updateUserStateSafe state userId f =
         updateUserState state userId (fun s -> f s, [])
@@ -193,45 +213,26 @@ module StoreUpdater =
                       newSubscriptions = ns :: us.newSubscriptions }
         | HealthCheckRequested _ -> state
 
-module HandleTelegramMessage =
-    module D = Domain
-    module P = Parser
-
-    let invoke (user: UserId) text (db: UserState) =
-        match P.parse text with
-        | P.History url -> (user, D.getHistory db.snapshots db.subscriptions user url), []
-        | P.GetUserSubscriptionsCmd ->
-            (user, D.subListToMessageResponse db.counts db.subscriptions db.newSubscriptions user), []
-        | P.DeleteSubscriptionCmd uri ->
-            let (remSubs, rmNewSubs) =
-                D.deleteSubs db.subscriptions db.newSubscriptions user uri
-                ||> D.removeSubs db.subscriptions db.newSubscriptions
-
-            (user, "Your subscription deleted"), [ SubscriptionRemoved(remSubs, rmNewSubs) ]
-        | P.AddNewSubscriptionCmd (uri, filter) ->
-            let newSub = D.createNewSub user uri filter
-            (user, "Your subscription created"), [ NewSubscriptionCreated newSub ]
-        | P.UnknownCmd ->
-            (user,
-             "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription\n/history [url] - show last snapshots for subscription with url"),
-            []
-
 let restore = StoreUpdater.update
 
-let main readMessage sendMessage update =
+let main readMessage sendMessage reduce =
     async {
         let! (user, msg) = readMessage
 
-        let! db =
-            update
-                (fun db ->
-                    let (db, (_, events)) =
-                        Store.updateUserState db user (fun db -> db, HandleTelegramMessage.invoke user msg db)
+        let handleTelegramMessage db =
+            let (db, (_, events)) =
+                State.updateUserState db user (fun db -> db, HandleTelegramMessage.invoke user msg db)
 
-                    db, events)
+            db, events
 
-        let (_, (telegramMsg, _)) =
-            Store.updateUserState db user (fun db -> db, HandleTelegramMessage.invoke user msg db)
+        let handleTelegramMessage2 db =
+            State.updateUserState db user (fun db -> db, HandleTelegramMessage.invoke user msg db)
+            |> snd
+            |> fst
 
-        do! telegramMsg ||> sendMessage |> Async.Ignore
+        let! telegramMsg =
+            reduce handleTelegramMessage
+            >>- handleTelegramMessage2
+
+        do! sendMessage user telegramMsg |> Async.Ignore
     }
