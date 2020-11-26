@@ -49,7 +49,7 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
             [ delayAfterTask (workerMainSub parsers (TP.make store SU.State.Empty SU.restore))
               delayAfterTask (workerMainSnap parsers (TP.make store SN.State.Empty SN.restore))
               B.main readFromTelegram sendToTelegram (TP.make store B.State.Empty B.restore)
-              delayAfterTask (N.main sendToTelegram (TP.make store N.State.Empty N.restore)) ]
+              delayAfterTask (N.main sendToTelegram (TP.make store N.State.Empty N.State.update)) ]
 
         do! P.restore queryAll (TP.make store () (fun _ _ -> ()))
 

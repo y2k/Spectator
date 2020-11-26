@@ -12,6 +12,6 @@ WORKDIR /app
 COPY --from=0 /app/application/bin/Release/net5.0/linux-x64/publish .
 
 HEALTHCHECK --interval=15m --timeout=5s \
-  CMD curl -f http://localhost/ || exit 1
+  CMD curl -f http://localhost:8888/ || exit 1
 
 ENTRYPOINT ["dotnet", "application.dll"]

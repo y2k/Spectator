@@ -4,19 +4,14 @@ open Spectator.Core
 
 type State =
     { users: Map<Subscription TypedId, UserId>
-      queue: (UserId * string) list
+      queue: (UserId * Snapshot) list
       initialized: bool }
     static member Empty =
         { users = Map.empty
           queue = []
           initialized = false }
 
-module StoreDomain =
-    let formatSnapshot snap =
-        match snap.uri.ToString() with
-        | Regex "https://t.me/.+" [] -> sprintf "%O" snap.uri
-        | _ -> sprintf "%s\n\n<a href=\"%O\">[ OPEN ]</a>" snap.title snap.uri
-
+module State =
     let update state =
         function
         | SubscriptionCreated sub ->
@@ -32,7 +27,7 @@ module StoreDomain =
                 match Map.tryFind snap.subscriptionId state.users with
                 | Some userId ->
                     { state with
-                          queue = (userId, formatSnapshot snap) :: state.queue }
+                          queue = (userId, snap) :: state.queue }
                 | None -> state
             else
                 state
@@ -40,6 +35,7 @@ module StoreDomain =
         | NewSubscriptionCreated _
         | HealthCheckRequested _ -> state
 
+module private Domain =
     let clearQueue state =
         if state.initialized then
             { state with queue = [] }, []
@@ -50,15 +46,17 @@ module StoreDomain =
             []
 
     let getUpdates state =
-        if state.initialized then state.queue else []
+        let formatSnapshot snap =
+            match snap.uri.ToString() with
+            | Regex "https://t.me/.+" [] -> sprintf "%O" snap.uri
+            | _ -> sprintf "%s\n\n<a href=\"%O\">[ OPEN ]</a>" snap.title snap.uri
 
-let restore = StoreDomain.update
+        if state.initialized then state.queue else []
+        |> List.map (fun (u, s) -> u, formatSnapshot s)
 
 let main sendToTelegramSingle update =
     async {
-        let! updates =
-            update StoreDomain.clearQueue
-            >>- StoreDomain.getUpdates
+        let! updates = update Domain.clearQueue >>- Domain.getUpdates
 
         do! updates
             |> List.map (uncurry sendToTelegramSingle)

@@ -51,11 +51,11 @@ module Domain =
                |> Option.defaultValue []
 
     let mkSubscription (parserIds: PluginId list) state =
-        let foo (ns: NewSubscription) =
+        let mkRequest (ns: NewSubscription) =
             parserIds |> List.map @@ fun id -> id, ns.uri
 
         state.newSubscriptions
-        |> List.map foo
+        |> List.map mkRequest
         |> List.concat
 
 let restore = Domain.update
