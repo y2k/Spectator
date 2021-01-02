@@ -57,9 +57,9 @@ module Domain =
 
         newSubscriptions
         |> List.filter ^ fun x -> x.userId = userId
-        |> List.map
-           ^ fun x -> sprintf "[Processing...] %O '%s'" x.uri x.filter
+        |> List.map (fun x -> sprintf "[Processing...] %O '%s'" x.uri x.filter)
         |> List.append subs
+        |> List.sort
         |> List.fold (sprintf "%s\n- %s") ""
         |> (+) "Your subscriptions:"
 

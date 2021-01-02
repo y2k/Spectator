@@ -32,7 +32,7 @@ let workerMainSnap parsers =
 
     SN.main loadSnapshots
 
-let mkApplication sendToTelegram readFromTelegram downloadString enableLogs insert delete queryAll =
+let mkApplication sendToTelegram readFromTelegram downloadString enableLogs insert delete queryAll syncSnapPeriod =
     (* Worker.TelegramParser.create config.restTelegramPassword config.restTelegramBaseUrl *)
     (* Worker.HtmlProvider.create config.filesDir *)
 
@@ -43,11 +43,16 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
         printfn "Restore state..."
 
         let store = TP.init ()
-        let delayAfterTask = Async.andWait (TimeSpan.FromSeconds 1.0)
+
+        let delayAfterTask f =
+            async {
+                do! f
+                do! TP.waitForChanges store
+            }
 
         let tasks =
             [ delayAfterTask (workerMainSub parsers (TP.make store SU.State.Empty SU.restore))
-              delayAfterTask (workerMainSnap parsers (TP.make store SN.State.Empty SN.restore))
+              Async.andWait syncSnapPeriod (workerMainSnap parsers (TP.make store SN.State.Empty SN.restore))
               B.main readFromTelegram sendToTelegram (TP.make store B.State.Empty B.restore)
               delayAfterTask (N.main sendToTelegram (TP.make store N.State.Empty N.State.update)) ]
 
@@ -55,14 +60,15 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
 
         let logTasks =
             if enableLogs then
-                Logger.log store
-                [ H.main H.startServer H.sendText (TP.make store H.State.Empty H.updatePing) ]
+                Logger.log (TP.make store)
+                [ H.mainWithDeps (TP.make store) ]
             else
                 []
 
         printfn "Started..."
 
-        do! Async.loopAll [ yield! logTasks
+        do!
+            Async.loopAll [ yield! logTasks
                             yield! tasks
                             yield
                                 P.main insert delete (TP.make store P.State.Empty P.update)
@@ -84,6 +90,7 @@ let main args =
         (M.insert db)
         (M.delete db)
         (M.queryAll db)
+        (TimeSpan.FromMinutes(float config.updateTimeMinutes))
     |> Async.RunSynchronously
 
     0

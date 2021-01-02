@@ -19,7 +19,9 @@ let main startServer sendText update =
                     >>- fun db -> db.healthCheckComplete
 
                 stop := breakLoop
-                if not breakLoop then do! Async.Sleep 1_000
+
+                if not breakLoop then
+                    do! Async.Sleep 1_000
         }
 
     async {
@@ -28,7 +30,8 @@ let main startServer sendText update =
         while true do
             let! ctx = ctxFactory
 
-            do! update (fun db -> { healthCheckComplete = false }, [ HealthCheckRequested ])
+            do!
+                update (fun db -> { healthCheckComplete = false }, [ HealthCheckRequested ])
                 |> Async.Ignore
 
             do! waitForPong
@@ -52,7 +55,8 @@ let sendText { ctx = ctx } (text: string) =
     async {
         let bytes = Encoding.UTF8.GetBytes text
 
-        do! ctx.Response.OutputStream.WriteAsync(bytes, 0, bytes.Length)
+        do!
+            ctx.Response.OutputStream.WriteAsync(bytes, 0, bytes.Length)
             |> Async.AwaitTask
 
         ctx.Response.Close()
@@ -65,3 +69,6 @@ let updatePing state =
     | SubscriptionCreated _
     | SubscriptionRemoved _
     | SnapshotCreated _ -> state
+
+let mainWithDeps makeReducer =
+    main startServer sendText (makeReducer State.Empty updatePing)

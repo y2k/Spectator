@@ -9,7 +9,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/application/bin/Debug/netcoreapp3.1/application.dll",
+            "program": "${workspaceFolder}/application/bin/Debug/net5.0/application.dll",
             "args": [ "__data/settings.yml" ],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,

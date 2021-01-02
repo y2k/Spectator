@@ -39,12 +39,13 @@ type Env =
       setDownloadStage: int -> unit
       resetApplication: unit -> unit }
 
-let private assertBot repeat
-                      (input: Threading.Channels.Channel<string>)
-                      (output: Threading.Channels.Channel<string>)
-                      msg
-                      expected
-                      =
+let private assertBot
+    repeat
+    (input: Threading.Channels.Channel<string>)
+    (output: Threading.Channels.Channel<string>)
+    msg
+    expected
+    =
     let rec flaky count f =
         async {
             try
@@ -68,14 +69,14 @@ let private assertBot repeat
         else
             !prev
 
-    if not repeat && not <| String.IsNullOrEmpty msg
-    then input.Writer.WriteAsync msg |> ignore
+    if not repeat && not <| String.IsNullOrEmpty msg then
+        input.Writer.WriteAsync msg |> ignore
 
     flaky
         10
         (async {
-            if repeat && not <| String.IsNullOrEmpty msg
-            then input.Writer.WriteAsync msg |> ignore
+            if repeat && not <| String.IsNullOrEmpty msg then
+                input.Writer.WriteAsync msg |> ignore
 
             let actual = read ()
             // printfn "\nLOG :: %O\n" actual
@@ -83,10 +84,11 @@ let private assertBot repeat
          })
 
 let mkDownloadString stage url =
-    IO.Path.Combine
-        (IO.Directory.GetCurrentDirectory(),
-         sprintf "../../../../tests/examples/%i/" stage,
-         Uri.EscapeDataString(string url))
+    IO.Path.Combine(
+        IO.Directory.GetCurrentDirectory(),
+        sprintf "../../../../tests/examples/%i/" stage,
+        Uri.EscapeDataString(string url)
+    )
     |> IO.File.ReadAllText
     |> async.Return
 
@@ -120,12 +122,13 @@ let run f =
     let state = ref <| mkState ()
 
     let mkApp () =
-        mkApplication (!state).output (!state).input db (!state).downloadString
+        mkApplication (!state).output (!state).input db (!state).downloadString (TimeSpan.FromSeconds 5.0)
 
     async {
         let! _ = mkApp () |> Async.StartChild
 
-        do! f
+        do!
+            f
                 { executeCommand = fun cmd expected -> assertBot true (!state).input (!state).output cmd expected
                   executeCommandOnce = fun cmd expected -> assertBot false (!state).input (!state).output cmd expected
                   waitForMessage = fun expected -> assertBot false (!state).input (!state).output "" expected
