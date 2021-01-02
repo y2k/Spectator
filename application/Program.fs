@@ -55,7 +55,7 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
 
         let logTasks =
             if enableLogs then
-                ignore (TP.make store () (fun _ e -> printfn "LOG event ::\n%O" e))
+                Logger.log store
                 [ H.main H.startServer H.sendText (TP.make store H.State.Empty H.updatePing) ]
             else
                 []
