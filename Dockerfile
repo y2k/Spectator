@@ -8,6 +8,8 @@ RUN dotnet publish -c Release -r linux-x64 --self-contained false
 
 FROM mcr.microsoft.com/dotnet/runtime:5.0.0-alpine3.12-amd64
 
+RUN apk add curl && rm -rf /var/cache/apk/*
+
 WORKDIR /app
 COPY --from=0 /app/application/bin/Release/net5.0/linux-x64/publish .
 
