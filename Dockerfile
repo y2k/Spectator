@@ -1,7 +1,28 @@
-FROM mcr.microsoft.com/dotnet/sdk:5.0.100-alpine3.12-amd64
+FROM mcr.microsoft.com/dotnet/sdk:5.0.202-alpine3.12-amd64
 
 WORKDIR /app
-COPY . /app
+COPY global.json .
+COPY nuget.config .
+COPY spectator.sln .
+COPY application/*.fs application/
+COPY application/*.fsproj application/
+COPY bot/*.fs bot/
+COPY bot/*.fsproj bot/
+COPY core/*.fs core/
+COPY core/*.fsproj core/
+COPY notifications/*.fs notifications/
+COPY notifications/*.fsproj notifications/
+COPY store/*.fs store/
+COPY store/*.fsproj store/
+COPY telegram/*.fs telegram/
+COPY telegram/*.fsproj telegram/
+COPY tests/*.fs tests/
+COPY tests/*.fsproj tests/
+COPY tests/examples tests/examples
+COPY web/*.fs web/
+COPY web/*.fsproj web/
+COPY worker/*.fs worker/
+COPY worker/*.fsproj worker/
 
 RUN dotnet test
 RUN dotnet publish -c Release -r linux-x64 --self-contained false
