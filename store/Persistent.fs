@@ -61,12 +61,12 @@ let main insert delete reducer =
                 | Delete (col, id) -> delete col id
     }
 
-let restore query recuder =
+let restore query reducer =
     async {
         for name in Domain.collections do
             do! query
                     name
                     (fun doc ->
                         let events = Domain.restore name doc
-                        recuder (fun db -> db, [ events ]) |> Async.Ignore)
+                        reducer (fun db -> db, [ events ]) |> Async.Ignore)
     }
