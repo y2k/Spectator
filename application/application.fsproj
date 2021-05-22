@@ -22,7 +22,7 @@
 
   <ItemGroup>
     <PackageReference Include="Legivel" Version="0.3.1" />
-    <PackageReference Include="y2k.event-persistent" Version="0.2.2" />
+    <PackageReference Include="y2k.event-persistent" Version="0.4.1" />
   </ItemGroup>
 
   <PropertyGroup>

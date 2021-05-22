@@ -7,7 +7,7 @@ open Swensen.Unquote
 module MockDatabase =
     open MongoDB.Bson
 
-    let make (): Map<string, BsonDocument list> ref = ref Map.empty
+    let make () : Map<string, BsonDocument list> ref = ref Map.empty
 
     let saveObject state name (x: BsonDocument) =
         let col =

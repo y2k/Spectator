@@ -24,8 +24,8 @@ module Domain =
         | SnapshotCreated _
         | HealthCheckRequested _ -> state
 
-    let mkSubscriptionsEnd (state: State) (results: list<(PluginId * Uri) * Result<bool, _>>): Events list =
-        let findPlugin (ns: NewSubscription): PluginId option =
+    let mkSubscriptionsEnd (state: State) (results: list<(PluginId * Uri) * Result<bool, _>>) : Events list =
+        let findPlugin (ns: NewSubscription) : PluginId option =
             results
             |> List.tryPick
                 (fun ((p, uri), r) ->
@@ -33,7 +33,7 @@ module Domain =
                     | Ok _ when uri = ns.uri -> Some p
                     | _ -> None)
 
-        let mkSubscription (newSub: NewSubscription) (p: PluginId): Subscription =
+        let mkSubscription (newSub: NewSubscription) (p: PluginId) : Subscription =
             { id = TypedId.wrap <| Guid.NewGuid()
               userId = newSub.userId
               provider = p
@@ -60,11 +60,9 @@ module Domain =
 
 let restore = Domain.update
 
-let main parserIds loadSubscriptions update =
+let main parserIds loadSubscriptions (reduce: IReducer<State, Events>) =
     async {
-        let! reqs =
-            update (fun db -> db, [])
-            >>- fun db -> Domain.mkSubscription parserIds db
+        let! reqs = reduce.Invoke(fun db -> db, [], Domain.mkSubscription parserIds db)
 
         let! responses =
             reqs
@@ -72,6 +70,5 @@ let main parserIds loadSubscriptions update =
             |> Async.Sequential
             |> Async.map @@ fun x -> Seq.zip reqs x |> Seq.toList
 
-        do! update (fun db -> db, Domain.mkSubscriptionsEnd db responses)
-            |> Async.Ignore
+        do! reduce.Invoke(fun db -> db, Domain.mkSubscriptionsEnd db responses, ())
     }

@@ -8,15 +8,13 @@ type State =
     { healthCheckComplete: bool }
     static member Empty = { healthCheckComplete = false }
 
-let main startServer sendText update =
+let main startServer sendText (reduce: IReducer<State, Events>) =
     let waitForPong =
         async {
             let stop = ref false
 
             while !stop do
-                let! breakLoop =
-                    update (fun db -> db, [])
-                    >>- fun db -> db.healthCheckComplete
+                let! breakLoop = reduce.Invoke(fun db -> db, [], db.healthCheckComplete)
 
                 stop := breakLoop
 
@@ -30,12 +28,8 @@ let main startServer sendText update =
         while true do
             let! ctx = ctxFactory
 
-            do!
-                update (fun db -> { healthCheckComplete = false }, [ HealthCheckRequested ])
-                |> Async.Ignore
-
+            do! reduce.Invoke(fun db -> { healthCheckComplete = false }, [ HealthCheckRequested ], ())
             do! waitForPong
-
             do! sendText ctx "OK"
     }
 

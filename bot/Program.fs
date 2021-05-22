@@ -87,11 +87,12 @@ module Domain =
             |> List.filter (fun sn -> sn.subscriptionId = sub.id)
             |> List.fold (fun a x -> sprintf "%s\n- %O" a x.uri) "History:"
 
-    let removeSubs (subscriptions: Subscription list)
-                   (newSubscriptions: NewSubscription list)
-                   (ns: NewSubscription list)
-                   (ss: Subscription list)
-                   =
+    let removeSubs
+        (subscriptions: Subscription list)
+        (newSubscriptions: NewSubscription list)
+        (ns: NewSubscription list)
+        (ss: Subscription list)
+        =
         let remSubs =
             subscriptions
             |> List.map @@ fun x -> x.id
@@ -131,7 +132,7 @@ module HandleTelegramMessage =
             let newSub = D.createNewSub user uri filter
             "Your subscription created", [ NewSubscriptionCreated newSub ]
         | P.UnknownCmd ->
-            "/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription\n/history [url] - show last snapshots for subscription with url",
+            "Spectator 0.1\n/ls - Show your subscriptions\n/add [url] - Add new subscription\n/rm [url] - Add new subscription\n/history [url] - show last snapshots for subscription with url",
             []
 
 type State =
@@ -139,7 +140,7 @@ type State =
     static member Empty = { states = Map.empty }
 
 module State =
-    let updateUserState (state: State) (userId: UserId) (f: UserState -> UserState * _): State * _ =
+    let updateUserState (state: State) (userId: UserId) (f: UserState -> UserState * _) : State * _ =
         let us =
             Map.tryFind userId state.states
             |> Option.defaultValue
@@ -161,7 +162,7 @@ module StoreUpdater =
         updateUserState state userId (fun s -> f s, [])
         |> fst
 
-    let private findUserBySnapshot (state: State) (snap: Snapshot): UserId option =
+    let private findUserBySnapshot (state: State) (snap: Snapshot) : UserId option =
         state.states
         |> Map.tryFindKey
            @@ fun _ v ->
@@ -215,24 +216,17 @@ module StoreUpdater =
 
 let restore = StoreUpdater.update
 
-let main readMessage sendMessage reduce =
+let main readMessage sendMessage (reduce: IReducer<State, Events>) =
     async {
         let! (user, msg) = readMessage
 
         let handleTelegramMessage db =
-            let (db, (_, events)) =
+            let (db, (result, events)) =
                 State.updateUserState db user (fun db -> db, HandleTelegramMessage.invoke user msg db)
 
-            db, events
+            db, events, result
 
-        let handleTelegramMessage2 db =
-            State.updateUserState db user (fun db -> db, HandleTelegramMessage.invoke user msg db)
-            |> snd
-            |> fst
-
-        let! telegramMsg =
-            reduce handleTelegramMessage
-            >>- handleTelegramMessage2
+        let! telegramMsg = reduce.Invoke handleTelegramMessage
 
         do! sendMessage user telegramMsg |> Async.Ignore
     }

@@ -1,5 +1,6 @@
 module Spectator.Store.Persistent
 
+open Spectator.Core
 open MongoDB.Bson
 open MongoDB.Bson.Serialization
 
@@ -51,22 +52,24 @@ let update state e =
     { state with
           queue = (Domain.update e) @ state.queue }
 
-let main insert delete reducer =
+let main insert delete (reducer: IReducer<_, _>) =
     async {
-        let! (db: State) = reducer (fun _ -> State.Empty, [])
+        let! (db: State) = reducer.Invoke(fun db -> State.Empty, [], db)
 
         for e in (List.rev db.queue) do
-            do! match e with
+            do!
+                match e with
                 | Insert (col, i) -> insert col i
                 | Delete (col, id) -> delete col id
     }
 
-let restore query reducer =
+let restore query (reducer: IReducer<_, Events>) =
     async {
         for name in Domain.collections do
-            do! query
+            do!
+                query
                     name
                     (fun doc ->
                         let events = Domain.restore name doc
-                        reducer (fun db -> db, [ events ]) |> Async.Ignore)
+                        reducer.Invoke(fun db -> db, [ events ], ()))
     }

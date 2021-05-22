@@ -1,5 +1,8 @@
 namespace Spectator.Core
 
+type IReducer<'state, 'event> =
+    abstract member Invoke : ('state -> 'state * 'event list * 'result) -> 'result Async
+
 [<AutoOpen>]
 module Prelude =
     module Async =

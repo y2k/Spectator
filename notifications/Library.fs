@@ -54,9 +54,14 @@ module private Domain =
         if state.initialized then state.queue else []
         |> List.map (fun (u, s) -> u, formatSnapshot s)
 
-let main sendToTelegramSingle update =
+    let execute state = 
+        let (state', events) = clearQueue state
+        let result = getUpdates state
+        state', events, result
+
+let main sendToTelegramSingle (reduce : IReducer<State, Events>) =
     async {
-        let! updates = update Domain.clearQueue >>- Domain.getUpdates
+        let! updates = reduce.Invoke Domain.execute
 
         do! updates
             |> List.map (uncurry sendToTelegramSingle)

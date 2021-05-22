@@ -4,12 +4,32 @@ open System
 open Spectator
 open Spectator.Core
 
+module StoreWrapper =
+    module S = EventPersistent.Store
+    let init = S.init
+
+    let make store initState update =
+        let reduce = S.make store initState update
+
+        { new IReducer<'state, Events> with
+            member _.Invoke f =
+                async {
+                    let! oldState =
+                        reduce
+                            (fun state ->
+                                let (newState, events, _) = f state
+                                newState, events)
+
+                    let (_, _, result) = f oldState
+                    return result
+                } }
+
 module N = Notifications
 module SN = Worker.SnapshotsMain
 module SU = Worker.SubscriptionsMain
 module B = Bot.App
 module P = Store.Persistent
-module TP = EventPersistent.Tea
+module TP = StoreWrapper
 module M = Store.MongoDb
 module H = HealthCheck
 
@@ -44,17 +64,15 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
 
         let store = TP.init ()
 
-        let delayAfterTask f =
-            async {
-                do! f
-                do! TP.waitForChanges store
-            }
-
         let tasks =
-            [ delayAfterTask (workerMainSub parsers (TP.make store SU.State.Empty SU.restore))
+            [ Async.andWait
+                (TimeSpan.FromSeconds 5.0)
+                (workerMainSub parsers (TP.make store SU.State.Empty SU.restore))
               Async.andWait syncSnapPeriod (workerMainSnap parsers (TP.make store SN.State.Empty SN.restore))
               B.main readFromTelegram sendToTelegram (TP.make store B.State.Empty B.restore)
-              delayAfterTask (N.main sendToTelegram (TP.make store N.State.Empty N.State.update)) ]
+              Async.andWait
+                  (TimeSpan.FromSeconds 2.0)
+                  (N.main sendToTelegram (TP.make store N.State.Empty N.State.update)) ]
 
         do! P.restore queryAll (TP.make store () (fun _ _ -> ()))
 
@@ -72,7 +90,7 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
                             yield! tasks
                             yield
                                 P.main insert delete (TP.make store P.State.Empty P.update)
-                                |> delayAfterTask ]
+                                |> Async.andWait (TimeSpan.FromSeconds 10.0) ]
     }
 
 [<EntryPoint>]

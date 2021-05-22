@@ -45,16 +45,21 @@ module Domain =
             let sub =
                 List.find (fun (sub: Subscription) -> snap.subscriptionId = sub.id) subs
 
-            if String.IsNullOrEmpty sub.filter
-            then true
-            else Text.RegularExpressions.Regex.IsMatch(snap.title, sub.filter)
+            if String.IsNullOrEmpty sub.filter then
+                true
+            else
+                Text.RegularExpressions.Regex.IsMatch(snap.title, sub.filter)
 
         snaps
         |> List.filter applyUserFilter
         |> List.choose
            @@ fun snap ->
                match Map.tryFind snap.subscriptionId lastUpdated with
-               | Some date -> if snap.created > date then Some(true, snap) else None
+               | Some date ->
+                   if snap.created > date then
+                       Some(true, snap)
+                   else
+                       None
                | None -> Some(false, snap)
 
     let updateLastUpdates (lastUpdated: Map<Subscription TypedId, DateTime>) snapshots =
@@ -97,15 +102,14 @@ module StoreDomain =
 
         { state with
               lastUpdated = Domain.updateLastUpdates state.lastUpdated snapshots },
-        effects |> List.map SnapshotCreated
+        effects |> List.map SnapshotCreated,
+        ()
 
 let restore = StoreDomain.update
 
-let main loadSnapshots update =
+let main loadSnapshots (reduce: IReducer<State, Events>) =
     async {
-        let! snapReqs =
-            update (fun db -> db, [])
-            >>- StoreDomain.mkNewSnapshots
+        let! snapReqs = reduce.Invoke(fun db -> db, [], StoreDomain.mkNewSnapshots db)
 
         let! snapResp =
             snapReqs
@@ -113,6 +117,5 @@ let main loadSnapshots update =
             |> Async.Sequential
             |> Async.map (fun x -> Seq.zip snapReqs x |> Seq.toList)
 
-        do! update (StoreDomain.mkNewSnapshotsEnd snapResp)
-            |> Async.Ignore
+        do! reduce.Invoke(fun db -> StoreDomain.mkNewSnapshotsEnd snapResp db)
     }
