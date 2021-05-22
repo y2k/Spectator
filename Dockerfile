@@ -1,7 +1,6 @@
 FROM mcr.microsoft.com/dotnet/sdk:5.0.202-alpine3.12-amd64
 
 WORKDIR /app
-COPY global.json .
 COPY nuget.config .
 COPY spectator.sln .
 COPY application/*.fs application/
