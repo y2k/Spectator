@@ -65,9 +65,7 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
         let store = TP.init ()
 
         let tasks =
-            [ Async.andWait
-                (TimeSpan.FromSeconds 5.0)
-                (workerMainSub parsers (TP.make store SU.State.Empty SU.restore))
+            [ Async.andWait (TimeSpan.FromSeconds 2.0) (workerMainSub parsers (TP.make store SU.State.Empty SU.restore))
               Async.andWait syncSnapPeriod (workerMainSnap parsers (TP.make store SN.State.Empty SN.restore))
               B.main readFromTelegram sendToTelegram (TP.make store B.State.Empty B.restore)
               Async.andWait
@@ -90,7 +88,7 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
                             yield! tasks
                             yield
                                 P.main insert delete (TP.make store P.State.Empty P.update)
-                                |> Async.andWait (TimeSpan.FromSeconds 10.0) ]
+                                |> Async.andWait (TimeSpan.FromSeconds 2.0) ]
     }
 
 [<EntryPoint>]
