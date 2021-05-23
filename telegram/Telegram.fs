@@ -31,7 +31,7 @@ let readMessage token =
     let rec tryRead offset =
         async {
             let! updates =
-                bot.GetUpdatesAsync(offset = offset, limit = 1, timeout = 30)
+                bot.GetUpdatesAsync(offset = offset, limit = 1, timeout = 300)
                 |> Async.AwaitTask
 
             if Array.isEmpty updates then return! tryRead offset else return updates

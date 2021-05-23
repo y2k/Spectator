@@ -16,7 +16,9 @@ module Prelude =
             let loop a =
                 async {
                     while true do
-                        do! a
+                        match! a |> Async.catch with
+                        | Ok _ -> ()
+                        | Error e -> eprintfn "LOG: Error: %O" e
                 }
 
             axs
