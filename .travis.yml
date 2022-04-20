@@ -1,0 +1,11 @@
+branches:
+  only:
+    - master
+
+services:
+  - docker
+
+script:
+  - docker build -t y2khub/spectator .
+  - echo "$DOCKER_PASSWORD" | docker login -u y2khub --password-stdin
+  - docker push y2khub/spectator
