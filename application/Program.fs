@@ -90,7 +90,13 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
 
 [<EntryPoint>]
 let main args =
-    let config = Config.readConfig args.[0]
+    let config: Config.Config =
+        { filesDir = IO.Path.Combine(IO.Directory.GetCurrentDirectory(), "__data")
+          mongoDomain = "mongodb"
+          restTelegramPassword = ""
+          restTelegramBaseUrl = ""
+          telegramToken = Environment.GetEnvironmentVariable "SPECTATOR_BOT_TOKEN"
+          updateTimeMinutes = 1 }
 
     let db = Store.MongoDb.make config.mongoDomain "spectator"
 
