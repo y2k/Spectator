@@ -15,10 +15,9 @@ module StoreWrapper =
             member _.Invoke f =
                 async {
                     let! oldState =
-                        reduce
-                            (fun state ->
-                                let (newState, events, _) = f state
-                                newState, events)
+                        reduce (fun state ->
+                            let (newState, events, _) = f state
+                            newState, events)
 
                     let (_, _, result) = f oldState
                     return result
@@ -34,8 +33,7 @@ module M = Store.MongoDb
 module H = HealthCheck
 
 let workerMainSub parsers =
-    let parserIds =
-        parsers |> List.map (fun (id, _, _) -> id)
+    let parserIds = parsers |> List.map (fun (id, _, _) -> id)
 
     let loadSubscriptions (pid, u) =
         parsers
@@ -56,8 +54,7 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
     (* Worker.TelegramParser.create config.restTelegramPassword config.restTelegramBaseUrl *)
     (* Worker.HtmlProvider.create config.filesDir *)
 
-    let parsers =
-        [ (Worker.RssParser.create downloadString) ]
+    let parsers = [ (Worker.RssParser.create downloadString) ]
 
     async {
         printfn "Restore state..."
@@ -95,8 +92,7 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
 let main args =
     let config = Config.readConfig args.[0]
 
-    let db =
-        Store.MongoDb.make config.mongoDomain "spectator"
+    let db = Store.MongoDb.make config.mongoDomain "spectator"
 
     mkApplication
         (Telegram.sendToTelegramSingle config.telegramToken)
