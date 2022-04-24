@@ -7,7 +7,6 @@
 
   <ItemGroup>
     <Compile Include="Logger.fs" />
-    <Compile Include="Config.fs" />
     <Compile Include="HealthCheck.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
