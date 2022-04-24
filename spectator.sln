@@ -11,8 +11,6 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "web", "web\web.fsproj", "{3
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "worker", "worker\worker.fsproj", "{929EBED6-603B-43E6-9DCA-956E6BD37500}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "application", "application\application.fsproj", "{EEDD1776-2C6E-4EC5-A6BF-2B1D7A8B6DB2}"
-EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "bot", "bot\bot.fsproj", "{C475291B-A415-4E68-A924-AE53E94BDDCE}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "telegram", "telegram\telegram.fsproj", "{AD0273D8-FB7E-4A98-B804-4F75AF0B9EDF}"
@@ -20,6 +18,8 @@ EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "store", "store\store.fsproj", "{4D1B6F18-7D24-460B-83B1-D8703D97C10A}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "tests", "tests\tests.fsproj", "{2022F477-05F2-412B-8384-B8C89854A7B8}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "application", "application\application.fsproj", "{E48EDF70-1BA7-4517-A1C2-046A4410BDD7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -82,18 +82,6 @@ Global
 		{929EBED6-603B-43E6-9DCA-956E6BD37500}.Release|x64.Build.0 = Release|Any CPU
 		{929EBED6-603B-43E6-9DCA-956E6BD37500}.Release|x86.ActiveCfg = Release|Any CPU
 		{929EBED6-603B-43E6-9DCA-956E6BD37500}.Release|x86.Build.0 = Release|Any CPU
-		{EEDD1776-2C6E-4EC5-A6BF-2B1D7A8B6DB2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{EEDD1776-2C6E-4EC5-A6BF-2B1D7A8B6DB2}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{EEDD1776-2C6E-4EC5-A6BF-2B1D7A8B6DB2}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{EEDD1776-2C6E-4EC5-A6BF-2B1D7A8B6DB2}.Debug|x64.Build.0 = Debug|Any CPU
-		{EEDD1776-2C6E-4EC5-A6BF-2B1D7A8B6DB2}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{EEDD1776-2C6E-4EC5-A6BF-2B1D7A8B6DB2}.Debug|x86.Build.0 = Debug|Any CPU
-		{EEDD1776-2C6E-4EC5-A6BF-2B1D7A8B6DB2}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{EEDD1776-2C6E-4EC5-A6BF-2B1D7A8B6DB2}.Release|Any CPU.Build.0 = Release|Any CPU
-		{EEDD1776-2C6E-4EC5-A6BF-2B1D7A8B6DB2}.Release|x64.ActiveCfg = Release|Any CPU
-		{EEDD1776-2C6E-4EC5-A6BF-2B1D7A8B6DB2}.Release|x64.Build.0 = Release|Any CPU
-		{EEDD1776-2C6E-4EC5-A6BF-2B1D7A8B6DB2}.Release|x86.ActiveCfg = Release|Any CPU
-		{EEDD1776-2C6E-4EC5-A6BF-2B1D7A8B6DB2}.Release|x86.Build.0 = Release|Any CPU
 		{C475291B-A415-4E68-A924-AE53E94BDDCE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{C475291B-A415-4E68-A924-AE53E94BDDCE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C475291B-A415-4E68-A924-AE53E94BDDCE}.Debug|x64.ActiveCfg = Debug|Any CPU
@@ -142,5 +130,17 @@ Global
 		{2022F477-05F2-412B-8384-B8C89854A7B8}.Release|x64.Build.0 = Release|Any CPU
 		{2022F477-05F2-412B-8384-B8C89854A7B8}.Release|x86.ActiveCfg = Release|Any CPU
 		{2022F477-05F2-412B-8384-B8C89854A7B8}.Release|x86.Build.0 = Release|Any CPU
+		{E48EDF70-1BA7-4517-A1C2-046A4410BDD7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E48EDF70-1BA7-4517-A1C2-046A4410BDD7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E48EDF70-1BA7-4517-A1C2-046A4410BDD7}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{E48EDF70-1BA7-4517-A1C2-046A4410BDD7}.Debug|x64.Build.0 = Debug|Any CPU
+		{E48EDF70-1BA7-4517-A1C2-046A4410BDD7}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{E48EDF70-1BA7-4517-A1C2-046A4410BDD7}.Debug|x86.Build.0 = Debug|Any CPU
+		{E48EDF70-1BA7-4517-A1C2-046A4410BDD7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E48EDF70-1BA7-4517-A1C2-046A4410BDD7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E48EDF70-1BA7-4517-A1C2-046A4410BDD7}.Release|x64.ActiveCfg = Release|Any CPU
+		{E48EDF70-1BA7-4517-A1C2-046A4410BDD7}.Release|x64.Build.0 = Release|Any CPU
+		{E48EDF70-1BA7-4517-A1C2-046A4410BDD7}.Release|x86.ActiveCfg = Release|Any CPU
+		{E48EDF70-1BA7-4517-A1C2-046A4410BDD7}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

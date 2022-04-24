@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:5.0.202-alpine3.12-amd64
+FROM mcr.microsoft.com/dotnet/sdk:6.0.201-alpine3.15-amd64
 
 WORKDIR /app
 COPY nuget.config .
@@ -26,12 +26,12 @@ COPY worker/*.fsproj worker/
 RUN dotnet test
 RUN dotnet publish -c Release -r linux-x64 --self-contained false
 
-FROM mcr.microsoft.com/dotnet/runtime:5.0.0-alpine3.12-amd64
+FROM mcr.microsoft.com/dotnet/runtime:6.0.3-alpine3.15-amd64
 
 RUN apk add curl && rm -rf /var/cache/apk/*
 
 WORKDIR /app
-COPY --from=0 /app/application/bin/Release/net5.0/linux-x64/publish .
+COPY --from=0 /app/application/bin/Release/net6.0/linux-x64/publish .
 
 HEALTHCHECK --interval=15m --timeout=5s \
   CMD curl -f http://localhost:8888/ || exit 1
