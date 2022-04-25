@@ -12,19 +12,17 @@ module Domain =
         subscriptions
         |> List.filter (fun s -> not <| List.contains s.id sids)
 
-    let update state event =
+    let update state (event:Event) =
         match event with
-        | NewSubscriptionCreated ns ->
-            { state with
-                  newSubscriptions = ns :: state.newSubscriptions }
-        | SubscriptionRemoved (sids, nsids) ->
+        | :? SubscriptionRemoved as SubscriptionRemoved (sids, nsids) ->
             { state with
                   newSubscriptions = removeNewSubs state.newSubscriptions nsids }
-        | SubscriptionCreated _
-        | SnapshotCreated _
-        | HealthCheckRequested _ -> state
+        | :? NewSubscriptionCreated as (NewSubscriptionCreated ns) ->
+            { state with
+                  newSubscriptions = ns :: state.newSubscriptions }
+        | _ -> state
 
-    let mkSubscriptionsEnd (state: State) (results: list<(PluginId * Uri) * Result<bool, _>>) : Events list =
+    let mkSubscriptionsEnd (state: State) (results: list<(PluginId * Uri) * Result<bool, _>>) : Event list =
         let findPlugin (ns: NewSubscription) : PluginId option =
             results
             |> List.tryPick
@@ -45,9 +43,9 @@ module Domain =
            @@ fun ns ->
                findPlugin ns
                |> Option.map
-                  @@ fun pid ->
-                      [ mkSubscription ns pid |> SubscriptionCreated
-                        SubscriptionRemoved([], [ ns.id ]) ]
+                  (fun pid ->
+                      [ (mkSubscription ns pid |> SubscriptionCreated) :> Event
+                        SubscriptionRemoved([], [ ns.id ]) ] )
                |> Option.defaultValue []
 
     let mkSubscription (parserIds: PluginId list) state =
@@ -60,7 +58,7 @@ module Domain =
 
 let restore = Domain.update
 
-let main parserIds loadSubscriptions (reduce: IReducer<State, Events>) =
+let main parserIds loadSubscriptions (reduce: IReducer<State, Event>) =
     async {
         let! reqs = reduce.Invoke(fun db -> db, [], Domain.mkSubscription parserIds db)
 

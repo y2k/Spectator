@@ -20,7 +20,8 @@ module Parser =
                 |> ignore
 
                 true
-            with _ -> false
+            with
+            | _ -> false
 
     let parse (message: string) =
         let isValidUri url =
@@ -31,8 +32,8 @@ module Parser =
         | Regex "/add ([^ ]+) ([^ ]+)" [ url; filter ] when isValidUri url && isValidRegex filter ->
             AddNewSubscriptionCmd(Uri url, Some filter)
         | Regex "/add ([^ ]+)" [ url ] when isValidUri url -> AddNewSubscriptionCmd(Uri url, None)
-        | Regex "/rm ([^ ]+)" [ url ] when isValidUri url -> DeleteSubscriptionCmd @@ Uri url
-        | Regex "/history ([^ ]+)" [ url ] when isValidUri url -> History @@ Uri url
+        | Regex "/rm ([^ ]+)" [ url ] when isValidUri url -> DeleteSubscriptionCmd(Uri url)
+        | Regex "/history ([^ ]+)" [ url ] when isValidUri url -> History(Uri url)
         | _ -> UnknownCmd
 
 module Domain =
@@ -81,11 +82,11 @@ module Domain =
         subs
         |> List.tryFind (fun sub -> sub.uri = uri && sub.userId = userId)
         |> function
-        | None -> "Not found subscription with this url"
-        | Some sub ->
-            snapshots
-            |> List.filter (fun sn -> sn.subscriptionId = sub.id)
-            |> List.fold (fun a x -> sprintf "%s\n- %O" a x.uri) "History:"
+            | None -> "Not found subscription with this url"
+            | Some sub ->
+                snapshots
+                |> List.filter (fun sn -> sn.subscriptionId = sub.id)
+                |> List.fold (fun a x -> sprintf "%s\n- %O" a x.uri) "History:"
 
     let removeSubs
         (subscriptions: Subscription list)
@@ -95,15 +96,13 @@ module Domain =
         =
         let remSubs =
             subscriptions
-            |> List.map @@ fun x -> x.id
-            |> List.filter
-               @@ fun id -> ss |> List.forall @@ fun si -> si.id <> id
+            |> List.map (fun x -> x.id)
+            |> List.filter (fun id -> ss |> List.forall (fun si -> si.id <> id))
 
         let rmNewSubs =
             newSubscriptions
-            |> List.map @@ fun x -> x.id
-            |> List.filter
-               @@ fun id -> ns |> List.forall @@ fun nsi -> nsi.id <> id
+            |> List.map (fun x -> x.id)
+            |> List.filter (fun id -> ns |> List.forall (fun nsi -> nsi.id <> id))
 
         remSubs, rmNewSubs
 
@@ -117,7 +116,7 @@ module HandleTelegramMessage =
     module D = Domain
     module P = Parser
 
-    let invoke (user: UserId) text (db: UserState) =
+    let invoke (user: UserId) text (db: UserState) : _ * Event list =
         match P.parse text with
         | P.History url -> D.getHistory db.snapshots db.subscriptions user url, []
         | P.GetUserSubscriptionsCmd ->
@@ -151,9 +150,7 @@ module State =
 
         let (us, effs) = f us
 
-        { state with
-              states = Map.add userId us state.states },
-        effs
+        { state with states = Map.add userId us state.states }, effs
 
 module StoreUpdater =
     open State
@@ -164,59 +161,48 @@ module StoreUpdater =
 
     let private findUserBySnapshot (state: State) (snap: Snapshot) : UserId option =
         state.states
-        |> Map.tryFindKey
-           @@ fun _ v ->
-               v.subscriptions
-               |> List.exists
-                  @@ fun sub -> sub.id = snap.subscriptionId
+        |> Map.tryFindKey (fun _ v ->
+            v.subscriptions
+            |> List.exists (fun sub -> sub.id = snap.subscriptionId))
 
     let private removeSubsWithIds states sIds nsIds =
         states
-        |> Map.map
-           @@ fun _ state ->
-               { state with
-                     subscriptions =
-                         state.subscriptions
-                         |> List.filter (fun s -> not <| List.contains s.id sIds)
-                     newSubscriptions =
-                         state.newSubscriptions
-                         |> List.filter (fun s -> not <| List.contains s.id nsIds) }
+        |> Map.map (fun _ state ->
+            { state with
+                subscriptions =
+                    state.subscriptions
+                    |> List.filter (fun s -> not <| List.contains s.id sIds)
+                newSubscriptions =
+                    state.newSubscriptions
+                    |> List.filter (fun s -> not <| List.contains s.id nsIds) })
 
     let private incrimentCount (counts: Map<Subscription TypedId, int>) (snap: Snapshot) =
         let count = Map.tryFind snap.subscriptionId counts
         Map.add snap.subscriptionId ((count |> Option.defaultValue 0) + 1) counts
 
-    let update state =
-        function
-        | SnapshotCreated (_, snap) ->
+    let update state (event: Event) =
+        match event with
+        | :? SubscriptionCreated as (SubscriptionCreated sub) ->
+            updateUserStateSafe state sub.userId (fun us -> { us with subscriptions = sub :: us.subscriptions })
+        | :? SnapshotCreated as SnapshotCreated (_, snap) ->
             match findUserBySnapshot state snap with
             | Some userId ->
-                updateUserStateSafe state userId
-                @@ fun us ->
+                updateUserStateSafe state userId (fun us ->
                     let snaps = snap :: us.snapshots
 
                     { us with
-                          snapshots = snaps |> List.take (min 10 snaps.Length)
-                          counts = incrimentCount us.counts snap }
+                        snapshots = snaps |> List.take (min 10 snaps.Length)
+                        counts = incrimentCount us.counts snap })
             | None -> state
-        | SubscriptionCreated sub ->
-            updateUserStateSafe state sub.userId
-            @@ fun us ->
-                { us with
-                      subscriptions = sub :: us.subscriptions }
-        | SubscriptionRemoved (sIds, nsIds) ->
-            { state with
-                  states = removeSubsWithIds state.states sIds nsIds }
-        | NewSubscriptionCreated ns ->
-            updateUserStateSafe state ns.userId
-            @@ fun us ->
-                { us with
-                      newSubscriptions = ns :: us.newSubscriptions }
-        | HealthCheckRequested _ -> state
+        | :? SubscriptionRemoved as SubscriptionRemoved (sIds, nsIds) ->
+            { state with states = removeSubsWithIds state.states sIds nsIds }
+        | :? NewSubscriptionCreated as (NewSubscriptionCreated ns) ->
+            updateUserStateSafe state ns.userId (fun us -> { us with newSubscriptions = ns :: us.newSubscriptions })
+        | _ -> state
 
 let restore = StoreUpdater.update
 
-let main readMessage sendMessage (reduce: IReducer<State, Events>) =
+let main readMessage sendMessage (reduce: IReducer<State, Event>) =
     async {
         let! (user, msg) = readMessage
 

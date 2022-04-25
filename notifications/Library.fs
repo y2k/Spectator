@@ -12,17 +12,9 @@ type State =
           initialized = false }
 
 module State =
-    let update state =
-        function
-        | SubscriptionCreated sub ->
-            { state with
-                  users = Map.add sub.id sub.userId state.users }
-        | SubscriptionRemoved (subId, _) ->
-            { state with
-                  users =
-                      state.users
-                      |> Map.filter (fun k _ -> not <| List.contains k subId) }
-        | SnapshotCreated (true, snap) ->
+    let update state (event: Event) =
+        match event with
+        | :? SnapshotCreated as SnapshotCreated (true, snap) ->
             if state.initialized then
                 match Map.tryFind snap.subscriptionId state.users with
                 | Some userId ->
@@ -31,9 +23,16 @@ module State =
                 | None -> state
             else
                 state
-        | SnapshotCreated (false, _) -> state
-        | NewSubscriptionCreated _
-        | HealthCheckRequested _ -> state
+        | :? SnapshotCreated as SnapshotCreated (false, _) -> state
+        | :? SubscriptionCreated as SubscriptionCreated sub ->
+            { state with
+                  users = Map.add sub.id sub.userId state.users }
+        | :? SubscriptionRemoved as SubscriptionRemoved (subId, _) ->
+            { state with
+                  users =
+                      state.users
+                      |> Map.filter (fun k _ -> not <| List.contains k subId) }
+        | _ -> state
 
 module private Domain =
     let clearQueue state =
@@ -54,12 +53,12 @@ module private Domain =
         if state.initialized then state.queue else []
         |> List.map (fun (u, s) -> u, formatSnapshot s)
 
-    let execute state = 
+    let execute state =
         let (state', events) = clearQueue state
         let result = getUpdates state
         state', events, result
 
-let main sendToTelegramSingle (reduce : IReducer<State, Events>) =
+let main sendToTelegramSingle (reduce : IReducer<State, Event>) =
     async {
         let! updates = reduce.Invoke Domain.execute
 

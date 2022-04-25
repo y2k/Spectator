@@ -11,7 +11,7 @@ type 'a TypedId = Guid
 #nowarn "42"
 
 module TypedId =
-    let inline wrap<'b> (a: Guid): 'b TypedId = (# "" a : TypedId<'b> #)
+    let inline wrap<'b> (a: Guid) : 'b TypedId = (# "" a : TypedId<'b> #)
     let empty () = wrap Guid.Empty
     let inline unwrap (x: _ TypedId) = (# "" x : Guid #)
 
@@ -55,12 +55,29 @@ type Snapshot =
           title = ""
           uri = null }
 
-type Events =
-    | NewSubscriptionCreated of NewSubscription
-    | SubscriptionCreated of Subscription
-    | SubscriptionRemoved of Subscription TypedId list * NewSubscription TypedId list
-    | SnapshotCreated of isNew: bool * Snapshot
+type Event =
+    interface
+    end
+
+type HealthCheckRequested =
     | HealthCheckRequested
+    interface Event
+
+type NewSubscriptionCreated =
+    | NewSubscriptionCreated of NewSubscription
+    interface Event
+
+type SubscriptionCreated =
+    | SubscriptionCreated of Subscription
+    interface Event
+
+type SnapshotCreated =
+    | SnapshotCreated of isNew: bool * Snapshot
+    interface Event
+
+type SubscriptionRemoved =
+    | SubscriptionRemoved of Subscription TypedId list * NewSubscription TypedId list
+    interface Event
 
 type Filter =
     | NoneFilter

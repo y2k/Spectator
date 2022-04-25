@@ -5,18 +5,51 @@ open System.Net
 open System.Text
 
 type State =
-    { healthCheckComplete: bool }
-    static member Empty = { healthCheckComplete = false }
+    { healthCheckRequested: bool }
+    static member Empty = { healthCheckRequested = false }
 
-let main startServer sendText (reduce: IReducer<State, Events>) =
+type t = private { ctx: HttpListenerContext }
+
+let private startServer url =
+    let listener = new HttpListener()
+    listener.Prefixes.Add url
+    listener.Start()
+
+    async {
+        let! ctx = listener.GetContextAsync()
+        return { ctx = ctx }
+    }
+
+let private sendResponseToClient { ctx = ctx } (text: string) =
+    async {
+        let bytes = Encoding.UTF8.GetBytes text
+
+        do!
+            ctx.Response.OutputStream.WriteAsync(bytes, 0, bytes.Length)
+            |> Async.AwaitTask
+
+        ctx.Response.Close()
+    }
+
+let private updatePing state (event: Event) =
+    match event with
+    | :? HealthCheckRequested -> { state with healthCheckRequested = true }
+    | _ -> state
+
+let main (makeReducer: State -> (State -> Event -> State) -> IReducer<State, Event>) =
+    let reduce = (makeReducer State.Empty updatePing)
+
+    let ping = reduce.Invoke(fun db -> db, [ HealthCheckRequested ], ())
+
     let waitForPong =
         async {
-            let stop = ref false
+            let mutable stop = false
 
-            while !stop do
-                let! breakLoop = reduce.Invoke(fun db -> db, [], db.healthCheckComplete)
+            while stop do
+                let! breakLoop =
+                    reduce.Invoke(fun db -> { db with healthCheckRequested = false }, [], db.healthCheckRequested)
 
-                stop := breakLoop
+                stop <- breakLoop
 
                 if not breakLoop then
                     do! Async.Sleep 1_000
@@ -28,41 +61,7 @@ let main startServer sendText (reduce: IReducer<State, Events>) =
         while true do
             let! ctx = ctxFactory
 
-            do! reduce.Invoke(fun db -> { healthCheckComplete = false }, [ HealthCheckRequested ], ())
+            do! ping
             do! waitForPong
-            do! sendText ctx "OK"
+            do! sendResponseToClient ctx "OK"
     }
-
-type t = private { ctx: HttpListenerContext }
-
-let startServer url =
-    let listener = new HttpListener()
-    listener.Prefixes.Add url
-    listener.Start()
-
-    async {
-        let! ctx = listener.GetContextAsync()
-        return { ctx = ctx }
-    }
-
-let sendText { ctx = ctx } (text: string) =
-    async {
-        let bytes = Encoding.UTF8.GetBytes text
-
-        do!
-            ctx.Response.OutputStream.WriteAsync(bytes, 0, bytes.Length)
-            |> Async.AwaitTask
-
-        ctx.Response.Close()
-    }
-
-let updatePing state =
-    function
-    | HealthCheckRequested -> { healthCheckComplete = true }
-    | NewSubscriptionCreated _
-    | SubscriptionCreated _
-    | SubscriptionRemoved _
-    | SnapshotCreated _ -> state
-
-let mainWithDeps makeReducer =
-    main startServer sendText (makeReducer State.Empty updatePing)

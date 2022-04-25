@@ -5,13 +5,15 @@ open Spectator
 open Spectator.Core
 
 module StoreWrapper =
+    open Spectator.Core
+
     module S = EventPersistent.Store
     let init = S.init
 
     let make store initState update =
         let reduce = S.make store initState update
 
-        { new IReducer<'state, Events> with
+        { new IReducer<'state, Event> with
             member _.Invoke f =
                 async {
                     let! oldState =
@@ -51,15 +53,12 @@ let workerMainSnap parsers =
     SN.main loadSnapshots
 
 let mkApplication sendToTelegram readFromTelegram downloadString enableLogs insert delete queryAll syncSnapPeriod =
-    (* Worker.TelegramParser.create config.restTelegramPassword config.restTelegramBaseUrl *)
-    (* Worker.HtmlProvider.create config.filesDir *)
-
     let parsers = [ (Worker.RssParser.create downloadString) ]
 
     async {
         printfn "Restore state..."
 
-        let store = TP.init ()
+        let store: Event EventPersistent.Store.t = TP.init ()
 
         let tasks =
             [ Async.andWait (TimeSpan.FromSeconds 2.0) (workerMainSub parsers (TP.make store SU.State.Empty SU.restore))
@@ -74,7 +73,7 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
         let logTasks =
             if enableLogs then
                 Logger.log (TP.make store)
-                [ H.mainWithDeps (TP.make store) ]
+                [ H.main (TP.make store) ]
             else
                 []
 
@@ -89,7 +88,7 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
     }
 
 [<EntryPoint>]
-let main args =
+let main _ =
     let config =
         {| filesDir = IO.Path.Combine(IO.Directory.GetCurrentDirectory(), "__data")
            mongoDomain = "mongodb"

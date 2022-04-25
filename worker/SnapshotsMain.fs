@@ -72,26 +72,25 @@ module Domain =
             lastUpdated
 
 module StoreDomain =
-    let update state event =
+    let update state (event: Event) =
         match event with
-        | SubscriptionRemoved (sids, nsids) ->
-            { state with
-                  subscriptions = Domain.removeSubs state.subscriptions sids }
-        | SubscriptionCreated sub ->
+        | :? SubscriptionCreated as (SubscriptionCreated sub) ->
             { state with
                   subscriptions = sub :: state.subscriptions }
-        | SnapshotCreated (_, snap) ->
+        | :? SnapshotCreated as SnapshotCreated (_, snap) ->
             { state with
                   lastUpdated = Domain.updateLastUpdates state.lastUpdated [ snap ] }
-        | HealthCheckRequested _
-        | NewSubscriptionCreated _ -> state
+        | :? SubscriptionRemoved as SubscriptionRemoved (sids, nsids) ->
+            { state with
+                  subscriptions = Domain.removeSubs state.subscriptions sids }
+        |  _-> state
 
     let mkNewSnapshots state =
         state.subscriptions
         |> List.map @@ fun x -> x.provider, x.uri
         |> List.distinct
 
-    let mkNewSnapshotsEnd responses state =
+    let mkNewSnapshotsEnd responses state : _ * _ list * _ =
         let snapshots =
             responses
             |> Domain.mkSnapshots state.subscriptions
@@ -102,12 +101,12 @@ module StoreDomain =
 
         { state with
               lastUpdated = Domain.updateLastUpdates state.lastUpdated snapshots },
-        effects |> List.map SnapshotCreated,
+        effects |> List.map (fun x ->SnapshotCreated x :> Event),
         ()
 
 let restore = StoreDomain.update
 
-let main loadSnapshots (reduce: IReducer<State, Events>) =
+let main loadSnapshots (reduce: IReducer<State, Event>) =
     async {
         let! snapReqs = reduce.Invoke(fun db -> db, [], StoreDomain.mkNewSnapshots db)
 
