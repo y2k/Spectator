@@ -104,7 +104,7 @@ let main _ =
         Worker.RssParser.Http.download
         true
         (TimeSpan.FromMinutes(float config.updateTimeMinutes))
-        (IO.Path.Combine(config.filesDir, "spectatordb"))
+        (IO.Path.Combine(config.filesDir, "spectator.db"))
     |> Async.RunSynchronously
 
     0
