@@ -31,7 +31,7 @@ module SU = Worker.SubscriptionsMain
 module B = Bot.App
 module P = Store.Persistent
 module TP = StoreWrapper
-module M = Store.MongoDb
+module M = Store.DatabaseAdapter
 module H = HealthCheck
 
 let workerMainSub parsers =
@@ -52,8 +52,10 @@ let workerMainSnap parsers =
 
     SN.main loadSnapshots
 
-let mkApplication sendToTelegram readFromTelegram downloadString enableLogs insert delete queryAll syncSnapPeriod =
+let mkApplication sendToTelegram readFromTelegram downloadString enableLogs syncSnapPeriod (connectionString: string) =
     let parsers = [ (Worker.RssParser.create downloadString) ]
+
+    let db = Store.DatabaseAdapter.make connectionString
 
     async {
         printfn "Restore state..."
@@ -68,7 +70,7 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
                   (TimeSpan.FromSeconds 2.0)
                   (N.main sendToTelegram (TP.make store N.State.Empty N.State.update)) ]
 
-        do! P.restore queryAll (TP.make store () (fun _ _ -> ()))
+        do! P.restore db (TP.make store () (fun _ _ -> ()))
 
         let logTasks =
             if enableLogs then
@@ -83,7 +85,7 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
             Async.loopAll [ yield! logTasks
                             yield! tasks
                             yield
-                                P.main insert delete (TP.make store P.State.Empty P.update)
+                                P.main db (TP.make store P.State.Empty P.update)
                                 |> Async.andWait (TimeSpan.FromSeconds 2.0) ]
     }
 
@@ -91,21 +93,18 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs inse
 let main _ =
     let config =
         {| filesDir = IO.Path.Combine(IO.Directory.GetCurrentDirectory(), "__data")
-           mongoDomain = "mongodb"
            telegramToken = Environment.GetEnvironmentVariable "SPECTATOR_BOT_TOKEN"
            updateTimeMinutes = 1 |}
 
-    let db = Store.MongoDb.make config.mongoDomain "spectator"
+    IO.Directory.CreateDirectory(config.filesDir) |> ignore
 
     mkApplication
         (Telegram.sendToTelegramSingle config.telegramToken)
         (Telegram.readMessage config.telegramToken)
         Worker.RssParser.Http.download
         true
-        (M.insert db)
-        (M.delete db)
-        (M.queryAll db)
         (TimeSpan.FromMinutes(float config.updateTimeMinutes))
+        (IO.Path.Combine(config.filesDir, "spectatordb"))
     |> Async.RunSynchronously
 
     0

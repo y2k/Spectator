@@ -1,8 +1,7 @@
 module Spectator.Store.Persistent
 
 open Spectator.Core
-open MongoDB.Bson
-open MongoDB.Bson.Serialization
+open LiteDB
 
 type MongoCmd =
     | Insert of string * BsonDocument
@@ -14,25 +13,21 @@ module Domain =
     let restore name (doc: BsonDocument) : Event =
         match name with
         | "snapshots" ->
-            let (s: Snapshot) = BsonSerializer.Deserialize doc
+            let (s: Snapshot) = BsonMapper.Global.Deserialize doc
             SnapshotCreated(false, s)
         | "subscriptions" ->
-            let (s: Subscription) = BsonSerializer.Deserialize doc
+            let (s: Subscription) = BsonMapper.Global.Deserialize doc
             SubscriptionCreated s
         | _ -> failwithf "Unsupported collections %s" name
 
     let update (e: Event) =
         match e with
         | :? SubscriptionCreated as SubscriptionCreated sub ->
-            let ser = BsonSerializer.LookupSerializer<Subscription>()
-
-            let doc = ser.ToBsonValue(sub) :?> BsonDocument
-            [ Insert("subscriptions", doc) ]
+            let doc = BsonMapper.Global.Serialize sub
+            [ Insert("subscriptions", doc :?> BsonDocument) ]
         | :? SnapshotCreated as SnapshotCreated (_, snap) ->
-            let ser = BsonSerializer.LookupSerializer<Snapshot>()
-
-            let doc = ser.ToBsonValue(snap) :?> BsonDocument
-            [ Insert("snapshots", doc) ]
+            let doc = BsonMapper.Global.Serialize snap
+            [ Insert("snapshots", doc :?> BsonDocument) ]
         | :? SubscriptionRemoved as SubscriptionRemoved (sids, _) ->
             sids
             |> List.map (fun id -> TypedId.unwrap id)
@@ -46,22 +41,22 @@ type State =
 let update state e =
     { state with queue = (Domain.update e) @ state.queue }
 
-let main insert delete (reducer: IReducer<_, Event>) =
+let main (db_: DatabaseAdapter.t) (reducer: IReducer<_, Event>) =
     async {
         let! (db: State) = reducer.Invoke(fun db -> State.Empty, [], db)
 
         for e in (List.rev db.queue) do
             do!
                 match e with
-                | Insert (col, i) -> insert col i
-                | Delete (col, id) -> delete col id
+                | Insert (col, i) -> DatabaseAdapter.insert db_ col i
+                | Delete (col, id) -> DatabaseAdapter.delete db_ col id
     }
 
-let restore query (reducer: IReducer<_, Event>) =
+let restore (db: DatabaseAdapter.t) (reducer: IReducer<_, Event>) =
     async {
         for name in Domain.collections do
             do!
-                query name (fun doc ->
+                DatabaseAdapter.queryAll db name (fun doc ->
                     let events = Domain.restore name doc
                     reducer.Invoke(fun db -> db, [ events ], ()))
     }

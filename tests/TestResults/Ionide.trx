@@ -1,0 +1,89 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="a2db68b2-7f20-46a9-97cf-8766a93c060d" name="@Igors-MacBook-Pro-2 2022-05-06 18:43:07" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2022-05-06T18:43:07.5814650+04:00" queuing="2022-05-06T18:43:07.5814650+04:00" start="2022-05-06T18:42:49.3237600+04:00" finish="2022-05-06T18:43:07.5950370+04:00" />
+  <TestSettings name="default" id="19bf2fca-8018-4058-aa7a-789d0d9d6279">
+    <Deployment runDeploymentRoot="_Igors-MacBook-Pro-2_2022-05-06_18_43_07" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="01ae1575-c6a5-4dfb-b993-16946fe34dd9" testId="6ffd8745-dadd-7745-8762-b33be16d928a" testName="TestsIntegration.save and restore state" computerName="Igors-MacBook-Pro-2" duration="00:00:16.3638504" startTime="2022-05-06T18:43:07.4576530+04:00" endTime="2022-05-06T18:43:07.4576890+04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="01ae1575-c6a5-4dfb-b993-16946fe34dd9">
+      <Output>
+        <ErrorInfo>
+          <Message>
+
+expected = actual
+"Your subscriptions:\n- [RSS] https://degoes.net/feed.xml '' (18)" = "Your subscriptions:"
+false
+
+Expected: True
+Actual:   False</Message>
+          <StackTrace>   at TestFramework.assertBot@54-1.Invoke(Unit unitVar) in /Users/igor/Projects/spectator/tests/TestFramework.fs:line 56
+   at Microsoft.FSharp.Control.AsyncPrimitives.CallThenInvoke[T,TResult](AsyncActivation`1 ctxt, TResult result1, FSharpFunc`2 part2) in D:\a\_work\1\s\src\fsharp\FSharp.Core\async.fs:line 447
+   at TestFramework.assertBot@51-3.Invoke(AsyncActivation`1 ctxt) in /Users/igor/Projects/spectator/tests/TestFramework.fs:line 51
+   at TestFramework.flaky@24-5.Invoke(AsyncActivation`1 ctxt) in /Users/igor/Projects/spectator/tests/TestFramework.fs:line 24
+   at TestFramework.flaky@23-12.Invoke(AsyncActivation`1 ctxt) in /Users/igor/Projects/spectator/tests/TestFramework.fs:line 23
+   at TestFramework.flaky@29-10.Invoke(AsyncActivation`1 ctxt) in /Users/igor/Projects/spectator/tests/TestFramework.fs:line 29
+   at Microsoft.FSharp.Control.Trampoline.Execute(FSharpFunc`2 firstAction) in D:\a\_work\1\s\src\fsharp\FSharp.Core\async.fs:line 104
+--- End of stack trace from previous location ---
+   at Microsoft.FSharp.Control.AsyncResult`1.Commit() in D:\a\_work\1\s\src\fsharp\FSharp.Core\async.fs:line 392
+   at Microsoft.FSharp.Control.AsyncPrimitives.QueueAsyncAndWaitForResultSynchronously[a](CancellationToken token, FSharpAsync`1 computation, FSharpOption`1 timeout) in D:\a\_work\1\s\src\fsharp\FSharp.Core\async.fs:line 1045
+   at Microsoft.FSharp.Control.AsyncPrimitives.RunSynchronously[T](CancellationToken cancellationToken, FSharpAsync`1 computation, FSharpOption`1 timeout) in D:\a\_work\1\s\src\fsharp\FSharp.Core\async.fs:line 1071
+   at Microsoft.FSharp.Control.FSharpAsync.RunSynchronously[T](FSharpAsync`1 computation, FSharpOption`1 timeout, FSharpOption`1 cancellationToken) in D:\a\_work\1\s\src\fsharp\FSharp.Core\async.fs:line 1366
+   at TestFramework.run(FSharpFunc`2 f) in /Users/igor/Projects/spectator/tests/TestFramework.fs:line 107
+   at TestsIntegration.save and restore state() in /Users/igor/Projects/spectator/tests/Integration.fs:line 5</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="TestsIntegration.save and restore state" storage="/users/igor/projects/spectator/tests/bin/debug/net6.0/tests.dll" id="6ffd8745-dadd-7745-8762-b33be16d928a">
+      <Execution id="01ae1575-c6a5-4dfb-b993-16946fe34dd9" />
+      <TestMethod codeBase="/Users/igor/Projects/spectator/tests/bin/Debug/net6.0/tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="TestsIntegration" name="save and restore state" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="6ffd8745-dadd-7745-8762-b33be16d928a" executionId="01ae1575-c6a5-4dfb-b993-16946fe34dd9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="1" executed="1" passed="0" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.4.3+1b45f5407b (64-bit .NET 6.0.3)
+[xUnit.net 00:00:00.62]   Discovering: tests
+[xUnit.net 00:00:00.66]   Discovered:  tests
+[xUnit.net 00:00:00.67]   Starting:    tests
+[xUnit.net 00:00:17.12]       
+[xUnit.net 00:00:17.12]       
+[xUnit.net 00:00:17.12]       expected = actual
+[xUnit.net 00:00:17.12]       "Your subscriptions:\n- [RSS] https://degoes.net/feed.xml '' (18)" = "Your subscriptions:"
+[xUnit.net 00:00:17.12]       false
+[xUnit.net 00:00:17.12]       
+[xUnit.net 00:00:17.12]       Expected: True
+[xUnit.net 00:00:17.12]       Actual:   False
+[xUnit.net 00:00:17.12]       Stack Trace:
+[xUnit.net 00:00:17.12]         /Users/igor/Projects/spectator/tests/TestFramework.fs(56,0): at TestFramework.assertBot@54-1.Invoke(Unit unitVar)
+[xUnit.net 00:00:17.12]         D:\a\_work\1\s\src\fsharp\FSharp.Core\async.fs(447,0): at Microsoft.FSharp.Control.AsyncPrimitives.CallThenInvoke[T,TResult](AsyncActivation`1 ctxt, TResult result1, FSharpFunc`2 part2)
+[xUnit.net 00:00:17.12]         /Users/igor/Projects/spectator/tests/TestFramework.fs(51,0): at TestFramework.assertBot@51-3.Invoke(AsyncActivation`1 ctxt)
+[xUnit.net 00:00:17.12]         /Users/igor/Projects/spectator/tests/TestFramework.fs(24,0): at TestFramework.flaky@24-5.Invoke(AsyncActivation`1 ctxt)
+[xUnit.net 00:00:17.12]         /Users/igor/Projects/spectator/tests/TestFramework.fs(23,0): at TestFramework.flaky@23-12.Invoke(AsyncActivation`1 ctxt)
+[xUnit.net 00:00:17.12]         /Users/igor/Projects/spectator/tests/TestFramework.fs(29,0): at TestFramework.flaky@29-10.Invoke(AsyncActivation`1 ctxt)
+[xUnit.net 00:00:17.12]         D:\a\_work\1\s\src\fsharp\FSharp.Core\async.fs(104,0): at Microsoft.FSharp.Control.Trampoline.Execute(FSharpFunc`2 firstAction)
+[xUnit.net 00:00:17.12]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:17.12]         D:\a\_work\1\s\src\fsharp\FSharp.Core\async.fs(392,0): at Microsoft.FSharp.Control.AsyncResult`1.Commit()
+[xUnit.net 00:00:17.12]         D:\a\_work\1\s\src\fsharp\FSharp.Core\async.fs(1045,0): at Microsoft.FSharp.Control.AsyncPrimitives.QueueAsyncAndWaitForResultSynchronously[a](CancellationToken token, FSharpAsync`1 computation, FSharpOption`1 timeout)
+[xUnit.net 00:00:17.12]         D:\a\_work\1\s\src\fsharp\FSharp.Core\async.fs(1071,0): at Microsoft.FSharp.Control.AsyncPrimitives.RunSynchronously[T](CancellationToken cancellationToken, FSharpAsync`1 computation, FSharpOption`1 timeout)
+[xUnit.net 00:00:17.12]         D:\a\_work\1\s\src\fsharp\FSharp.Core\async.fs(1366,0): at Microsoft.FSharp.Control.FSharpAsync.RunSynchronously[T](FSharpAsync`1 computation, FSharpOption`1 timeout, FSharpOption`1 cancellationToken)
+[xUnit.net 00:00:17.12]         /Users/igor/Projects/spectator/tests/TestFramework.fs(107,0): at TestFramework.run(FSharpFunc`2 f)
+[xUnit.net 00:00:17.12]         /Users/igor/Projects/spectator/tests/Integration.fs(5,0): at TestsIntegration.save and restore state()
+[xUnit.net 00:00:17.13]   Finished:    tests
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="Igors-MacBook-Pro-2" outcome="Error" timestamp="2022-05-06T18:43:07.4522070+04:00">
+        <Text>[xUnit.net 00:00:17.12]     TestsIntegration.save and restore state [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>
