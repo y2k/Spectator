@@ -2,6 +2,9 @@
     "files.exclude": {
         "**/bin": true,
         "**/obj": true,
-        ".*": true
+        ".*": true,
+        "LICENSE": true,
+        "nuget.config": true,
+        "*.sln": true,
     }
 }
