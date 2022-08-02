@@ -1,5 +1,6 @@
 namespace Spectator.Core
 
+[<System.Obsolete>]
 type IReducer<'state, 'event> =
     abstract member Invoke : ('state -> 'state * 'event list * 'result) -> 'result Async
 
