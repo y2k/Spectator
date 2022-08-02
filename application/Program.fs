@@ -96,7 +96,8 @@ let main _ =
            telegramToken = Environment.GetEnvironmentVariable "SPECTATOR_BOT_TOKEN"
            updateTimeMinutes = 1 |}
 
-    IO.Directory.CreateDirectory(config.filesDir) |> ignore
+    IO.Directory.CreateDirectory(config.filesDir)
+    |> ignore
 
     mkApplication
         (Telegram.sendToTelegramSingle config.telegramToken)

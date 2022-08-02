@@ -59,9 +59,9 @@ type Event =
     interface
     end
 
-type HealthCheckRequested =
-    | HealthCheckRequested
-    interface Event
+type Command =
+    interface
+    end
 
 type NewSubscriptionCreated =
     | NewSubscriptionCreated of NewSubscription

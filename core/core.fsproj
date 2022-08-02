@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <PackageReference Include="y2k.prelude" Version="0.2.10" />
+    <PackageReference Include="Prelude.Atom" Version="0.1.0" />
   </ItemGroup>
 
 </Project>
