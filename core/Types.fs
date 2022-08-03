@@ -88,3 +88,21 @@ type TelegramMessageReceived =
 type SendTelegramMessage =
     | SendTelegramMessage of user: string * message: string
     interface Command
+
+type TimerTicked =
+    | TimerTicked of minNumber: int64
+    interface Event
+
+module StoreAtom =
+    type 's StateStore = { mutable state: 's }
+
+    let inline make () : ^state StateStore =
+        let emptyState = (^state: (static member empty: ^state) ())
+        { state = emptyState }
+
+    let addStateCofx (state: _ StateStore) f = fun x -> f state.state x
+
+    let handleCommand (stateHolder: 'state StateStore) (cmd: Command) =
+        match cmd with
+        | :? 'state as newState -> stateHolder.state <- newState
+        | _ -> ()

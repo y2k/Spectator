@@ -41,16 +41,31 @@ type State =
 let update state e =
     { state with queue = (Domain.update e) @ state.queue }
 
-let main (db_: DatabaseAdapter.t) (reducer: IReducer<_, Event>) =
-    async {
-        let! (db: State) = reducer.Invoke(fun db -> State.Empty, [], db)
+let handleCommand (chan: MongoCmd AsyncChannel.t) (cmd: Command) =
+    Domain.update cmd
+    |> List.iter (AsyncChannel.write chan)
 
-        for e in (List.rev db.queue) do
+let main (dbAdapter: DatabaseAdapter.t) (chan: MongoCmd AsyncChannel.t) =
+    async {
+        while true do
+            let! e = AsyncChannel.read chan
+
             do!
                 match e with
-                | Insert (col, i) -> DatabaseAdapter.insert db_ col i
-                | Delete (col, id) -> DatabaseAdapter.delete db_ col id
+                | Insert (col, i) -> DatabaseAdapter.insert dbAdapter col i
+                | Delete (col, id) -> DatabaseAdapter.delete dbAdapter col id
     }
+
+// let main (dbAdapter: DatabaseAdapter.t) (reducer: IReducer<_, Event>) =
+//     async {
+//         let! (db: State) = reducer.Invoke(fun db -> State.Empty, [], db)
+
+//         for e in (List.rev db.queue) do
+//             do!
+//                 match e with
+//                 | Insert (col, i) -> DatabaseAdapter.insert dbAdapter col i
+//                 | Delete (col, id) -> DatabaseAdapter.delete dbAdapter col id
+//     }
 
 let restore (db: DatabaseAdapter.t) (reducer: IReducer<_, Event>) =
     async {
