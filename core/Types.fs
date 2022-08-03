@@ -60,22 +60,23 @@ type Event =
     end
 
 type Command = Event
+type SyntheticEvent = Event
 
 type NewSubscriptionCreated =
     | NewSubscriptionCreated of NewSubscription
-    interface Event
+    interface SyntheticEvent
 
 type SubscriptionCreated =
     | SubscriptionCreated of Subscription
-    interface Event
+    interface Command
 
 type SnapshotCreated =
     | SnapshotCreated of isNew: bool * Snapshot
-    interface Event
+    interface SyntheticEvent
 
 type SubscriptionRemoved =
     | SubscriptionRemoved of Subscription TypedId list * NewSubscription TypedId list
-    interface Event
+    interface SyntheticEvent
 
 type Filter =
     | NoneFilter
@@ -97,8 +98,7 @@ module StoreAtom =
     type 's StateStore = { mutable state: 's }
 
     let inline make () : ^state StateStore =
-        let emptyState = (^state: (static member empty: ^state) ())
-        { state = emptyState }
+        { state = (^state: (static member empty: ^state) ()) }
 
     let addStateCofx (state: _ StateStore) f = fun x -> f state.state x
 

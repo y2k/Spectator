@@ -8,6 +8,8 @@ module Parser =
     open System.Xml.Linq
     open System.Xml.XPath
 
+    let pluginId = Guid.Parse "E5D3A9F2-325C-4CEF-BCA9-99D23F9E5AE5"
+
     let private nsHttp = XmlNamespaceManager(NameTable())
     nsHttp.AddNamespace("media", "http://search.yahoo.com/mrss/")
     nsHttp.AddNamespace("atom", "http://www.w3.org/2005/Atom")
@@ -70,6 +72,6 @@ module Http =
         }
 
 let create downloadString =
-    Guid.Parse "E5D3A9F2-325C-4CEF-BCA9-99D23F9E5AE5",
+    Parser.pluginId,
     (fun (uri: Uri) -> uri |> downloadString >>- Parser.isValid),
     (fun (uri: Uri) -> uri |> downloadString >>- Parser.getNodes)
