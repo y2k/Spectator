@@ -202,6 +202,22 @@ module StoreUpdater =
 
 let restore = StoreUpdater.update
 
+let handleEvent (e: Event) : Command list =
+    match e with
+    | :? TelegramMessageReceived as TelegramMessageReceived (user, msg) ->
+        let handleTelegramMessage db =
+            let (db, (result, events)) =
+                State.updateUserState db user (fun db -> db, HandleTelegramMessage.invoke user msg db)
+
+            db, events, result
+        // let! telegramMsg = reduce.Invoke handleTelegramMessage
+        let telegramMsg: string = failwith "???"
+
+        // do! sendMessage user telegramMsg |> Async.Ignore
+        [ SendTelegramMessage(user, telegramMsg) ]
+    | _ -> []
+
+[<Obsolete>]
 let main readMessage sendMessage (reduce: IReducer<State, Event>) =
     async {
         let! (user, msg) = readMessage

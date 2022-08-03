@@ -18,6 +18,12 @@ let handleEvent (e: Event) : Command list =
 
 open System.Net
 
+type State =
+    private
+        { state: Map<Guid, HttpListenerContext> Atom.IAtom }
+
+let init () = { state = Atom.atom Map.empty }
+
 let private sendResponseToClient (text: string) (ctx: HttpListenerContext) =
     async {
         use _ = ctx.Response
@@ -28,20 +34,18 @@ let private sendResponseToClient (text: string) (ctx: HttpListenerContext) =
             |> Async.AwaitTask
     }
 
-let handleCmd (atom: Atom.IAtom<_>) (cmd: Command) =
+let handleCmd { state = atom } (cmd: Command) =
     match cmd with
     | :? SendHealthCheckResponse as SendHealthCheckResponse id ->
         atom.dispatch (fun db -> Map.remove id db, Map.tryFind id db)
         |> Option.iter (sendResponseToClient "OK" >> Async.Start)
     | _ -> ()
 
-let main (dispatch: Event -> unit) =
+let main { state = atom } (dispatch: Event -> unit) =
     async {
         let listener = new HttpListener()
         listener.Prefixes.Add "http://localhost:8888/"
         listener.Start()
-
-        let atom: Map<Guid, HttpListenerContext> Atom.IAtom = Atom.atom Map.empty
 
         while true do
             let! ctx = listener.GetContextAsync()

@@ -7,7 +7,7 @@ type IReducer<'state, 'event> =
 [<AutoOpen>]
 module Prelude =
     module Async =
-        let andWait (timeout: System.TimeSpan) a =
+        let delayAfter (timeout: System.TimeSpan) a =
             async {
                 do! a
                 do! Async.Sleep timeout

@@ -59,9 +59,7 @@ type Event =
     interface
     end
 
-type Command =
-    interface
-    end
+type Command = Event
 
 type NewSubscriptionCreated =
     | NewSubscriptionCreated of NewSubscription
@@ -82,3 +80,11 @@ type SubscriptionRemoved =
 type Filter =
     | NoneFilter
     | UserFilter of string
+
+type TelegramMessageReceived =
+    | TelegramMessageReceived of user: string * message: string
+    interface Event
+
+type SendTelegramMessage =
+    | SendTelegramMessage of user: string * message: string
+    interface Command

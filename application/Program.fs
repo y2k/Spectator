@@ -25,6 +25,13 @@ module StoreWrapper =
                     return result
                 } }
 
+    let makeDispatch store handleEvent handleCmd =
+        let dispatchStore = make store () (fun _ e -> handleEvent e |> List.iter handleCmd)
+
+        fun (e: Event) ->
+            dispatchStore.Invoke(fun _ -> (), [ e ], ())
+            |> Async.Start
+
 module N = Notifications
 module SN = Worker.SnapshotsMain
 module SU = Worker.SubscriptionsMain
@@ -32,7 +39,6 @@ module B = Bot.App
 module P = Store.Persistent
 module TP = StoreWrapper
 module M = Store.DatabaseAdapter
-module H = HealthCheck
 
 let workerMainSub parsers =
     let parserIds = parsers |> List.map (fun (id, _, _) -> id)
@@ -52,7 +58,14 @@ let workerMainSnap parsers =
 
     SN.main loadSnapshots
 
-let mkApplication sendToTelegram readFromTelegram downloadString enableLogs syncSnapPeriod (connectionString: string) =
+let mkApplication
+    sendToTelegram
+    readFromTelegram
+    downloadString
+    isProduction
+    syncSnapPeriod
+    (connectionString: string)
+    =
     let parsers = [ (Worker.RssParser.create downloadString) ]
 
     let db = Store.DatabaseAdapter.make connectionString
@@ -63,30 +76,44 @@ let mkApplication sendToTelegram readFromTelegram downloadString enableLogs sync
         let store: Event EventPersistent.Store.t = TP.init ()
 
         let tasks =
-            [ Async.andWait (TimeSpan.FromSeconds 2.0) (workerMainSub parsers (TP.make store SU.State.Empty SU.restore))
-              Async.andWait syncSnapPeriod (workerMainSnap parsers (TP.make store SN.State.Empty SN.restore))
+            [ Async.delayAfter
+                  (TimeSpan.FromSeconds 2.0)
+                  (workerMainSub parsers (TP.make store SU.State.Empty SU.restore))
+              Async.delayAfter syncSnapPeriod (workerMainSnap parsers (TP.make store SN.State.Empty SN.restore))
               B.main readFromTelegram sendToTelegram (TP.make store B.State.Empty B.restore)
-              Async.andWait
+              Async.delayAfter
                   (TimeSpan.FromSeconds 2.0)
                   (N.main sendToTelegram (TP.make store N.State.Empty N.State.update)) ]
 
         do! P.restore db (TP.make store () (fun _ _ -> ()))
 
-        let logTasks =
-            if enableLogs then
-                Logger.log (TP.make store)
-                [ H.main (TP.make store) ]
+        let healthState = HealthCheck.init ()
+
+        let productionTasks =
+            if isProduction then
+                let dispatch =
+                    TP.makeDispatch
+                        store
+                        (fun e ->
+                            [ yield! HealthCheck.handleEvent e
+                              yield! Logger.logEvent e ])
+                        (fun cmd ->
+                            HealthCheck.handleCmd healthState cmd
+                            Logger.logCommand cmd)
+
+                [ HealthCheck.main healthState dispatch ]
             else
                 []
 
         printfn "Started..."
 
         do!
-            Async.loopAll [ yield! logTasks
-                            yield! tasks
-                            yield
-                                P.main db (TP.make store P.State.Empty P.update)
-                                |> Async.andWait (TimeSpan.FromSeconds 2.0) ]
+            [ yield! productionTasks
+              yield! tasks
+              yield
+                  P.main db (TP.make store P.State.Empty P.update)
+                  |> Async.delayAfter (TimeSpan.FromSeconds 2.0) ]
+            |> Async.loopAll
     }
 
 [<EntryPoint>]
