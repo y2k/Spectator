@@ -20,33 +20,31 @@ module Parser =
 
     let parseRss (doc: XDocument) =
         doc.XPathSelectElements "//channel/item"
-        |> Seq.map
-            (fun e ->
-                { subscriptionId = TypedId.empty ()
-                  created =
-                      e.XPathSelectElement("pubDate").Value
-                      |> DateTime.Parse
-                  id = TypedId.empty ()
-                  title = e.XPathSelectElement("title").Value
-                  uri = e.XPathSelectElement("link").Value |> Uri })
+        |> Seq.map (fun e ->
+            { subscriptionId = TypedId.empty ()
+              created =
+                e.XPathSelectElement("pubDate").Value
+                |> DateTime.Parse
+              id = TypedId.empty ()
+              title = e.XPathSelectElement("title").Value
+              uri = e.XPathSelectElement("link").Value |> Uri })
         |> Seq.toList
 
     let parseAtom (ns: XmlNamespaceManager) (doc: XDocument) =
         doc.XPathSelectElements("atom:feed//atom:entry", ns)
-        |> Seq.map
-            (fun e ->
-                { subscriptionId = TypedId.empty ()
-                  created =
-                      e.XPathSelectElement("atom:updated", ns).Value
-                      |> DateTime.Parse
-                  id = TypedId.empty ()
-                  title = e.XPathSelectElement("atom:title", ns).Value
-                  uri =
-                      e
-                          .XPathSelectElement("atom:link", ns)
-                          .Attribute("href" |> XName.op_Implicit)
-                          .Value
-                      |> Uri })
+        |> Seq.map (fun e ->
+            { subscriptionId = TypedId.empty ()
+              created =
+                e.XPathSelectElement("atom:updated", ns).Value
+                |> DateTime.Parse
+              id = TypedId.empty ()
+              title = e.XPathSelectElement("atom:title", ns).Value
+              uri =
+                e.XPathSelectElement("atom:link", ns).Attribute(
+                    "href" |> XName.op_Implicit
+                )
+                    .Value
+                |> Uri })
         |> Seq.toList
 
     let getNodes (html: string) =
@@ -68,7 +66,15 @@ module Http =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/605.1.15 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/605.1 Edge/19.17763"
             |> client.DefaultRequestHeaders.UserAgent.ParseAdd
 
-            return! client.GetStringAsync uri
+            let! result =
+                client.GetByteArrayAsync uri
+                |> Async.AwaitTask
+                |> Async.Catch
+
+            return
+                match result with
+                | Choice1Of2 x -> Ok x
+                | Choice2Of2 e -> Error e
         }
 
 let create downloadString =

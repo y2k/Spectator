@@ -94,6 +94,10 @@ type TimerTicked =
     | TimerTicked of minNumber: int64
     interface Event
 
+type DownloadHttp =
+    | DownloadHttp of Uri * (Result<byte [], exn> -> Event)
+    interface Command
+
 module StoreAtom =
     type 's StateStore = { mutable state: 's }
 
@@ -106,3 +110,6 @@ module StoreAtom =
         match cmd with
         | :? 'state as newState -> stateHolder.state <- newState
         | _ -> ()
+
+    let handleCommandFun (stateHolder: 'state StateStore) update (cmd: #Command) =
+        stateHolder.state <- update stateHolder.state cmd

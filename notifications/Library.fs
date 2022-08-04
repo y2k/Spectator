@@ -13,7 +13,7 @@ type State =
           queue = []
           initialized = false }
 
-module State =
+module private State =
     let update state (event: Event) =
         match event with
         | :? SnapshotCreated as SnapshotCreated (true, snap) ->
@@ -59,6 +59,8 @@ module private Domain =
         let (state', events) = clearQueue state
         let result = getUpdates state
         state', events, result
+
+let handleStateCmd (state: State) (cmd: Command) = State.update state cmd
 
 let handleEvent (state: State) (e: Event) =
     match e with

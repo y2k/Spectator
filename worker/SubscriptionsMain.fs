@@ -5,22 +5,24 @@ open Spectator.Core
 
 module RssParser = RssParser.Parser
 
-module Https =
-    type DownloadHttp =
-        | DownloadHttp of Uri * (byte [] -> Event)
-        interface Command
-
 type State =
     { newSubscriptions: NewSubscription list }
     static member empty = { newSubscriptions = [] }
 
-let handleCmd (cmd: Command) =
-    match cmd with
-    | :? NewSubscriptionCreated as NewSubscriptionCreated ns -> failwith "???"
-    | _ -> ()
+let handleStateCmd (state: State) (cmd: Command) =
+    let removeNewSubs (subscriptions: NewSubscription list) sids =
+        subscriptions
+        |> List.filter (fun s -> not <| List.contains s.id sids)
 
-type DownloadCompleted =
-    | DownloadCompleted of Uri * byte []
+    match cmd with
+    | :? SubscriptionRemoved as SubscriptionRemoved (sids, nsids) ->
+        { state with newSubscriptions = removeNewSubs state.newSubscriptions nsids }
+    | :? NewSubscriptionCreated as (NewSubscriptionCreated ns) ->
+        { state with newSubscriptions = ns :: state.newSubscriptions }
+    | _ -> state
+
+type private DownloadCompleted =
+    | DownloadCompleted of Uri * Result<byte [], exn>
     interface Event
 
 let private mkSubscription (newSub: NewSubscription) (p: PluginId) : Subscription =
@@ -34,16 +36,13 @@ let handleEvent (state: State) (e: Event) : Command list =
     match e with
     | :? TimerTicked ->
         state.newSubscriptions
-        |> List.map (fun ns -> Https.DownloadHttp(ns.uri, (fun data -> DownloadCompleted(ns.uri, data))))
-    | :? DownloadCompleted as DownloadCompleted (uri, data) ->
-        let isValid =
-            data
-            |> Text.Encoding.UTF8.GetString
-            |> RssParser.isValid
+        |> List.map (fun ns -> DownloadHttp(ns.uri, (fun data -> DownloadCompleted(ns.uri, data))))
+    | :? DownloadCompleted as DownloadCompleted (uri, (Ok data)) ->
+        let isRss = RssParser.isValid (Text.Encoding.UTF8.GetString data)
 
         state.newSubscriptions
         |> List.choose (fun ns ->
-            if isValid && ns.uri = uri then
+            if isRss && ns.uri = uri then
                 Some(SubscriptionCreated(mkSubscription ns RssParser.pluginId))
             else
                 None)

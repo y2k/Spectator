@@ -8,6 +8,7 @@
   <ItemGroup>
     <Compile Include="Logger.fs" />
     <Compile Include="HealthCheck.fs" />
+    <Compile Include="CommandHandlers.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

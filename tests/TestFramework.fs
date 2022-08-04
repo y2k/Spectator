@@ -62,7 +62,8 @@ let mkDownloadString stage url =
         sprintf "../../../../tests/examples/%i/" stage,
         Uri.EscapeDataString(string url)
     )
-    |> IO.File.ReadAllText
+    |> IO.File.ReadAllBytes
+    |> Ok
     |> async.Return
 
 let private mkApplication (output: string Channel) (input: string Channel) db downloadString time =
