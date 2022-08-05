@@ -1,4 +1,4 @@
-module Spectator.Worker.SubscriptionsMain
+module Spectator.Worker.RssSubscriptionsWorker
 
 open System
 open Spectator.Core
@@ -43,25 +43,13 @@ let handleEvent (state: State) (e: Event) : Command list =
         state.newSubscriptions
         |> List.choose (fun ns ->
             if isRss && ns.uri = uri then
-                Some(SubscriptionCreated(mkSubscription ns RssParser.pluginId))
+                [ SubscriptionCreated(mkSubscription ns RssParser.pluginId) :> Command
+                  SubscriptionRemoved([], [ ns.id ]) ]
+                |> Some
             else
                 None)
+        |> List.concat
     | _ -> []
-
-// module Domain =
-//     let removeNewSubs (subscriptions: NewSubscription list) sids =
-//         subscriptions
-//         |> List.filter (fun s -> not <| List.contains s.id sids)
-
-//     let update state (event:Event) =
-//         match event with
-//         | :? SubscriptionRemoved as SubscriptionRemoved (sids, nsids) ->
-//             { state with
-//                   newSubscriptions = removeNewSubs state.newSubscriptions nsids }
-//         | :? NewSubscriptionCreated as (NewSubscriptionCreated ns) ->
-//             { state with
-//                   newSubscriptions = ns :: state.newSubscriptions }
-//         | _ -> state
 
 //     let mkSubscriptionsEnd (state: State) (results: list<(PluginId * Uri) * Result<bool, _>>) : Event list =
 //         let findPlugin (ns: NewSubscription) : PluginId option =

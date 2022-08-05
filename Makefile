@@ -1,3 +1,6 @@
+run:
+	export $$(cat .env | xargs) && dotnet run --project application
+
 test:
 	dotnet test
 

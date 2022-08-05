@@ -18,7 +18,7 @@ module Parser =
     nsHttps.AddNamespace("media", "http://search.yahoo.com/mrss/")
     nsHttps.AddNamespace("atom", "https://www.w3.org/2005/Atom")
 
-    let parseRss (doc: XDocument) =
+    let private parseRss (doc: XDocument) =
         doc.XPathSelectElements "//channel/item"
         |> Seq.map (fun e ->
             { subscriptionId = TypedId.empty ()
@@ -30,7 +30,7 @@ module Parser =
               uri = e.XPathSelectElement("link").Value |> Uri })
         |> Seq.toList
 
-    let parseAtom (ns: XmlNamespaceManager) (doc: XDocument) =
+    let private parseAtom (ns: XmlNamespaceManager) (doc: XDocument) =
         doc.XPathSelectElements("atom:feed//atom:entry", ns)
         |> Seq.map (fun e ->
             { subscriptionId = TypedId.empty ()
@@ -56,28 +56,28 @@ module Parser =
 
     let isValid = getNodes >> List.isEmpty >> not
 
-module Http =
-    open System.Net.Http
+// module Http =
+//     open System.Net.Http
 
-    let download (uri: Uri) =
-        async {
-            use client = new HttpClient()
+//     let download (uri: Uri) =
+//         async {
+//             use client = new HttpClient()
 
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/605.1.15 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/605.1 Edge/19.17763"
-            |> client.DefaultRequestHeaders.UserAgent.ParseAdd
+//             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/605.1.15 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/605.1 Edge/19.17763"
+//             |> client.DefaultRequestHeaders.UserAgent.ParseAdd
 
-            let! result =
-                client.GetByteArrayAsync uri
-                |> Async.AwaitTask
-                |> Async.Catch
+//             let! result =
+//                 client.GetByteArrayAsync uri
+//                 |> Async.AwaitTask
+//                 |> Async.Catch
 
-            return
-                match result with
-                | Choice1Of2 x -> Ok x
-                | Choice2Of2 e -> Error e
-        }
+//             return
+//                 match result with
+//                 | Choice1Of2 x -> Ok x
+//                 | Choice2Of2 e -> Error e
+//         }
 
-let create downloadString =
-    Parser.pluginId,
-    (fun (uri: Uri) -> uri |> downloadString >>- Parser.isValid),
-    (fun (uri: Uri) -> uri |> downloadString >>- Parser.getNodes)
+// let create downloadString =
+//     Parser.pluginId,
+//     (fun (uri: Uri) -> uri |> downloadString >>- Parser.isValid),
+//     (fun (uri: Uri) -> uri |> downloadString >>- Parser.getNodes)

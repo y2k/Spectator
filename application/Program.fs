@@ -34,7 +34,8 @@ module StoreWrapper =
 module Bot = Bot.App
 module Persistent = Store.Persistent
 module DatabaseAdapter = Store.DatabaseAdapter
-module RssWorker = Worker.SubscriptionsMain
+module RssSubscriptionsWorker = Worker.RssSubscriptionsWorker
+module RssSnapshotsWorker = Worker.RssSnapshotsWorker
 
 let mkApplication
     sendToTelegram
@@ -49,12 +50,14 @@ let mkApplication
         let store: Event EventPersistent.Store.t = StoreWrapper.init ()
         let botState = StoreAtom.make ()
         let notifState = StoreAtom.make ()
-        let rssWorkerState = StoreAtom.make ()
+        let rssSubState = StoreAtom.make ()
+        let rssSnapState = StoreAtom.make ()
 
         let handleEvent e =
             [ yield! (StoreAtom.addStateCofx botState Bot.handleEvent) e
               yield! (StoreAtom.addStateCofx notifState Notifications.handleEvent) e
-              yield! (StoreAtom.addStateCofx rssWorkerState RssWorker.handleEvent) e ]
+              yield! (StoreAtom.addStateCofx rssSubState RssSubscriptionsWorker.handleEvent) e
+              yield! (StoreAtom.addStateCofx rssSnapState RssSnapshotsWorker.handleEvent) e ]
 
         let handleCommand dispatch cmd =
             Https.handleCommand downloadString dispatch cmd
@@ -62,7 +65,8 @@ let mkApplication
             TelegramEventAdapter.handleCommand sendToTelegram cmd
             StoreAtom.handleCommand notifState cmd
             StoreAtom.handleCommandFun notifState Notifications.handleStateCmd cmd
-            StoreAtom.handleCommandFun rssWorkerState RssWorker.handleStateCmd cmd
+            StoreAtom.handleCommandFun rssSubState RssSubscriptionsWorker.handleStateCmd cmd
+            StoreAtom.handleCommandFun rssSnapState RssSnapshotsWorker.handleStateCmd cmd
 
         let db = DatabaseAdapter.make connectionString
         do! Persistent.restore db (StoreWrapper.make store () (fun _ _ -> ()))
@@ -116,7 +120,7 @@ let main _ =
     mkApplication
         (Telegram.sendToTelegramSingle config.telegramToken)
         (Telegram.readMessage config.telegramToken)
-        Worker.RssParser.Http.download
+        Https.download
         true
         (TimeSpan.FromMinutes(float config.updateTimeMinutes))
         (IO.Path.Combine(config.filesDir, "spectator.db"))

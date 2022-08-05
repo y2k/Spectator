@@ -72,7 +72,7 @@ type SubscriptionCreated =
 
 type SnapshotCreated =
     | SnapshotCreated of isNew: bool * Snapshot
-    interface SyntheticEvent
+    interface Command
 
 type SubscriptionRemoved =
     | SubscriptionRemoved of Subscription TypedId list * NewSubscription TypedId list
@@ -91,7 +91,7 @@ type SendTelegramMessage =
     interface Command
 
 type TimerTicked =
-    | TimerTicked of minNumber: int64
+    | TimerTicked of minuteNumber: int64
     interface Event
 
 type DownloadHttp =
