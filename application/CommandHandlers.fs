@@ -20,14 +20,14 @@ module TelegramEventAdapter =
         }
 
 module TimerAdapter =
-    let generateEvents (dispatch: Event -> unit) =
+    let generateEvents (period: TimeSpan) (dispatch: Event -> unit) =
         async {
             let mutable i = 0L
 
             while true do
                 dispatch (TimerTicked i)
                 i <- i + 1L
-                do! Async.Sleep 60_000
+                do! Async.Sleep period
         }
 
 module Https =

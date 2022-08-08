@@ -5,31 +5,22 @@ open Spectator
 open Spectator.Core
 
 module StoreWrapper =
-    module S = EventPersistent.Store
-    let init = S.init
-
-    [<Obsolete>]
-    let make store initState update =
-        let reduce = S.make store initState update
-
-        { new IReducer<'state, Event> with
-            member _.Invoke f =
+    let makeDispatch (handleMsg: Event -> Command list) (handleCmd: (Event -> unit) -> Command -> unit) =
+        let mail: MailboxProcessor<Event> =
+            MailboxProcessor.Start (fun mail ->
                 async {
-                    let! oldState =
-                        reduce (fun state ->
-                            let (newState, events, _) = f state
-                            newState, events)
+                    while true do
+                        let! msg = mail.Receive()
 
-                    let (_, _, result) = f oldState
-                    return result
-                } }
+                        try
+                            handleMsg msg |> List.iter (handleCmd mail.Post)
+                        with
+                        | e ->
+                            eprintfn "ERROR: %O" e
+                            exit -1
+                })
 
-    let makeDispatch store handleEvent handleCmd =
-        let dispatchStore = make store () (fun _ e -> handleEvent e |> List.iter handleCmd)
-
-        fun (e: Event) ->
-            dispatchStore.Invoke(fun _ -> (), [ e ], ())
-            |> Async.Start
+        mail.Post
 
 module Bot = Bot.App
 module Persistent = Store.Persistent
@@ -37,17 +28,9 @@ module DatabaseAdapter = Store.DatabaseAdapter
 module RssSubscriptionsWorker = Worker.RssSubscriptionsWorker
 module RssSnapshotsWorker = Worker.RssSnapshotsWorker
 
-let mkApplication
-    sendToTelegram
-    readFromTelegram
-    downloadString
-    isProduction
-    syncSnapPeriod
-    (connectionString: string)
-    =
+let runApplication timerPeriod (connectionString: string) extEventHandler extCommandHandler productionTasks =
     async {
         let persCache = AsyncChannel.make ()
-        let store: Event EventPersistent.Store.t = StoreWrapper.init ()
         let botState = StoreAtom.make ()
         let notifState = StoreAtom.make ()
         let rssSubState = StoreAtom.make ()
@@ -57,51 +40,27 @@ let mkApplication
             [ yield! (StoreAtom.addStateCofx botState Bot.handleEvent) e
               yield! (StoreAtom.addStateCofx notifState Notifications.handleEvent) e
               yield! (StoreAtom.addStateCofx rssSubState RssSubscriptionsWorker.handleEvent) e
-              yield! (StoreAtom.addStateCofx rssSnapState RssSnapshotsWorker.handleEvent) e ]
+              yield! (StoreAtom.addStateCofx rssSnapState RssSnapshotsWorker.handleEvent) e
+              yield! extEventHandler e ]
 
         let handleCommand dispatch cmd =
-            Https.handleCommand downloadString dispatch cmd
+            extCommandHandler dispatch cmd
             StoreAtom.handleCommand botState cmd
-            TelegramEventAdapter.handleCommand sendToTelegram cmd
             StoreAtom.handleCommand notifState cmd
+            StoreAtom.handleCommandFun botState Bot.handleStateCmd cmd
             StoreAtom.handleCommandFun notifState Notifications.handleStateCmd cmd
             StoreAtom.handleCommandFun rssSubState RssSubscriptionsWorker.handleStateCmd cmd
             StoreAtom.handleCommandFun rssSnapState RssSnapshotsWorker.handleStateCmd cmd
 
+        let dispatch = StoreWrapper.makeDispatch handleEvent handleCommand
+
         let db = DatabaseAdapter.make connectionString
-        do! Persistent.restore db (StoreWrapper.make store () (fun _ _ -> ()))
-
-        let healthState = HealthCheck.init ()
-
-        let (handleEvent, handleCommand, productionTasks) =
-            if isProduction then
-                let handleEvent e =
-                    [ yield! handleEvent e
-                      yield! HealthCheck.handleEvent e
-                      yield! Logger.logEvent e ]
-
-                let handleCommand dispatch cmd =
-                    handleCommand dispatch cmd
-                    HealthCheck.handleCmd healthState cmd
-                    Logger.logCommand cmd
-
-                handleEvent, handleCommand, [ HealthCheck.main healthState ]
-            else
-                handleEvent, (fun _ _ -> ()), []
-
-        let mutable dispatch: Event -> unit = ignore
-        dispatch <- StoreWrapper.makeDispatch store handleEvent (fun e -> handleCommand dispatch e)
+        do! Persistent.restore db dispatch
 
         printfn "Started..."
 
         do!
-            [ yield TimerAdapter.generateEvents dispatch
-              yield TelegramEventAdapter.generateEvents readFromTelegram dispatch
-              //   yield
-              //       Async.delayAfter
-              //           (TimeSpan.FromSeconds 2.0)
-              //           (workerMainSub parsers (TP.make store SU.State.Empty SU.restore))
-              //   yield Async.delayAfter syncSnapPeriod (workerMainSnap parsers (TP.make store SN.State.Empty SN.restore))
+            [ yield TimerAdapter.generateEvents timerPeriod dispatch
               yield Persistent.main db persCache
               yield! List.map (fun f -> f dispatch) productionTasks ]
             |> Async.loopAll
@@ -117,13 +76,28 @@ let main _ =
     IO.Directory.CreateDirectory(config.filesDir)
     |> ignore
 
-    mkApplication
-        (Telegram.sendToTelegramSingle config.telegramToken)
-        (Telegram.readMessage config.telegramToken)
-        Https.download
-        true
-        (TimeSpan.FromMinutes(float config.updateTimeMinutes))
-        (IO.Path.Combine(config.filesDir, "spectator.db"))
+    async {
+        let healthState = HealthCheck.init ()
+
+        let handleEvent e =
+            [ yield! HealthCheck.handleEvent e
+              yield! Logger.logEvent e ]
+
+        let handleCommand dispatch cmd =
+            TelegramEventAdapter.handleCommand (Telegram.sendToTelegramSingle config.telegramToken) cmd
+            HealthCheck.handleCmd healthState cmd
+            Logger.logCommand cmd
+            Https.handleCommand Https.download dispatch cmd
+
+        do!
+            runApplication
+                (TimeSpan.FromMinutes(float config.updateTimeMinutes))
+                (IO.Path.Combine(config.filesDir, "spectator.db"))
+                handleEvent
+                handleCommand
+                [ HealthCheck.main healthState
+                  TelegramEventAdapter.generateEvents (Telegram.readMessage config.telegramToken) ]
+    }
     |> Async.RunSynchronously
 
     0

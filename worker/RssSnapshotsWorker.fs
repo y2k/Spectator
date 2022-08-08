@@ -31,6 +31,11 @@ let handleStateCmd (state: State) (cmd: Command) : State =
         { state with lastUpdated = Map.add snap.subscriptionId (max lastUpdated snap.created) state.lastUpdated }
     | _ -> state
 
+let private fixSnapshotFields (sub: Subscription) snap =
+    { snap with
+        subscriptionId = sub.id
+        id = TypedId.wrap <| Guid.NewGuid() }
+
 let handleEvent (state: State) (e: Event) : Command list =
     match e with
     | :? TimerTicked ->
@@ -44,6 +49,8 @@ let handleEvent (state: State) (e: Event) : Command list =
 
         RssParser.Parser.getNodes (Text.Encoding.UTF8.GetString bytes)
         |> List.filter (fun x -> x.created > lastUpdated)
+        |> List.map (fixSnapshotFields sub)
+        |> List.sortBy (fun x -> x.created)
         |> List.map (fun snap -> SnapshotCreated(true, snap) :> Command)
     | _ -> []
 

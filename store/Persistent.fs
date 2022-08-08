@@ -67,11 +67,12 @@ let main (dbAdapter: DatabaseAdapter.t) (chan: MongoCmd AsyncChannel.t) =
 //                 | Delete (col, id) -> DatabaseAdapter.delete dbAdapter col id
 //     }
 
-let restore (db: DatabaseAdapter.t) (reducer: IReducer<_, Event>) =
+let restore (db: DatabaseAdapter.t) dispatch =
     async {
         for name in Domain.collections do
             do!
                 DatabaseAdapter.queryAll db name (fun doc ->
                     let events = Domain.restore name doc
-                    reducer.Invoke(fun db -> db, [ events ], ()))
+                    dispatch events
+                    async.Return())
     }

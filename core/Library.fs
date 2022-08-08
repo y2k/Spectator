@@ -2,7 +2,7 @@ namespace Spectator.Core
 
 [<System.Obsolete>]
 type IReducer<'state, 'event> =
-    abstract member Invoke : ('state -> 'state * 'event list * 'result) -> 'result Async
+    abstract member Invoke: ('state -> 'state * 'event list * 'result) -> 'result Async
 
 [<AutoOpen>]
 module Prelude =
@@ -19,7 +19,9 @@ module Prelude =
                     while true do
                         match! a |> Async.catch with
                         | Ok _ -> ()
-                        | Error e -> eprintfn "LOG: Error: %O" e
+                        | Error e ->
+                            eprintfn "LOG: Error: %O" e
+                            exit -1
                 }
 
             axs

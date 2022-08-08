@@ -4,12 +4,18 @@ open System
 open System.Threading.Channels
 open Swensen.Unquote
 
-type Env =
-    { executeCommand: string -> string -> unit Async
-      executeCommandOnce: string -> string -> unit Async
-      waitForMessage: string -> unit Async
-      setDownloadStage: int -> unit
-      resetApplication: unit -> unit }
+let rec private flaky count f =
+    async {
+        try
+            do! f
+        with
+        | e ->
+            if count > 0 then
+                do! Async.Sleep 1_000
+                do! flaky (count - 1) f
+            else
+                raise e
+    }
 
 let private assertBot
     repeat
@@ -18,29 +24,16 @@ let private assertBot
     msg
     expected
     =
-    let rec flaky count f =
-        async {
-            try
-                do! f
-            with
-            | e ->
-                if count > 0 then
-                    do! Async.Sleep 1_000
-                    do! flaky (count - 1) f
-                else
-                    raise e
-        }
-
-    let prev = ref "<not set>"
+    let mutable prev = "<not set>"
 
     let read () =
         let (success, v) = output.Reader.TryRead()
 
         if success then
-            prev := v
+            prev <- v
             v
         else
-            !prev
+            prev
 
     if not repeat && not <| String.IsNullOrEmpty msg then
         input.Writer.WriteAsync msg |> ignore
@@ -56,7 +49,7 @@ let private assertBot
             test <@ expected = actual @>
         })
 
-let mkDownloadString stage url =
+let mkDownloadString stage (url: Uri) =
     IO.Path.Combine(
         IO.Directory.GetCurrentDirectory(),
         sprintf "../../../../tests/examples/%i/" stage,
@@ -66,45 +59,58 @@ let mkDownloadString stage url =
     |> Ok
     |> async.Return
 
-let private mkApplication (output: string Channel) (input: string Channel) db downloadString time =
-    Spectator.Application.mkApplication
-        (fun userId message ->
-            output.Writer.WriteAsync message |> ignore
-            async.Return())
-        (async {
-            let! m = input.Reader.ReadAsync()
-            return "0", m
-        })
-        (fun url -> ! downloadString url)
-        false
+let private mkApplication (output: string Channel) (input: string Channel) db (downloadString: _ ref) time =
+    let handleCommand dispatch cmd =
+        Spectator.Https.handleCommand (fun url -> downloadString.Value url) dispatch cmd
+
+        Spectator.TelegramEventAdapter.handleCommand
+            (fun userId message ->
+                (output.Writer.WriteAsync message).AsTask()
+                |> Async.AwaitTask)
+            cmd
+
+    Spectator.Application.runApplication
         time
         db
+        (fun _ -> [])
+        handleCommand
+        [ Spectator.TelegramEventAdapter.generateEvents (
+              async {
+                  let! m = input.Reader.ReadAsync()
+                  return "0", m
+              }
+          ) ]
 
-let run f =
-    let mkState () =
-        {| output = Channel.CreateUnbounded<string>()
-           input = Channel.CreateUnbounded<string>()
-           downloadString = ref <| mkDownloadString 0 |}
+type TestState =
+    private
+        { output: Channel<string>
+          input: Channel<string>
+          downloadString: (Uri -> Async<Result<byte array, exn>>) ref }
 
-    let mutable state = mkState ()
+let executeCommand (state: TestState) cmd expected =
+    assertBot true state.input state.output cmd expected
+    |> Async.RunSynchronously
+
+let executeCommandOnce (state: TestState) cmd expected =
+    assertBot false state.input state.output cmd expected
+    |> Async.RunSynchronously
+
+let waitForMessage (state: TestState) expected =
+    assertBot false state.input state.output "" expected
+    |> Async.RunSynchronously
+
+let setDownloadStage (state: TestState) stage =
+    state.downloadString.Value <- mkDownloadString stage
+
+let resetApplication () : TestState =
+    let state =
+        { input = Channel.CreateUnbounded<string>()
+          output = Channel.CreateUnbounded<string>()
+          downloadString = ref (mkDownloadString 0) }
 
     let dbPath = IO.Path.GetTempFileName()
 
-    let mkApp () =
-        mkApplication state.output (state).input dbPath state.downloadString (TimeSpan.FromSeconds 5.0)
+    mkApplication state.output state.input dbPath state.downloadString (TimeSpan.FromSeconds 5.0)
+    |> Async.Start
 
-    async {
-        let! _ = mkApp () |> Async.StartChild
-
-        do!
-            f
-                { executeCommand = fun cmd expected -> assertBot true state.input state.output cmd expected
-                  executeCommandOnce = fun cmd expected -> assertBot false state.input state.output cmd expected
-                  waitForMessage = fun expected -> assertBot false state.input state.output "" expected
-                  setDownloadStage = fun stage -> state.downloadString.Value <- mkDownloadString stage
-                  resetApplication =
-                    fun _ ->
-                        state <- mkState ()
-                        mkApp () |> Async.Start }
-    }
-    |> Async.RunSynchronously
+    state

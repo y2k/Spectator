@@ -201,7 +201,7 @@ module StoreUpdater =
             updateUserStateSafe state ns.userId (fun us -> { us with newSubscriptions = ns :: us.newSubscriptions })
         | _ -> state
 
-let restore = StoreUpdater.update
+let handleStateCmd = StoreUpdater.update
 
 let handleEvent (db: State) (e: Event) : Command list =
     match e with

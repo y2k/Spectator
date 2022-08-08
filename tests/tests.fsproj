@@ -8,7 +8,7 @@
 
   <ItemGroup>
     <Compile Include="TestFramework.fs" />
-    <Compile Include="Integration.fs" />
+    <Compile Include="IntegrationTests.fs" />
     <Compile Include="Infrastructure.fs" />
     <Compile Include="ParseTests.fs" />
   </ItemGroup>
