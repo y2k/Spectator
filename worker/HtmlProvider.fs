@@ -7,31 +7,18 @@ module private ShinglesTester =
     let private checkLength = 32
 
     let private clear text =
-        let text =
-            Regex.Replace(text, "<style.+?</style>", "", RegexOptions.Singleline)
-
-        let text =
-            Regex.Replace(text, "<script.+?</script>", "", RegexOptions.Singleline)
-
-        let text =
-            Regex.Replace(text, "<!--.+?-->", "", RegexOptions.Singleline)
-
-        let text =
-            Regex.Replace(text, "\\<[^>]+\\>", "", RegexOptions.Singleline)
-
-        let text =
-            Regex.Replace(text, "[., \r\n\\d]+", "", RegexOptions.Singleline)
-
+        let text = Regex.Replace(text, "<style.+?</style>", "", RegexOptions.Singleline)
+        let text = Regex.Replace(text, "<script.+?</script>", "", RegexOptions.Singleline)
+        let text = Regex.Replace(text, "<!--.+?-->", "", RegexOptions.Singleline)
+        let text = Regex.Replace(text, "\\<[^>]+\\>", "", RegexOptions.Singleline)
+        let text = Regex.Replace(text, "[., \r\n\\d]+", "", RegexOptions.Singleline)
         text
 
     let private computeCodes (page: string) =
         [| for i in 0 .. page.Length - checkLength -> page.Substring(i, checkLength).GetHashCode() |]
 
     let private analize (source: int []) (dest: int []) =
-        let same =
-            source
-            |> Array.sumBy
-               ^ fun x -> if Array.contains x dest then 1 else 0
+        let same = Array.sumBy (fun x -> if Array.contains x dest then 1 else 0) source
 
         (float same) * 2.
         / (float (source.Length + dest.Length))
@@ -64,7 +51,9 @@ let private getTitle content =
 
     doc
         .DocumentNode
-        .SelectSingleNode("//title")
+        .SelectSingleNode(
+            "//title"
+        )
         .InnerHtml
 
 let private download (uri: Uri) =

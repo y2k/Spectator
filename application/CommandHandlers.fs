@@ -3,6 +3,24 @@ namespace Spectator
 open System
 open Spectator.Core
 
+module StoreWrapper =
+    let makeDispatch (handleMsg: Event -> Command list) (handleCmd: (Event -> unit) -> Command -> unit) =
+        let mail: MailboxProcessor<Event> =
+            MailboxProcessor.Start (fun mail ->
+                async {
+                    while true do
+                        let! msg = mail.Receive()
+
+                        try
+                            handleMsg msg |> List.iter (handleCmd mail.Post)
+                        with
+                        | e ->
+                            eprintfn "ERROR: %O" e
+                            exit -1
+                })
+
+        mail.Post
+
 module TelegramEventAdapter =
     let handleCommand sendToTelegram (cmd: Command) =
         match cmd with

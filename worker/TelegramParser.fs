@@ -16,18 +16,16 @@ type SnapshotResponse =
 let private getChatId (uri: Uri) =
     uri.AbsoluteUri
     |> function
-    | Regex "^https://t.me/([\\w\\d_]+)$" [ id ] -> Ok id
-    | origin ->
-        Error
-        ^ sprintf "Can't find valid id from %s" origin
+        | Regex "^https://t.me/([\\w\\d_]+)$" [ id ] -> Ok id
+        | origin -> Error(sprintf "Can't find valid id from %s" origin)
 
 let getNodes restTelegramPassword restTelegramBaseUrl uri =
     async {
         let chat =
             getChatId uri
             |> function
-            | Ok id -> id
-            | Error e -> failwith e
+                | Ok id -> id
+                | Error e -> failwith e
 
         let client = new HttpClient()
 
@@ -57,9 +55,9 @@ let getNodes restTelegramPassword restTelegramBaseUrl uri =
 let create restTelegramPassword restTelegramBaseUrl =
     {| id = Guid.Parse "3B26457E-8AB7-41AD-8DEC-11AF891A3052"
        isValid =
-           fun uri ->
-               match getChatId uri with
-               | Ok _ -> true
-               | Error _ -> false
-               |> async.Return
+        fun uri ->
+            match getChatId uri with
+            | Ok _ -> true
+            | Error _ -> false
+            |> async.Return
        getNodes = fun uri -> getNodes restTelegramPassword restTelegramBaseUrl uri |}
