@@ -20,10 +20,10 @@ let sendToTelegramSingle telegramToken (user: string) message =
     bot.SendTextMessageAsync(ChatId.op_Implicit user, message, parseMode = Enums.ParseMode.Html)
     |> (Async.AwaitTask >> Async.Catch)
     >>- function
-    | Choice1Of2 _ -> SuccessResponse
-    | Choice2Of2 (:? AggregateException as ae) when (ae.InnerException :? Exceptions.ApiRequestException) ->
-        BotBlockedResponse
-    | Choice2Of2 e -> UnknownErrorResponse e
+        | Choice1Of2 _ -> SuccessResponse
+        | Choice2Of2 (:? AggregateException as ae) when (ae.InnerException :? Exceptions.ApiRequestException) ->
+            BotBlockedResponse
+        | Choice2Of2 e -> UnknownErrorResponse e
 
 let readMessage token =
     let bot = makeClient token
@@ -34,14 +34,17 @@ let readMessage token =
                 bot.GetUpdatesAsync(offset = offset, limit = 1, timeout = 300)
                 |> Async.AwaitTask
 
-            if Array.isEmpty updates then return! tryRead offset else return updates
+            if Array.isEmpty updates then
+                return! tryRead offset
+            else
+                return updates
         }
 
-    let offset = ref 0
+    let mutable offset = 0
 
     async {
-        let! updates = tryRead !offset
+        let! updates = tryRead offset
         let x = updates.[0]
-        offset := x.Id + 1
+        offset <- x.Id + 1
         return string x.Message.From.Id, x.Message.Text
     }
