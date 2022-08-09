@@ -4,13 +4,14 @@ open Spectator.Core
 open LiteDB
 
 type MongoCmd =
+    private
     | Insert of string * BsonDocument
     | Delete of string * System.Guid
 
-module Domain =
+module private Domain =
     let collections = [ "subscriptions"; "snapshots" ]
 
-    let restore name (doc: BsonDocument) : Event =
+    let restore name (doc: BsonDocument) : Command =
         match name with
         | "snapshots" ->
             let (s: Snapshot) = BsonMapper.Global.Deserialize doc
@@ -20,7 +21,7 @@ module Domain =
             SubscriptionCreated s
         | _ -> failwithf "Unsupported collections %s" name
 
-    let update (e: Event) =
+    let update (e: Command) =
         match e with
         | :? SubscriptionCreated as SubscriptionCreated sub ->
             let doc = BsonMapper.Global.Serialize sub
@@ -38,41 +39,62 @@ type State =
     { queue: MongoCmd list }
     static member Empty = { queue = [] }
 
-let update state e =
+let private update state e =
     { state with queue = (Domain.update e) @ state.queue }
 
-let handleCommand (chan: MongoCmd AsyncChannel.t) (cmd: Command) =
-    Domain.update cmd
-    |> List.iter (AsyncChannel.write chan)
+type t =
+    private
+        { chan: MongoCmd AsyncChannel.t
+          db: DatabaseAdapter.t
+          mutable restored: bool }
 
-let main (dbAdapter: DatabaseAdapter.t) (chan: MongoCmd AsyncChannel.t) =
+let make connectionString : t =
+    { chan = AsyncChannel.make ()
+      db = DatabaseAdapter.make connectionString
+      restored = false }
+
+type RestoreStateEvent =
+    | RestoreStateEvent of t
+    interface Event
+
+type private MarkRestoreComplete =
+    | MarkRestoreComplete
+    interface Command
+
+let handleCommand (t: t) (cmd: Command) =
+    match cmd with
+    | :? MarkRestoreComplete -> t.restored <- true
+    | _ when t.restored ->
+        Domain.update cmd
+        |> List.iter (AsyncChannel.write t.chan)
+    | _ -> ()
+
+let main (t: t) =
     async {
         while true do
-            let! e = AsyncChannel.read chan
+            let! e = AsyncChannel.read t.chan
 
             do!
                 match e with
-                | Insert (col, i) -> DatabaseAdapter.insert dbAdapter col i
-                | Delete (col, id) -> DatabaseAdapter.delete dbAdapter col id
+                | Insert (col, i) -> DatabaseAdapter.insert t.db col i
+                | Delete (col, id) -> DatabaseAdapter.delete t.db col id
     }
 
-// let main (dbAdapter: DatabaseAdapter.t) (reducer: IReducer<_, Event>) =
-//     async {
-//         let! (db: State) = reducer.Invoke(fun db -> State.Empty, [], db)
+let handleEvent (e: Event) : Command list =
+    match e with
+    | :? RestoreStateEvent as RestoreStateEvent t ->
+        async {
+            let result = ResizeArray()
 
-//         for e in (List.rev db.queue) do
-//             do!
-//                 match e with
-//                 | Insert (col, i) -> DatabaseAdapter.insert dbAdapter col i
-//                 | Delete (col, id) -> DatabaseAdapter.delete dbAdapter col id
-//     }
+            for name in Domain.collections do
+                do!
+                    DatabaseAdapter.queryAll t.db name (fun doc ->
+                        let cmd = Domain.restore name doc
+                        result.Add cmd
+                        async.Return())
 
-let restore (db: DatabaseAdapter.t) dispatch =
-    async {
-        for name in Domain.collections do
-            do!
-                DatabaseAdapter.queryAll db name (fun doc ->
-                    let events = Domain.restore name doc
-                    dispatch events
-                    async.Return())
-    }
+            result.Add MarkRestoreComplete
+            return Seq.toList result
+        }
+        |> Async.RunSynchronously
+    | _ -> []

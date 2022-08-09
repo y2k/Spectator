@@ -85,7 +85,8 @@ type TestState =
     private
         { output: Channel<string>
           input: Channel<string>
-          downloadString: (Uri -> Async<Result<byte array, exn>>) ref }
+          downloadString: (Uri -> Async<Result<byte array, exn>>) ref
+          dbPath: string }
 
 let executeCommand (state: TestState) cmd expected =
     assertBot true state.input state.output cmd expected
@@ -102,15 +103,26 @@ let waitForMessage (state: TestState) expected =
 let setDownloadStage (state: TestState) stage =
     state.downloadString.Value <- mkDownloadString stage
 
-let resetApplication () : TestState =
+let startApplication () : TestState =
     let state =
         { input = Channel.CreateUnbounded<string>()
           output = Channel.CreateUnbounded<string>()
-          downloadString = ref (mkDownloadString 0) }
+          downloadString = ref (mkDownloadString 0)
+          dbPath = IO.Path.GetTempFileName() }
 
-    let dbPath = IO.Path.GetTempFileName()
+    mkApplication state.output state.input state.dbPath state.downloadString (TimeSpan.FromSeconds 5.0)
+    |> Async.Start
 
-    mkApplication state.output state.input dbPath state.downloadString (TimeSpan.FromSeconds 5.0)
+    state
+
+let resetApplication (oldState: TestState) : TestState =
+    let state =
+        { input = Channel.CreateUnbounded<string>()
+          output = Channel.CreateUnbounded<string>()
+          downloadString = ref (mkDownloadString 0)
+          dbPath = oldState.dbPath }
+
+    mkApplication state.output state.input state.dbPath state.downloadString (TimeSpan.FromSeconds 5.0)
     |> Async.Start
 
     state

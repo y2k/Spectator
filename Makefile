@@ -2,7 +2,7 @@ run:
 	export $$(cat .env | xargs) && dotnet run --project application
 
 test:
-	dotnet test
+	dotnet test tests/tests.fsproj
 
 build:
 	dotnet build

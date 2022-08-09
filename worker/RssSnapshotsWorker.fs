@@ -47,11 +47,16 @@ let handleEvent (state: State) (e: Event) : Command list =
             |> Map.tryFind sub.id
             |> Option.defaultValue DateTime.UnixEpoch
 
+        let isNew =
+            state.lastUpdated
+            |> Map.tryFind sub.id
+            |> Option.isSome
+
         RssParser.Parser.getNodes (Text.Encoding.UTF8.GetString bytes)
         |> List.filter (fun x -> x.created > lastUpdated)
         |> List.map (fixSnapshotFields sub)
         |> List.sortBy (fun x -> x.created)
-        |> List.map (fun snap -> SnapshotCreated(true, snap) :> Command)
+        |> List.map (fun snap -> SnapshotCreated(isNew, snap) :> Command)
     | _ -> []
 
 // module Domain =

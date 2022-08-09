@@ -14,7 +14,7 @@ type State =
           initialized = false }
 
 module private State =
-    let update state (event: Event) =
+    let update state (event: Command) =
         match event with
         | :? SnapshotCreated as SnapshotCreated (true, snap) ->
             if state.initialized then

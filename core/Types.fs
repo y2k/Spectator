@@ -59,12 +59,13 @@ type Event =
     interface
     end
 
-type Command = Event
-type SyntheticEvent = Event
+type Command =
+    interface
+    end
 
 type NewSubscriptionCreated =
     | NewSubscriptionCreated of NewSubscription
-    interface SyntheticEvent
+    interface Command
 
 type SubscriptionCreated =
     | SubscriptionCreated of Subscription
@@ -76,7 +77,7 @@ type SnapshotCreated =
 
 type SubscriptionRemoved =
     | SubscriptionRemoved of Subscription TypedId list * NewSubscription TypedId list
-    interface SyntheticEvent
+    interface Command
 
 type Filter =
     | NoneFilter

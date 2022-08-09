@@ -15,7 +15,7 @@
         },
         {
             "label": "test",
-            "command": "dotnet test tests/tests.fsproj",
+            "command": "make test",
             "type": "shell",
             "group": {
                 "kind": "test",
@@ -28,14 +28,14 @@
         },
         {
             "label": "build",
-            "command": "dotnet build",
+            "command": "make build",
             "type": "shell",
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
             "presentation": {
-                "reveal": "always"
+                "reveal": "silent"
             },
             "problemMatcher": []
         }

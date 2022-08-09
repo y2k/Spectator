@@ -30,7 +30,7 @@ module RssSnapshotsWorker = Worker.RssSnapshotsWorker
 
 let runApplication timerPeriod (connectionString: string) extEventHandler extCommandHandler productionTasks =
     async {
-        let persCache = AsyncChannel.make ()
+        let persCache = Persistent.make connectionString
         let botState = StoreAtom.make ()
         let notifState = StoreAtom.make ()
         let rssSubState = StoreAtom.make ()
@@ -41,7 +41,8 @@ let runApplication timerPeriod (connectionString: string) extEventHandler extCom
               yield! (StoreAtom.addStateCofx notifState Notifications.handleEvent) e
               yield! (StoreAtom.addStateCofx rssSubState RssSubscriptionsWorker.handleEvent) e
               yield! (StoreAtom.addStateCofx rssSnapState RssSnapshotsWorker.handleEvent) e
-              yield! extEventHandler e ]
+              yield! extEventHandler e
+              yield! Persistent.handleEvent e ]
 
         let handleCommand dispatch cmd =
             extCommandHandler dispatch cmd
@@ -51,17 +52,17 @@ let runApplication timerPeriod (connectionString: string) extEventHandler extCom
             StoreAtom.handleCommandFun notifState Notifications.handleStateCmd cmd
             StoreAtom.handleCommandFun rssSubState RssSubscriptionsWorker.handleStateCmd cmd
             StoreAtom.handleCommandFun rssSnapState RssSnapshotsWorker.handleStateCmd cmd
+            Persistent.handleCommand persCache cmd
 
         let dispatch = StoreWrapper.makeDispatch handleEvent handleCommand
 
-        let db = DatabaseAdapter.make connectionString
-        do! Persistent.restore db dispatch
+        dispatch (Persistent.RestoreStateEvent persCache :> Event)
 
         printfn "Started..."
 
         do!
             [ yield TimerAdapter.generateEvents timerPeriod dispatch
-              yield Persistent.main db persCache
+              yield Persistent.main persCache
               yield! List.map (fun f -> f dispatch) productionTasks ]
             |> Async.loopAll
     }

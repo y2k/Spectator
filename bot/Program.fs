@@ -116,7 +116,7 @@ module HandleTelegramMessage =
     module D = Domain
     module P = Parser
 
-    let invoke (user: UserId) text (db: UserState) : _ * Event list =
+    let invoke (user: UserId) text (db: UserState) : _ * Command list =
         match P.parse text with
         | P.History url -> D.getHistory db.snapshots db.subscriptions user url, []
         | P.GetUserSubscriptionsCmd ->
@@ -181,7 +181,7 @@ module StoreUpdater =
         let count = Map.tryFind snap.subscriptionId counts
         Map.add snap.subscriptionId ((count |> Option.defaultValue 0) + 1) counts
 
-    let update state (event: Event) =
+    let update state (event: Command) =
         match event with
         | :? SubscriptionCreated as (SubscriptionCreated sub) ->
             updateUserStateSafe state sub.userId (fun us -> { us with subscriptions = sub :: us.subscriptions })

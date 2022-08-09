@@ -1,4 +1,4 @@
-module IntegrationTests
+namespace IntegrationTests
 
 open Xunit
 module T = TestFramework
@@ -6,17 +6,17 @@ module T = TestFramework
 module ``save and restore state`` =
     [<Fact>]
     let test () =
-        let env = T.resetApplication ()
+        let env = T.startApplication ()
         T.executeCommand env "/ls" "Your subscriptions:"
         T.executeCommandOnce env "/add https://degoes.net/feed.xml" "Your subscription created"
         T.executeCommand env "/ls" "Your subscriptions:\n- [RSS] https://degoes.net/feed.xml '' (18)"
-        let env = T.resetApplication ()
+        let env = T.resetApplication env
         T.executeCommand env "/ls" "Your subscriptions:\n- [RSS] https://degoes.net/feed.xml '' (18)"
 
 module ``simple rss test`` =
     [<Fact>]
     let test () =
-        let env = T.resetApplication ()
+        let env = T.startApplication ()
         T.executeCommand env "/ls" "Your subscriptions:"
         T.executeCommandOnce env "/add https://degoes.net/feed.xml" "Your subscription created"
         T.executeCommand env "/ls" "Your subscriptions:\n- [RSS] https://degoes.net/feed.xml '' (18)"
@@ -40,7 +40,7 @@ module ``simple rss test`` =
 module ``simple jr test`` =
     [<Fact>]
     let test () =
-        let env = T.resetApplication ()
+        let env = T.startApplication ()
         T.executeCommandOnce env "/add http://joyreactor.cc/rss/tag/котэ" "Your subscription created"
         T.executeCommand env "/ls" "Your subscriptions:\n- [RSS] http://joyreactor.cc/rss/tag/котэ '' (10)"
 
@@ -52,7 +52,7 @@ module ``simple jr test`` =
 module ``add and remove other test`` =
     [<Fact>]
     let test () =
-        let env = T.resetApplication ()
+        let env = T.startApplication ()
         T.executeCommandOnce env "/add https://degoes.net/feed.xml" "Your subscription created"
         T.executeCommandOnce env "/add http://joyreactor.cc/rss/tag/котэ" "Your subscription created"
 
