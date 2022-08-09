@@ -37,11 +37,11 @@ let runApplication timerPeriod (connectionString: string) extEventHandler extCom
         let rssSnapState = StoreAtom.make ()
 
         let handleEvent e =
-            [ yield! (StoreAtom.addStateCofx botState Bot.handleEvent) e
+            [ yield! extEventHandler e
+              yield! (StoreAtom.addStateCofx botState Bot.handleEvent) e
               yield! (StoreAtom.addStateCofx notifState Notifications.handleEvent) e
               yield! (StoreAtom.addStateCofx rssSubState RssSubscriptionsWorker.handleEvent) e
               yield! (StoreAtom.addStateCofx rssSnapState RssSnapshotsWorker.handleEvent) e
-              yield! extEventHandler e
               yield! Persistent.handleEvent e ]
 
         let handleCommand dispatch cmd =
@@ -81,13 +81,13 @@ let main _ =
         let healthState = HealthCheck.init ()
 
         let handleEvent e =
-            [ yield! HealthCheck.handleEvent e
-              yield! Logger.logEvent e ]
+            [ yield! Logger.logEvent e
+              yield! HealthCheck.handleEvent e ]
 
         let handleCommand dispatch cmd =
+            Logger.logCommand cmd
             TelegramEventAdapter.handleCommand (Telegram.sendToTelegramSingle config.telegramToken) cmd
             HealthCheck.handleCmd healthState cmd
-            Logger.logCommand cmd
             Https.handleCommand Https.download dispatch cmd
 
         do!

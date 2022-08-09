@@ -110,7 +110,7 @@ let startApplication () : TestState =
           downloadString = ref (mkDownloadString 0)
           dbPath = IO.Path.GetTempFileName() }
 
-    mkApplication state.output state.input state.dbPath state.downloadString (TimeSpan.FromSeconds 5.0)
+    mkApplication state.output state.input state.dbPath state.downloadString (TimeSpan.FromSeconds 2.0)
     |> Async.Start
 
     state
@@ -122,7 +122,7 @@ let resetApplication (oldState: TestState) : TestState =
           downloadString = ref (mkDownloadString 0)
           dbPath = oldState.dbPath }
 
-    mkApplication state.output state.input state.dbPath state.downloadString (TimeSpan.FromSeconds 5.0)
+    mkApplication state.output state.input state.dbPath state.downloadString (TimeSpan.FromSeconds 2.0)
     |> Async.Start
 
     state
