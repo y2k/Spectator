@@ -12,39 +12,20 @@ module RssSnapshotsWorker = Worker.RssSnapshotsWorker
 
 let runApplication timerPeriod (connectionString: string) extEventHandler extCommandHandler productionTasks =
     let persCache = Persistent.make connectionString
-    let botState = StoreAtom.make ()
-    let notifState = StoreAtom.make ()
-    let rssSubState = StoreAtom.make ()
-    let rssSnapState = StoreAtom.make ()
 
-    let handleEvent e =
-        [ yield! extEventHandler e
-          yield! (StoreAtom.addStateCofx botState Bot.handleEvent) e
-          yield! (StoreAtom.addStateCofx notifState Notifications.handleEvent) e
-          yield! (StoreAtom.addStateCofx rssSubState RssSubscriptionsWorker.handleEvent) e
-          yield! (StoreAtom.addStateCofx rssSnapState RssSnapshotsWorker.handleEvent) e
-          yield! Persistent.handleEvent e ]
-
-    let handleCommand dispatch cmd =
-        extCommandHandler dispatch cmd
-        StoreAtom.handleCommand botState cmd
-        StoreAtom.handleCommand notifState cmd
-        StoreAtom.handleCommandFun botState Bot.handleStateCmd cmd
-        StoreAtom.handleCommandFun notifState Notifications.handleStateCmd cmd
-        StoreAtom.handleCommandFun rssSubState RssSubscriptionsWorker.handleStateCmd cmd
-        StoreAtom.handleCommandFun rssSnapState RssSnapshotsWorker.handleStateCmd cmd
-        Persistent.handleCommand persCache cmd
-
-    let dispatch = StoreWrapper.makeDispatch handleEvent handleCommand
-
-    dispatch (Persistent.RestoreStateEvent persCache :> Event)
-
-    printfn "Started..."
-
-    [ yield TimerAdapter.generateEvents timerPeriod dispatch
-      yield Persistent.main persCache
-      yield! List.map (fun f -> f dispatch) productionTasks ]
-    |> Async.loopAll
+    Router.init
+    |> Router.addEvent extEventHandler
+    |> Router.addCommand extCommandHandler
+    |> Router.addStatefull Bot.handleEvent Bot.handleStateCmd
+    |> Router.addStatefull Notifications.handleEvent Notifications.handleStateCmd
+    |> Router.addStatefull_ RssSubscriptionsWorker.handleEvent RssSubscriptionsWorker.handleStateCmd
+    |> Router.addStatefull_ RssSnapshotsWorker.handleEvent RssSnapshotsWorker.handleStateCmd
+    |> Router.addEvent Persistent.handleEvent
+    |> Router.addCommand_ (Persistent.handleCommand persCache)
+    |> Router.addEventGenerator (TimerAdapter.generateEvents timerPeriod)
+    |> Router.addEventGenerators productionTasks
+    |> Router.addEventGenerator (fun _ -> Persistent.main persCache)
+    |> Router.start (Persistent.RestoreStateEvent persCache)
 
 [<EntryPoint>]
 let main _ =

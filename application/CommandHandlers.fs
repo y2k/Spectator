@@ -78,3 +78,79 @@ module Https =
             }
             |> Async.Start
         | _ -> ()
+
+module Router =
+    type t =
+        { eventHandlers: (Event -> Command list) list
+          commandHandlers: ((Event -> unit) -> Command -> unit) list
+          eventGenerators: ((Event -> unit) -> unit Async) list }
+
+    let init =
+        { eventHandlers = []
+          commandHandlers = []
+          eventGenerators = [] }
+
+    let inline addStatefull handleEvent handleStateCmd (t: t) : t =
+        let botState = StoreAtom.make ()
+
+        let eh e =
+            (StoreAtom.addStateCofx botState handleEvent) e
+
+        let ch1 _ cmd = StoreAtom.handleCommand botState cmd
+
+        let ch2 _ cmd =
+            StoreAtom.handleCommandFun botState handleStateCmd cmd
+
+        { t with
+            eventHandlers = eh :: t.eventHandlers
+            commandHandlers = ch1 :: ch2 :: t.commandHandlers }
+
+    let inline addStatefull_ handleEvent handleStateCmd (t: t) : t =
+        let botState = StoreAtom.make ()
+
+        let eh e =
+            (StoreAtom.addStateCofx botState handleEvent) e
+
+        let ch2 _ cmd =
+            StoreAtom.handleCommandFun botState handleStateCmd cmd
+
+        { t with
+            eventHandlers = eh :: t.eventHandlers
+            commandHandlers = ch2 :: t.commandHandlers }
+
+    let addEvent eventHandler (t: t) : t =
+        { t with eventHandlers = eventHandler :: t.eventHandlers }
+
+    let addCommand commandHandler (t: t) : t =
+        { t with commandHandlers = commandHandler :: t.commandHandlers }
+
+    let addCommand_ commandHandler (t: t) : t =
+        { t with
+            commandHandlers =
+                (fun _ cmd -> commandHandler cmd)
+                :: t.commandHandlers }
+
+    let addEventGenerator eventGen (t: t) : t =
+        { t with eventGenerators = eventGen :: t.eventGenerators }
+
+    let addEventGenerators eventGens (t: t) : t =
+        { t with eventGenerators = eventGens @ t.eventGenerators }
+
+    let start startEvent (t: t) : unit Async =
+        let handleEvent e =
+            t.eventHandlers
+            |> List.rev
+            |> List.collect (fun eventHandler -> eventHandler e)
+
+        let handleCommand dispatch cmd =
+            t.commandHandlers
+            |> List.rev
+            |> List.iter (fun commandHandler -> commandHandler dispatch cmd)
+
+        let dispatch = StoreWrapper.makeDispatch handleEvent handleCommand
+        dispatch startEvent
+        printfn "Started..."
+
+        t.eventGenerators
+        |> List.map (fun eventGen -> eventGen dispatch)
+        |> Async.loopAll
