@@ -66,11 +66,9 @@ module Domain =
 
     let deleteSubs (subscriptions: Subscription list) newSubscriptions userId uri =
         (newSubscriptions
-         |> List.filter
-            ^ fun x -> x.userId <> userId || x.uri <> uri),
+         |> List.filter (fun x -> x.userId <> userId || x.uri <> uri)),
         (subscriptions
-         |> List.filter
-            ^ fun x -> x.userId <> userId || x.uri <> uri)
+         |> List.filter (fun x -> x.userId <> userId || x.uri <> uri))
 
     let createNewSub user uri filter =
         { id = TypedId.wrap <| Guid.NewGuid()
@@ -157,8 +155,7 @@ module StoreUpdater =
     open State
 
     let private updateUserStateSafe state userId f =
-        updateUserState state userId (fun s -> f s, [])
-        |> fst
+        fst (updateUserState state userId (fun s -> f s, []))
 
     let private findUserBySnapshot (state: State) (snap: Snapshot) : UserId option =
         state.states

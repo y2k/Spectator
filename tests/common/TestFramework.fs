@@ -3,6 +3,8 @@ module TestFramework
 open System
 open System.Threading.Channels
 open Swensen.Unquote
+open Spectator
+open Spectator.Store
 
 let rec private flaky count f =
     async {
@@ -60,26 +62,24 @@ let mkDownloadString stage (url: Uri) =
     |> async.Return
 
 let private mkApplication (output: string Channel) (input: string Channel) db (downloadString: _ ref) time =
-    let handleCommand dispatch cmd =
-        Spectator.Https.handleCommand (fun url -> downloadString.Value url) dispatch cmd
+    let persCache = Persistent.make db
 
-        Spectator.TelegramEventAdapter.handleCommand
-            (fun userId message ->
-                (output.Writer.WriteAsync message).AsTask()
-                |> Async.AwaitTask)
-            cmd
-
-    Spectator.Application.runApplication
-        time
-        db
-        (fun _ -> [])
-        handleCommand
-        [ Spectator.TelegramEventAdapter.generateEvents (
-              async {
-                  let! m = input.Reader.ReadAsync()
-                  return "0", m
-              }
-          ) ]
+    Application.runApplication persCache time
+    |> Router.addCommand (Https.handleCommand (fun url -> downloadString.Value url))
+    |> Router.addCommand_ (
+        TelegramEventAdapter.handleCommand (fun userId message ->
+            (output.Writer.WriteAsync message).AsTask()
+            |> Async.AwaitTask)
+    )
+    |> Router.addEventGenerator (
+        TelegramEventAdapter.generateEvents (
+            async {
+                let! m = input.Reader.ReadAsync()
+                return "0", m
+            }
+        )
+    )
+    |> Router.start (Persistent.RestoreStateEvent persCache)
 
 type TestState =
     private

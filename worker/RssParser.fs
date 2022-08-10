@@ -55,29 +55,3 @@ module Parser =
             @ parseAtom nsHttp doc @ parseAtom nsHttps doc)
 
     let isValid = getNodes >> List.isEmpty >> not
-
-// module Http =
-//     open System.Net.Http
-
-//     let download (uri: Uri) =
-//         async {
-//             use client = new HttpClient()
-
-//             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/605.1.15 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/605.1 Edge/19.17763"
-//             |> client.DefaultRequestHeaders.UserAgent.ParseAdd
-
-//             let! result =
-//                 client.GetByteArrayAsync uri
-//                 |> Async.AwaitTask
-//                 |> Async.Catch
-
-//             return
-//                 match result with
-//                 | Choice1Of2 x -> Ok x
-//                 | Choice2Of2 e -> Error e
-//         }
-
-// let create downloadString =
-//     Parser.pluginId,
-//     (fun (uri: Uri) -> uri |> downloadString >>- Parser.isValid),
-//     (fun (uri: Uri) -> uri |> downloadString >>- Parser.getNodes)

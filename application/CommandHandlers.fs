@@ -79,6 +79,22 @@ module Https =
             |> Async.Start
         | _ -> ()
 
+module StoreAtom =
+    type 's StateStore = { mutable state: 's }
+
+    let inline make () : ^state StateStore =
+        { state = (^state: (static member empty: ^state) ()) }
+
+    let addStateCofx (state: _ StateStore) f = fun x -> f state.state x
+
+    let handleCommand (stateHolder: 'state StateStore) (cmd: Command) =
+        match cmd with
+        | :? 'state as newState -> stateHolder.state <- newState
+        | _ -> ()
+
+    let handleCommandFun (stateHolder: 'state StateStore) update (cmd: #Command) =
+        stateHolder.state <- update stateHolder.state cmd
+
 module Router =
     type t =
         { eventHandlers: (Event -> Command list) list
@@ -132,9 +148,6 @@ module Router =
 
     let addEventGenerator eventGen (t: t) : t =
         { t with eventGenerators = eventGen :: t.eventGenerators }
-
-    let addEventGenerators eventGens (t: t) : t =
-        { t with eventGenerators = eventGens @ t.eventGenerators }
 
     let start startEvent (t: t) : unit Async =
         let handleEvent e =

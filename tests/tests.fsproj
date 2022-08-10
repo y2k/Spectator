@@ -7,9 +7,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="TestFramework.fs" />
+    <Compile Include="common/TestFramework.fs" />
     <Compile Include="IntegrationTests.fs" />
-    <Compile Include="Infrastructure.fs" />
     <Compile Include="ParseTests.fs" />
   </ItemGroup>
 

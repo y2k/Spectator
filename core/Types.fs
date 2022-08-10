@@ -98,19 +98,3 @@ type TimerTicked =
 type DownloadHttp =
     | DownloadHttp of Uri * (Result<byte [], exn> -> Event)
     interface Command
-
-module StoreAtom =
-    type 's StateStore = { mutable state: 's }
-
-    let inline make () : ^state StateStore =
-        { state = (^state: (static member empty: ^state) ()) }
-
-    let addStateCofx (state: _ StateStore) f = fun x -> f state.state x
-
-    let handleCommand (stateHolder: 'state StateStore) (cmd: Command) =
-        match cmd with
-        | :? 'state as newState -> stateHolder.state <- newState
-        | _ -> ()
-
-    let handleCommandFun (stateHolder: 'state StateStore) update (cmd: #Command) =
-        stateHolder.state <- update stateHolder.state cmd

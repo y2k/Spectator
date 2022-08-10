@@ -13,27 +13,6 @@ type State =
           queue = []
           initialized = false }
 
-module private Domain =
-    let clearQueue state =
-        if state.initialized then
-            { state with queue = [] }
-        else
-            { state with
-                queue = []
-                initialized = true }
-
-    let getUpdates state =
-        let formatSnapshot snap =
-            match snap.uri.ToString() with
-            | Regex "https://t.me/.+" [] -> sprintf "%O" snap.uri
-            | _ -> sprintf "%s\n\n<a href=\"%O\">[ OPEN ]</a>" snap.title snap.uri
-
-        if state.initialized then
-            state.queue
-        else
-            []
-        |> List.map (fun (u, s) -> u, formatSnapshot s)
-
 let handleStateCmd (state: State) (cmd: Command) =
     match cmd with
     | :? SnapshotCreated as SnapshotCreated (true, snap) ->
@@ -53,10 +32,24 @@ let handleStateCmd (state: State) (cmd: Command) =
     | _ -> state
 
 let handleEvent (state: State) (e: Event) =
+    let formatSnapshot snap =
+        match snap.uri.ToString() with
+        | Regex "https://t.me/.+" [] -> sprintf "%O" snap.uri
+        | _ -> sprintf "%s\n\n<a href=\"%O\">[ OPEN ]</a>" snap.title snap.uri
+
     match e with
     | :? TimerTicked ->
-        let newState = Domain.clearQueue state
-        let messages = Domain.getUpdates state
+        let newState =
+            { state with
+                queue = []
+                initialized = true }
+
+        let messages =
+            if state.initialized then
+                state.queue
+            else
+                []
+            |> List.map (fun (u, s) -> u, formatSnapshot s)
 
         [ yield newState :> Command
           yield! List.map (fun x -> let a = SendTelegramMessage x in a :> Command) messages ]
