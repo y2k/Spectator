@@ -39,8 +39,11 @@ module Subscriptions =
 
 module Snapshots =
     type State =
-        { subscriptions: Subscription list }
-        static member empty = { subscriptions = [] }
+        { subscriptions: Subscription list
+          lastCheckedId: Map<string, int64> }
+        static member empty =
+            { subscriptions = []
+              lastCheckedId = Map.empty }
 
     let handleStateCmd state (e: Command) =
         match e with
@@ -57,11 +60,25 @@ module Snapshots =
         | DownloadCompleted of sub: Subscription * result: Result<byte [], exn>
         interface Event
 
+    let private getPrioritySubscription _ : Subscription option = failwith "???"
+
+    let private getLastPostId _ : int64 = failwith "???"
+    let private makePostUrl _ _ : Uri = failwith "???"
+
     let handleSnapshotsEvent (state: State) (e: Event) =
         match e with
         | :? TimerTicked ->
             state.subscriptions
-            |> List.filter (fun sub -> sub.provider = PluginId)
-            |> List.map (fun sub -> DownloadHttp(makeWebUrl sub.uri, (fun r -> DownloadCompleted(sub, r))))
+            |> Seq.filter (fun sub -> sub.provider = PluginId)
+            |> getPrioritySubscription
+            |> Option.map (fun sub ->
+                let startId = getLastPostId (failwith "???")
+
+                Seq.init 100 (fun i ->
+                    DownloadHttp(
+                        makeWebUrl (makePostUrl sub.uri (startId + int64 i)),
+                        (fun r -> DownloadCompleted(sub, r))
+                    )))
+            |> Option.defaultValue []
         | :? DownloadCompleted as DownloadCompleted (sub, Ok bytes) -> failwith "???"
         | _ -> []
