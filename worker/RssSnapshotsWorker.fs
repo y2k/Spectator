@@ -40,6 +40,7 @@ let handleEvent (state: State) (e: Event) : Command list =
     match e with
     | :? TimerTicked ->
         state.subscriptions
+        |> List.filter (fun sub -> sub.provider = RssParser.Parser.pluginId)
         |> List.map (fun s -> DownloadHttp(s.uri, (fun r -> DownloadComplete(s, r))))
     | :? DownloadComplete as DownloadComplete (sub, Ok bytes) ->
         let lastUpdated =
