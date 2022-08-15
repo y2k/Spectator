@@ -57,13 +57,27 @@ module Snapshots =
         Uri(sprintf "https://t.me/%s/%s?embed=1" m.Groups[1].Value m.Groups[2].Value)
 
     type DownloadCompleted =
-        | DownloadCompleted of sub: Subscription * result: Result<byte [], exn>
+        | DownloadCompleted of sub: Subscription * result: DownloadResult list
         interface Event
 
     let private getPrioritySubscription _ : Subscription option = failwith "???"
 
     let private getLastPostId _ : int64 = failwith "???"
     let private makePostUrl _ _ : Uri = failwith "???"
+
+    open HtmlAgilityPack
+
+    let private getText (bytes: byte []) =
+        let doc = HtmlDocument()
+        doc.LoadHtml(Text.Encoding.UTF8.GetString bytes)
+
+        let node =
+            doc.DocumentNode.SelectSingleNode("//div[contains(@class,'tgme_widget_message_text')]")
+            |> Option.ofObj
+
+        node
+        |> Option.map (fun node -> node.InnerText)
+        |> Option.map System.Net.WebUtility.HtmlDecode
 
     let handleSnapshotsEvent (state: State) (e: Event) =
         match e with
@@ -73,12 +87,12 @@ module Snapshots =
             |> getPrioritySubscription
             |> Option.map (fun sub ->
                 let startId = getLastPostId (failwith "???")
-
-                Seq.init 100 (fun i ->
-                    DownloadHttp(
-                        makeWebUrl (makePostUrl sub.uri (startId + int64 i)),
-                        (fun r -> DownloadCompleted(sub, r))
-                    )))
+                let uris = List.init 100 (fun i -> makePostUrl sub.uri (startId + int64 i))
+                [ MultiDownloadHttp(uris, (fun r -> DownloadCompleted(sub, r))) ])
             |> Option.defaultValue []
-        | :? DownloadCompleted as DownloadCompleted (sub, Ok bytes) -> failwith "???"
+        | :? DownloadCompleted as DownloadCompleted (sub, results) ->
+            // getText bytes
+            // |> Option.filter (fun content -> Regex.IsMatch(content, sub.filter))
+            // |> ignore
+            failwith "???"
         | _ -> []

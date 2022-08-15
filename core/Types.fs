@@ -98,3 +98,11 @@ type TimerTicked =
 type DownloadHttp =
     | DownloadHttp of Uri * (Result<byte [], exn> -> Event)
     interface Command
+
+type DownloadResult =
+    { uri: Uri
+      data: Result<byte [], exn> }
+
+type MultiDownloadHttp =
+    | MultiDownloadHttp of Uri list * (DownloadResult list -> Event)
+    interface Command
