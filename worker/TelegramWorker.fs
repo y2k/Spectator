@@ -7,6 +7,35 @@ open System.Text.RegularExpressions
 let private PluginId = Guid.Parse("FA3B985E-466F-4C47-9222-CB090ED3FED2")
 let private telegramRegex = Regex("https://t.me/([^/]+)/(\\d+)")
 
+module Parser =
+    open HtmlAgilityPack
+
+    type ParseResult =
+        | Success of string
+        | NoPost
+        | UnknownError of string
+
+    let parse (data: byte []) =
+        let doc = HtmlDocument()
+        doc.Load(new IO.MemoryStream(data))
+
+        let node =
+            doc.DocumentNode.SelectSingleNode("//div[contains(@class,'tgme_widget_message_text')]")
+            |> Option.ofObj
+
+        node
+        |> Option.map (fun node -> node.InnerText)
+        |> Option.map Net.WebUtility.HtmlDecode
+        |> Option.map (fun x -> Success x)
+        |> Option.defaultWith (fun _ ->
+            let node =
+                doc.DocumentNode.SelectSingleNode("//div[@class='tgme_widget_message_error']")
+
+            if node.InnerText = "Post not found" then
+                NoPost
+            else
+                UnknownError node.InnerHtml)
+
 module Subscriptions =
     type State =
         { newSubs: NewSubscription list }
@@ -65,21 +94,7 @@ module Snapshots =
     let private getLastPostId _ : int64 = failwith "???"
     let private makePostUrl _ _ : Uri = failwith "???"
 
-    open HtmlAgilityPack
-
-    let private getText (bytes: byte []) =
-        let doc = HtmlDocument()
-        doc.LoadHtml(Text.Encoding.UTF8.GetString bytes)
-
-        let node =
-            doc.DocumentNode.SelectSingleNode("//div[contains(@class,'tgme_widget_message_text')]")
-            |> Option.ofObj
-
-        node
-        |> Option.map (fun node -> node.InnerText)
-        |> Option.map System.Net.WebUtility.HtmlDecode
-
-    let handleSnapshotsEvent (state: State) (e: Event) =
+    let handleEvent (state: State) (e: Event) : Command list =
         match e with
         | :? TimerTicked ->
             state.subscriptions
@@ -88,7 +103,7 @@ module Snapshots =
             |> Option.map (fun sub ->
                 let startId = getLastPostId (failwith "???")
                 let uris = List.init 100 (fun i -> makePostUrl sub.uri (startId + int64 i))
-                [ MultiDownloadHttp(uris, (fun r -> DownloadCompleted(sub, r))) ])
+                [ MultiDownloadHttp(uris, (fun r -> DownloadCompleted(sub, r))) :> Command ])
             |> Option.defaultValue []
         | :? DownloadCompleted as DownloadCompleted (sub, results) ->
             // getText bytes

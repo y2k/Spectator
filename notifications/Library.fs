@@ -32,7 +32,7 @@ let handleStateCmd (state: State) (cmd: Command) =
     | _ -> state
 
 let handleEvent (state: State) (e: Event) =
-    let formatSnapshot snap =
+    let formatSnapshot (snap: Snapshot) =
         match snap.uri.ToString() with
         | Regex "https://t.me/.+" [] -> sprintf "%O" snap.uri
         | _ -> sprintf "%s\n\n<a href=\"%O\">[ OPEN ]</a>" snap.title snap.uri

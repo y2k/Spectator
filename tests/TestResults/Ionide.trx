@@ -1,0 +1,53 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="76a73e27-7be2-4e92-ba58-262fac91a1e0" name="@Igors-MacBook-Pro 2022-08-18 14:34:57" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2022-08-18T14:34:57.0515660+04:00" queuing="2022-08-18T14:34:57.0515660+04:00" start="2022-08-18T14:34:54.7743060+04:00" finish="2022-08-18T14:34:57.0693790+04:00" />
+  <TestSettings name="default" id="3b204155-1705-49fd-86b1-76d3b3c49b3c">
+    <Deployment runDeploymentRoot="_Igors-MacBook-Pro_2022-08-18_14_34_57" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="d7a0272d-33d3-4b52-9ee9-2d60ba1a57f4" testId="a29135ad-33fd-9797-6329-9f195cb173e6" testName="TelegramParserTests.test" computerName="Igors-MacBook-Pro" duration="00:00:00.0098450" startTime="2022-08-18T14:34:56.8841810+04:00" endTime="2022-08-18T14:34:56.8842150+04:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d7a0272d-33d3-4b52-9ee9-2d60ba1a57f4">
+      <Output>
+        <ErrorInfo>
+          <Message>System.Exception : ???</Message>
+          <StackTrace>   at Spectator.Worker.TelegramWorker.Snapshots.getPrioritySubscription[a](a _arg1) in /Users/igor/Projects/spectator/worker/TelegramWorker.fs:line 92
+   at Spectator.Worker.TelegramWorker.Snapshots.handleEvent(State state, Event e) in /Users/igor/Projects/spectator/worker/TelegramWorker.fs:line 102
+   at TelegramParserTests.test() in /Users/igor/Projects/spectator/tests/TelegramParserTests.fs:line 15</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="TelegramParserTests.test" storage="/users/igor/projects/spectator/tests/bin/debug/net6.0/tests.dll" id="a29135ad-33fd-9797-6329-9f195cb173e6">
+      <Execution id="d7a0272d-33d3-4b52-9ee9-2d60ba1a57f4" />
+      <TestMethod codeBase="/Users/igor/Projects/spectator/tests/bin/Debug/net6.0/tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="TelegramParserTests" name="test" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="a29135ad-33fd-9797-6329-9f195cb173e6" executionId="d7a0272d-33d3-4b52-9ee9-2d60ba1a57f4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="1" executed="1" passed="0" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.4.3+1b45f5407b (64-bit .NET 6.0.7)
+[xUnit.net 00:00:00.92]   Discovering: tests
+[xUnit.net 00:00:00.97]   Discovered:  tests
+[xUnit.net 00:00:00.98]   Starting:    tests
+[xUnit.net 00:00:01.09]       System.Exception : ???
+[xUnit.net 00:00:01.09]       Stack Trace:
+[xUnit.net 00:00:01.10]         /Users/igor/Projects/spectator/worker/TelegramWorker.fs(92,0): at Spectator.Worker.TelegramWorker.Snapshots.getPrioritySubscription[a](a _arg1)
+[xUnit.net 00:00:01.10]         /Users/igor/Projects/spectator/worker/TelegramWorker.fs(102,0): at Spectator.Worker.TelegramWorker.Snapshots.handleEvent(State state, Event e)
+[xUnit.net 00:00:01.10]         /Users/igor/Projects/spectator/tests/TelegramParserTests.fs(15,0): at TelegramParserTests.test()
+[xUnit.net 00:00:01.10]   Finished:    tests
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="Igors-MacBook-Pro" outcome="Error" timestamp="2022-08-18T14:34:56.8779580+04:00">
+        <Text>[xUnit.net 00:00:01.09]     TelegramParserTests.test [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>
