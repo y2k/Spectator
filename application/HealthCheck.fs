@@ -29,9 +29,7 @@ let private sendResponseToClient (text: string) (ctx: HttpListenerContext) =
         use _ = ctx.Response
         let bytes = Text.Encoding.UTF8.GetBytes text
 
-        do!
-            ctx.Response.OutputStream.WriteAsync(bytes, 0, bytes.Length)
-            |> Async.AwaitTask
+        do! ctx.Response.OutputStream.WriteAsync(bytes, 0, bytes.Length) |> Async.AwaitTask
     }
 
 let handleCmd { state = atom } (cmd: Command) =
