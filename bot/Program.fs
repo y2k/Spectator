@@ -16,12 +16,11 @@ module Parser =
             false
         else
             try
-                Text.RegularExpressions.Regex.Match("", pattern)
-                |> ignore
+                Text.RegularExpressions.Regex.Match("", pattern) |> ignore
 
                 true
-            with
-            | _ -> false
+            with _ ->
+                false
 
     let parse (message: string) =
         let isValidUri url =
@@ -65,10 +64,8 @@ module Domain =
         |> (+) "Your subscriptions:"
 
     let deleteSubs (subscriptions: Subscription list) newSubscriptions userId uri =
-        (newSubscriptions
-         |> List.filter (fun x -> x.userId <> userId || x.uri <> uri)),
-        (subscriptions
-         |> List.filter (fun x -> x.userId <> userId || x.uri <> uri))
+        (newSubscriptions |> List.filter (fun x -> x.userId <> userId || x.uri <> uri)),
+        (subscriptions |> List.filter (fun x -> x.userId <> userId || x.uri <> uri))
 
     let createNewSub user uri filter =
         { id = TypedId.wrap <| Guid.NewGuid()
@@ -159,20 +156,14 @@ module StoreUpdater =
 
     let private findUserBySnapshot (state: State) (snap: Snapshot) : UserId option =
         state.states
-        |> Map.tryFindKey (fun _ v ->
-            v.subscriptions
-            |> List.exists (fun sub -> sub.id = snap.subscriptionId))
+        |> Map.tryFindKey (fun _ v -> v.subscriptions |> List.exists (fun sub -> sub.id = snap.subscriptionId))
 
     let private removeSubsWithIds states sIds nsIds =
         states
         |> Map.map (fun _ state ->
             { state with
-                subscriptions =
-                    state.subscriptions
-                    |> List.filter (fun s -> not <| List.contains s.id sIds)
-                newSubscriptions =
-                    state.newSubscriptions
-                    |> List.filter (fun s -> not <| List.contains s.id nsIds) })
+                subscriptions = state.subscriptions |> List.filter (fun s -> not <| List.contains s.id sIds)
+                newSubscriptions = state.newSubscriptions |> List.filter (fun s -> not <| List.contains s.id nsIds) })
 
     let private incrimentCount (counts: Map<Subscription TypedId, int>) (snap: Snapshot) =
         let count = Map.tryFind snap.subscriptionId counts
@@ -200,18 +191,13 @@ module StoreUpdater =
 
 let handleStateCmd = StoreUpdater.update
 
-let handleEvent (db: State) (e: Event) : Command list =
-    match e with
-    | :? TelegramMessageReceived as TelegramMessageReceived (user, msg) ->
-        let handleTelegramMessage db =
-            let (db, (result, events)) =
-                State.updateUserState db user (fun db -> db, HandleTelegramMessage.invoke user msg db)
+let handleEvent (db: State) (TelegramMessageReceived (user, msg)) : Command list =
+    let handleTelegramMessage db =
+        let (db, (result, events)) =
+            State.updateUserState db user (fun db -> db, HandleTelegramMessage.invoke user msg db)
 
-            db, events, result
+        db, events, result
 
-        let (state', commands, telegramMsg) = handleTelegramMessage db
+    let (state', commands, telegramMsg) = handleTelegramMessage db
 
-        [ SendTelegramMessage(user, telegramMsg)
-          state'
-          yield! commands ]
-    | _ -> []
+    [ SendTelegramMessage(user, telegramMsg); state'; yield! commands ]

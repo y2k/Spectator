@@ -4,16 +4,14 @@ open System
 open Spectator
 open Spectator.Core
 
-module Bot = Bot.App
 module Persistent = Store.Persistent
-module DatabaseAdapter = Store.DatabaseAdapter
 module RssSubscriptionsWorker = Worker.RssSubscriptionsWorker
 module RssSnapshotsWorker = Worker.RssSnapshotsWorker
 
 let runApplication persCache timerPeriod =
     Router.init
-    |> Router.addStatefull Bot.handleEvent Bot.handleStateCmd
-    |> Router.addStatefull Notifications.handleEvent Notifications.handleStateCmd
+    |> Router.addStatefull (Router.makeHandleEvent Bot.App.handleEvent) Bot.App.handleStateCmd
+    |> Router.addStatefull (Router.makeHandleEvent Notifications.handleEvent) Notifications.handleStateCmd
     |> Router.addStatefull_ RssSubscriptionsWorker.handleEvent RssSubscriptionsWorker.handleStateCmd
     |> Router.addStatefull_ RssSnapshotsWorker.handleEvent RssSnapshotsWorker.handleStateCmd
     |> Router.addEvent Persistent.handleEvent
@@ -41,6 +39,7 @@ let main _ =
     |> Router.addCommand (Https.handleCommand Https.download)
     |> Router.addEventGenerator (HealthCheck.main healthState)
     |> Router.addEventGenerator (TelegramEventAdapter.generateEvents (Telegram.readMessage telegramToken))
+    |> Router.addEventGenerator (Web.start)
     |> Router.start (Persistent.RestoreStateEvent persCache)
     |> Async.RunSynchronously
 

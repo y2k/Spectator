@@ -1,23 +1,20 @@
+module Spectator.Web
+
 open Suave
-open Suave.Swagger.Rest
-open Suave.Swagger.Swagger
-open Suave.Swagger.FunnyDsl
+open Suave.Filters
+open Suave.Operators
 open Spectator.Core
 
-[<CLIMutable>]
-type TimeResult =
-    { items : Snapshot [] }
+type WebRequest =
+    | WebRequest of byte[]
+    interface Event
 
-let snapshots = MODEL { items = [||] }
-
-let api =
-    swagger {
-        for route in getting (simpleUrl "/snapshots" |> thenReturns snapshots) do
-            yield route |> addResponse 200 "Featured snapshots" (Some typeof<TimeResult>)
-            yield route |> supportsJsonAndXml
-    }
-
-[<EntryPoint>]
-let main _ =
-    startWebServer defaultConfig api.App
-    0
+let start (dispatch: Event -> unit) =
+    choose
+        [ pathStarts "/api"
+          >=> POST
+          >=> request (fun r ->
+              dispatch (WebRequest r.rawForm)
+              Successful.NO_CONTENT) ]
+    |> startWebServerAsync { defaultConfig with bindings = [ HttpBinding.createSimple HTTP "0.0.0.0" 8080 ] }
+    |> snd

@@ -18,6 +18,7 @@
     <ProjectReference Include="..\worker\worker.fsproj" />
     <ProjectReference Include="..\store\store.fsproj" />
     <ProjectReference Include="..\telegram\telegram.fsproj" />
+    <ProjectReference Include="..\web\web.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

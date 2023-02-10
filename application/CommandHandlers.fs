@@ -96,6 +96,12 @@ module StoreAtom =
         stateHolder.state <- update stateHolder.state cmd
 
 module Router =
+    let makeHandleEvent (f: 'State -> 'e -> _) =
+        fun (state: 'State) (e: Event) ->
+            match e with
+            | :? 'e as e2 -> f state e2
+            | _ -> []
+
     type t =
         { eventHandlers: (Event -> Command list) list
           commandHandlers: ((Event -> unit) -> Command -> unit) list
