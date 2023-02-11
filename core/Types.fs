@@ -91,10 +91,18 @@ type SendTelegramMessage =
     | SendTelegramMessage of user: string * message: string
     interface Command
 
-type TimerTicked =
-    | TimerTicked of minuteNumber: int64
-    interface Event
+type Initialize = Initialize
+    with
+        interface Event
+
+type DispatchWithTimeout =
+    | DispatchWithTimeout of TimeSpan * Event
+    interface Command
+
+type DispatchWithInterval =
+    | DispatchWithInterval of TimeSpan * Event
+    interface Command
 
 type DownloadHttp =
-    | DownloadHttp of Uri * (Result<byte[], exn> -> Event)
+    | DownloadHttp of Uri list * (Result<byte[], exn> list -> Event)
     interface Command

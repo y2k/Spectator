@@ -24,17 +24,13 @@ let ``degoes xml`` () =
 
 [<Fact>]
 let ``parsing wikipedia atom is success`` () =
-    let xs =
-        Infrastructure.loadFromDisk "wiki_atom.xml"
-        |> P.Parser.getNodes
+    let xs = Infrastructure.loadFromDisk "wiki_atom.xml" |> P.Parser.getNodes
 
     Assert.Equal(50, xs.Length)
 
 [<Fact>]
 let ``parse simple rss`` () =
-    let xs =
-        Infrastructure.loadFromDisk "rss1.xml"
-        |> P.Parser.getNodes
+    let xs = Infrastructure.loadFromDisk "rss1.xml" |> P.Parser.getNodes
 
     Assert.Equal(
         [ { subscriptionId = TypedId.empty ()
@@ -63,9 +59,7 @@ let ``parse simple rss`` () =
 
 [<Fact>]
 let ``parse simple atom`` () =
-    let xs =
-        Infrastructure.loadFromDisk "atom1.xml"
-        |> P.Parser.getNodes
+    let xs = Infrastructure.loadFromDisk "atom1.xml" |> P.Parser.getNodes
 
     Assert.Equal(
         [ { subscriptionId = TypedId.empty ()

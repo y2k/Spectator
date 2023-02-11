@@ -34,16 +34,34 @@ module TelegramEventAdapter =
                 dispatch (TelegramMessageReceived(user, msg))
         }
 
-module TimerAdapter =
-    let generateEvents (period: TimeSpan) (dispatch: Event -> unit) =
+module InitializeGenerator =
+    let start (dispatch: Event -> unit) =
         async {
-            let mutable i = 0L
-
-            while true do
-                dispatch (TimerTicked i)
-                i <- i + 1L
-                do! Async.Sleep period
+            do! Async.Sleep 1_000
+            dispatch Initialize
         }
+
+module SheduleGenerator =
+    let dispatchWithTimeout (dispatch: Event -> unit) (cmd: Command) =
+        match cmd with
+        | :? DispatchWithTimeout as DispatchWithTimeout (t, e) ->
+            async {
+                do! Async.Sleep t
+                dispatch e
+            }
+            |> Async.Start
+        | _ -> ()
+
+    let dispatchWithInterval (dispatch: Event -> unit) (cmd: Command) =
+        match cmd with
+        | :? DispatchWithInterval as DispatchWithInterval (t, e) ->
+            async {
+                while true do
+                    do! Async.Sleep t
+                    dispatch e
+            }
+            |> Async.Start
+        | _ -> ()
 
 module Https =
     open System.Net.Http
@@ -65,10 +83,10 @@ module Https =
 
     let handleCommand downloadString dispatch (cmd: Command) =
         match cmd with
-        | :? DownloadHttp as DownloadHttp (uri, callback) ->
+        | :? DownloadHttp as DownloadHttp (uris, callback) ->
             async {
-                let! bytes = downloadString uri
-                dispatch (callback bytes)
+                let! result = uris |> Seq.map (fun uri -> downloadString uri) |> Async.Parallel
+                dispatch (callback (List.ofSeq result))
             }
             |> Async.Start
         | _ -> ()

@@ -33,9 +33,13 @@ let private fixSnapshotFields (sub: Subscription) snap =
         subscriptionId = sub.id
         id = TypedId.wrap <| Guid.NewGuid() }
 
+type RssSnapshotsUpdate = RssSnapshotsUpdate
+    with
+        interface Event
+
 let handleEvent (state: State) (e: Event) : Command list =
     match e with
-    | :? TimerTicked ->
+    | :? RssSnapshotsUpdate ->
         state.subscriptions
         |> List.map (fun s -> DownloadHttp(s.uri, (fun r -> DownloadComplete(s, r))))
     | :? DownloadComplete as DownloadComplete (sub, Ok bytes) ->

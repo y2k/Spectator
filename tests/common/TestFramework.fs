@@ -4,14 +4,14 @@ open System
 open System.Threading.Channels
 open Swensen.Unquote
 open Spectator
+open Spectator.Core
 open Spectator.Store
 
 let rec private flaky count f =
     async {
         try
             do! f
-        with
-        | e ->
+        with e ->
             if count > 0 then
                 do! Async.Sleep 1_000
                 do! flaky (count - 1) f
@@ -19,13 +19,7 @@ let rec private flaky count f =
                 raise e
     }
 
-let private assertBot
-    repeat
-    (input: Threading.Channels.Channel<string>)
-    (output: Threading.Channels.Channel<string>)
-    msg
-    expected
-    =
+let private assertBot repeat (input: Channel<string>) (output: Channel<string>) msg expected =
     let mutable prev = "<not set>"
 
     let read () =
@@ -61,15 +55,14 @@ let mkDownloadString stage (url: Uri) =
     |> Ok
     |> async.Return
 
-let private mkApplication (output: string Channel) (input: string Channel) db (downloadString: _ ref) time =
+let private mkApplication (output: string Channel) (input: string Channel) db (downloadString: _ ref) (time: TimeSpan) =
     let persCache = Persistent.make db
 
-    Application.runApplication persCache time
+    Application.runApplication persCache
     |> Router.addCommand (Https.handleCommand (fun url -> downloadString.Value url))
     |> Router.addCommand_ (
         TelegramEventAdapter.handleCommand (fun userId message ->
-            (output.Writer.WriteAsync message).AsTask()
-            |> Async.AwaitTask)
+            (output.Writer.WriteAsync message).AsTask() |> Async.AwaitTask)
     )
     |> Router.addEventGenerator (
         TelegramEventAdapter.generateEvents (
@@ -79,6 +72,22 @@ let private mkApplication (output: string Channel) (input: string Channel) db (d
             }
         )
     )
+    |> Router.addCommand (fun dispatch cmd ->
+        match cmd with
+        | :? DispatchWithTimeout as DispatchWithTimeout (_, e) ->
+            async {
+                do! Async.Sleep time
+                dispatch e
+            }
+            |> Async.Start
+        | :? DispatchWithInterval as DispatchWithInterval (_, e) ->
+            async {
+                while true do
+                    do! Async.Sleep time
+                    dispatch e
+            }
+            |> Async.Start
+        | _ -> ())
     |> Router.start (Persistent.RestoreStateEvent persCache)
 
 type TestState =
@@ -89,16 +98,13 @@ type TestState =
           dbPath: string }
 
 let executeCommand (state: TestState) cmd expected =
-    assertBot true state.input state.output cmd expected
-    |> Async.RunSynchronously
+    assertBot true state.input state.output cmd expected |> Async.RunSynchronously
 
 let executeCommandOnce (state: TestState) cmd expected =
-    assertBot false state.input state.output cmd expected
-    |> Async.RunSynchronously
+    assertBot false state.input state.output cmd expected |> Async.RunSynchronously
 
 let waitForMessage (state: TestState) expected =
-    assertBot false state.input state.output "" expected
-    |> Async.RunSynchronously
+    assertBot false state.input state.output "" expected |> Async.RunSynchronously
 
 let setDownloadStage (state: TestState) stage =
     state.downloadString.Value <- mkDownloadString stage

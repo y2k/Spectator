@@ -64,9 +64,7 @@ type private MarkRestoreComplete =
 let handleCommand (t: t) (cmd: Command) =
     match cmd with
     | :? MarkRestoreComplete -> t.restored <- true
-    | _ when t.restored ->
-        Domain.update cmd
-        |> List.iter (AsyncChannel.write t.chan)
+    | _ when t.restored -> Domain.update cmd |> List.iter (AsyncChannel.write t.chan)
     | _ -> ()
 
 let main (t: t) =

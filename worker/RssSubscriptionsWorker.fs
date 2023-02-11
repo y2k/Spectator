@@ -21,7 +21,7 @@ let handleStateCmd (state: State) (cmd: Command) =
     | _ -> state
 
 type private DownloadCompleted =
-    | DownloadCompleted of Uri * Result<byte[], exn>
+    | DownloadCompleted of Uri list * Result<byte[], exn> list
     interface Event
 
 let private mkSubscription (newSub: NewSubscription) (p: PluginId) : Subscription =
@@ -31,13 +31,29 @@ let private mkSubscription (newSub: NewSubscription) (p: PluginId) : Subscriptio
       uri = newSub.uri
       filter = newSub.filter }
 
+type RssSubscriptionsUpdate = RssSubscriptionsUpdate
+    with
+        interface Event
+
 let handleEvent (state: State) (e: Event) : Command list =
     match e with
-    | :? TimerTicked ->
+    | :? RssSubscriptionsUpdate ->
+        // state.newSubscriptions
+        // |> List.map (fun ns -> DownloadHttp(ns.uri, (fun data -> DownloadCompleted(ns.uri, data))))
         state.newSubscriptions
-        |> List.map (fun ns -> DownloadHttp(ns.uri, (fun data -> DownloadCompleted(ns.uri, data))))
-    | :? DownloadCompleted as DownloadCompleted (uri, (Ok data)) ->
-        let isRss = RssParser.isValid (Text.Encoding.UTF8.GetString data)
+        |> List.map (fun ns -> ns.uri)
+        |> fun uris -> [ DownloadHttp(uris, (fun data -> DownloadCompleted(uris, data))) ]
+    | :? DownloadCompleted as DownloadCompleted (uris, results) ->
+        let responses =
+            Seq.zip uris results
+            |> Seq.choose (fun (k, v) ->
+                match v with
+                | Ok d -> Some(string k, d)
+                | Error _ -> None)
+            |> Map.ofSeq
+
+        let isRss (data: byte[]) =
+            RssParser.isValid (Text.Encoding.UTF8.GetString data)
 
         state.newSubscriptions
         |> List.choose (fun ns ->
