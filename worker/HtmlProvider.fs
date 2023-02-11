@@ -17,11 +17,10 @@ module private ShinglesTester =
     let private computeCodes (page: string) =
         [| for i in 0 .. page.Length - checkLength -> page.Substring(i, checkLength).GetHashCode() |]
 
-    let private analize (source: int []) (dest: int []) =
+    let private analize (source: int[]) (dest: int[]) =
         let same = Array.sumBy (fun x -> if Array.contains x dest then 1 else 0) source
 
-        (float same) * 2.
-        / (float (source.Length + dest.Length))
+        (float same) * 2. / (float (source.Length + dest.Length))
 
     let compare sourceContent destContent =
         analize (sourceContent |> (clear >> computeCodes)) (destContent |> (clear >> computeCodes))
@@ -49,12 +48,7 @@ let private getTitle content =
     let doc = HtmlAgilityPack.HtmlDocument()
     doc.LoadHtml content
 
-    doc
-        .DocumentNode
-        .SelectSingleNode(
-            "//title"
-        )
-        .InnerHtml
+    doc.DocumentNode.SelectSingleNode("//title").InnerHtml
 
 let private download (uri: Uri) =
     async {

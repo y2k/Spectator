@@ -28,7 +28,7 @@ let handleStateCmd (state: State) (cmd: Command) =
         { state with users = state.users |> Map.filter (fun k _ -> not <| List.contains k subId) }
     | _ -> state
 
-let handleEvent (state: State) (e: TimerTicked) =
+let handleEvent (state: State) (_: TimerTicked) : Command list =
     let formatSnapshot snap =
         match snap.uri.ToString() with
         | Regex "https://t.me/.+" [] -> sprintf "%O" snap.uri
@@ -43,5 +43,5 @@ let handleEvent (state: State) (e: TimerTicked) =
         if state.initialized then state.queue else []
         |> List.map (fun (u, s) -> u, formatSnapshot s)
 
-    [ yield newState :> Command
-      yield! List.map (fun x -> let a = SendTelegramMessage x in a :> Command) messages ]
+    [ yield newState
+      yield! Seq.map (fun x -> SendTelegramMessage x :> Command) messages ]

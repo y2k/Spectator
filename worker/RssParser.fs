@@ -22,9 +22,7 @@ module Parser =
         doc.XPathSelectElements "//channel/item"
         |> Seq.map (fun e ->
             { subscriptionId = TypedId.empty ()
-              created =
-                e.XPathSelectElement("pubDate").Value
-                |> DateTime.Parse
+              created = e.XPathSelectElement("pubDate").Value |> DateTime.Parse
               id = TypedId.empty ()
               title = e.XPathSelectElement("title").Value
               uri = e.XPathSelectElement("link").Value |> Uri })
@@ -34,9 +32,7 @@ module Parser =
         doc.XPathSelectElements("atom:feed//atom:entry", ns)
         |> Seq.map (fun e ->
             { subscriptionId = TypedId.empty ()
-              created =
-                e.XPathSelectElement("atom:updated", ns).Value
-                |> DateTime.Parse
+              created = e.XPathSelectElement("atom:updated", ns).Value |> DateTime.Parse
               id = TypedId.empty ()
               title = e.XPathSelectElement("atom:title", ns).Value
               uri =
@@ -50,8 +46,6 @@ module Parser =
     let getNodes (html: string) =
         html
         |> XDocument.Parse
-        |> (fun doc ->
-            parseRss doc
-            @ parseAtom nsHttp doc @ parseAtom nsHttps doc)
+        |> (fun doc -> parseRss doc @ parseAtom nsHttp doc @ parseAtom nsHttps doc)
 
     let isValid = getNodes >> List.isEmpty >> not

@@ -41,7 +41,7 @@ let getNodes restTelegramPassword restTelegramBaseUrl uri =
             |> client.GetStringAsync
 
         return
-            JsonConvert.DeserializeObject<SnapshotResponse []> json
+            JsonConvert.DeserializeObject<SnapshotResponse[]> json
             |> Seq.toList
             |> List.map
                ^ fun x ->

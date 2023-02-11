@@ -96,5 +96,5 @@ type TimerTicked =
     interface Event
 
 type DownloadHttp =
-    | DownloadHttp of Uri * (Result<byte [], exn> -> Event)
+    | DownloadHttp of Uri * (Result<byte[], exn> -> Event)
     interface Command

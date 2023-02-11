@@ -11,8 +11,7 @@ type State =
 
 let handleStateCmd (state: State) (cmd: Command) =
     let removeNewSubs (subscriptions: NewSubscription list) sids =
-        subscriptions
-        |> List.filter (fun s -> not <| List.contains s.id sids)
+        subscriptions |> List.filter (fun s -> not <| List.contains s.id sids)
 
     match cmd with
     | :? SubscriptionRemoved as SubscriptionRemoved (sids, nsids) ->
@@ -22,7 +21,7 @@ let handleStateCmd (state: State) (cmd: Command) =
     | _ -> state
 
 type private DownloadCompleted =
-    | DownloadCompleted of Uri * Result<byte [], exn>
+    | DownloadCompleted of Uri * Result<byte[], exn>
     interface Event
 
 let private mkSubscription (newSub: NewSubscription) (p: PluginId) : Subscription =

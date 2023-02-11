@@ -32,7 +32,7 @@ let main _ =
 
     runApplication persCache (TimeSpan.FromMinutes(float updateTimeMinutes))
     |> Router.addEvent Logger.logEvent
-    |> Router.addEvent HealthCheck.handleEvent
+    |> Router.addEvent (Router.makeHandleEvent_ HealthCheck.handleEvent)
     |> Router.addCommand_ Logger.logCommand
     |> Router.addCommand_ (TelegramEventAdapter.handleCommand (Telegram.sendToTelegramSingle telegramToken))
     |> Router.addCommand_ (HealthCheck.handleCmd healthState)

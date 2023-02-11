@@ -11,10 +11,8 @@ type SendHealthCheckResponse =
     | SendHealthCheckResponse of Guid
     interface Command
 
-let handleEvent (e: Event) : Command list =
-    match e with
-    | :? HealthCheckRequested as HealthCheckRequested id -> [ SendHealthCheckResponse id ]
-    | _ -> []
+let handleEvent (HealthCheckRequested id) : Command list =
+    [ SendHealthCheckResponse id ]
 
 open System.Net
 

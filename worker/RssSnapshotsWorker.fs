@@ -11,17 +11,14 @@ type State =
           lastUpdated = Map.empty }
 
 type private DownloadComplete =
-    | DownloadComplete of Subscription * Result<byte [], exn>
+    | DownloadComplete of Subscription * Result<byte[], exn>
     interface Event
 
 let handleStateCmd (state: State) (cmd: Command) : State =
     match cmd with
     | :? SubscriptionCreated as (SubscriptionCreated sub) -> { state with subscriptions = sub :: state.subscriptions }
     | :? SubscriptionRemoved as SubscriptionRemoved (sids, _) ->
-        { state with
-            subscriptions =
-                state.subscriptions
-                |> List.filter (fun s -> not <| List.contains s.id sids) }
+        { state with subscriptions = state.subscriptions |> List.filter (fun s -> not <| List.contains s.id sids) }
     | :? SnapshotCreated as SnapshotCreated (_, snap) ->
         let lastUpdated =
             state.lastUpdated
@@ -47,10 +44,7 @@ let handleEvent (state: State) (e: Event) : Command list =
             |> Map.tryFind sub.id
             |> Option.defaultValue DateTime.UnixEpoch
 
-        let isNew =
-            state.lastUpdated
-            |> Map.tryFind sub.id
-            |> Option.isSome
+        let isNew = state.lastUpdated |> Map.tryFind sub.id |> Option.isSome
 
         RssParser.Parser.getNodes (Text.Encoding.UTF8.GetString bytes)
         |> List.filter (fun x -> x.created > lastUpdated)

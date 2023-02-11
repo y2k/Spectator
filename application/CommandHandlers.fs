@@ -6,15 +6,14 @@ open Spectator.Core
 module StoreWrapper =
     let makeDispatch (handleMsg: Event -> Command list) (handleCmd: (Event -> unit) -> Command -> unit) =
         let mail: MailboxProcessor<Event> =
-            MailboxProcessor.Start (fun mail ->
+            MailboxProcessor.Start(fun mail ->
                 async {
                     while true do
                         let! msg = mail.Receive()
 
                         try
                             handleMsg msg |> List.iter (handleCmd mail.Post)
-                        with
-                        | e ->
+                        with e ->
                             eprintfn "ERROR: %O" e
                             exit -1
                 })
@@ -25,9 +24,7 @@ module TelegramEventAdapter =
     let handleCommand sendToTelegram (cmd: Command) =
         match cmd with
         | :? SendTelegramMessage as SendTelegramMessage (user, msg) ->
-            sendToTelegram user msg
-            |> Async.Ignore
-            |> Async.Start
+            sendToTelegram user msg |> Async.Ignore |> Async.Start
         | _ -> ()
 
     let generateEvents readFromTelegram (dispatch: Event -> unit) =
@@ -58,10 +55,7 @@ module Https =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/605.1.15 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/605.1 Edge/19.17763"
             |> client.DefaultRequestHeaders.UserAgent.ParseAdd
 
-            let! result =
-                client.GetByteArrayAsync uri
-                |> Async.AwaitTask
-                |> Async.Catch
+            let! result = client.GetByteArrayAsync uri |> Async.AwaitTask |> Async.Catch
 
             return
                 match result with
@@ -101,6 +95,11 @@ module Router =
             match e with
             | :? 'e as e2 -> f state e2
             | _ -> []
+
+    let makeHandleEvent_ handleEvent' (e: Event) : Command list =
+        match e with
+        | :? _ as x -> handleEvent' x
+        | _ -> []
 
     type t =
         { eventHandlers: (Event -> Command list) list
@@ -147,19 +146,14 @@ module Router =
         { t with commandHandlers = commandHandler :: t.commandHandlers }
 
     let addCommand_ commandHandler (t: t) : t =
-        { t with
-            commandHandlers =
-                (fun _ cmd -> commandHandler cmd)
-                :: t.commandHandlers }
+        { t with commandHandlers = (fun _ cmd -> commandHandler cmd) :: t.commandHandlers }
 
     let addEventGenerator eventGen (t: t) : t =
         { t with eventGenerators = eventGen :: t.eventGenerators }
 
     let start startEvent (t: t) : unit Async =
         let handleEvent e =
-            t.eventHandlers
-            |> List.rev
-            |> List.collect (fun eventHandler -> eventHandler e)
+            t.eventHandlers |> List.rev |> List.collect (fun eventHandler -> eventHandler e)
 
         let handleCommand dispatch cmd =
             t.commandHandlers
