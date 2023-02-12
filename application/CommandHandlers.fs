@@ -85,7 +85,11 @@ module Https =
         match cmd with
         | :? DownloadHttp as DownloadHttp (uris, callback) ->
             async {
-                let! result = uris |> Seq.map (fun uri -> downloadString uri) |> Async.Parallel
+                let! result =
+                    uris
+                    |> Seq.map (fun uri -> downloadString uri)
+                    |> fun xs -> Async.Parallel(xs, 3)
+
                 dispatch (callback (List.ofSeq result))
             }
             |> Async.Start

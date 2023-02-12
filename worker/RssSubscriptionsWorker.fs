@@ -38,8 +38,6 @@ type RssSubscriptionsUpdate = RssSubscriptionsUpdate
 let handleEvent (state: State) (e: Event) : Command list =
     match e with
     | :? RssSubscriptionsUpdate ->
-        // state.newSubscriptions
-        // |> List.map (fun ns -> DownloadHttp(ns.uri, (fun data -> DownloadCompleted(ns.uri, data))))
         state.newSubscriptions
         |> List.map (fun ns -> ns.uri)
         |> fun uris -> [ DownloadHttp(uris, (fun data -> DownloadCompleted(uris, data))) ]
@@ -56,12 +54,14 @@ let handleEvent (state: State) (e: Event) : Command list =
             RssParser.isValid (Text.Encoding.UTF8.GetString data)
 
         state.newSubscriptions
-        |> List.choose (fun ns ->
-            if isRss && ns.uri = uri then
+        |> List.choose (fun ns -> Map.tryFind (string ns.uri) responses |> Option.map (fun d -> ns, d))
+        |> List.choose (fun (ns, data) ->
+            if isRss data then
                 [ SubscriptionCreated(mkSubscription ns RssParser.pluginId) :> Command
                   SubscriptionRemoved([], [ ns.id ]) ]
                 |> Some
             else
                 None)
         |> List.concat
+        |> List.append [ DispatchWithTimeout(TimeSpan.FromMinutes 1, RssSubscriptionsUpdate) ]
     | _ -> []
