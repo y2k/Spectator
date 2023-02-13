@@ -17,13 +17,18 @@ let runApplication persCache =
     |> Router.addEventGenerator InitializeGenerator.start
     |> Router.addStatefull (Router.makeHandleEvent Bot.App.handleEvent) Bot.App.handleStateCmd
     |> Router.addStatefull (Router.makeHandleEvent Notifications.handleEvent) Notifications.handleStateCmd
-    |> Router.addStatefull_ RssSnapshotsWorker.handleEvent RssSnapshotsWorker.handleStateCmd
-    |> Router.addStatefull_ RssSubscriptionsWorker.handleEvent RssSubscriptionsWorker.handleStateCmd
-    |> Router.addEvent (
-        Router.makeHandleEvent_ (fun (_: Initialize) ->
-            [ DispatchWithTimeout(TimeSpan.Zero, RssSubscriptionsWorker.RssSubscriptionsUpdate)
-              DispatchWithTimeout(TimeSpan.Zero, RssSnapshotsWorker.RssSnapshotsUpdate) ])
-    )
+    |> Router.addStatefull_
+        (RouterUtils.handleEvent
+            (Guid.NewGuid())
+            RssSnapshotsWorker.handleTimerEvent
+            (Router.makeHandleEvent RssSnapshotsWorker.handleDownloadEvent))
+        RssSnapshotsWorker.handleStateCmd
+    |> Router.addStatefull_
+        (RouterUtils.handleEvent
+            (Guid.NewGuid())
+            RssSubscriptionsWorker.handleTimerEvent
+            (Router.makeHandleEvent RssSubscriptionsWorker.handleDownloadEvent))
+        RssSubscriptionsWorker.handleStateCmd
 
 [<EntryPoint>]
 let main _ =

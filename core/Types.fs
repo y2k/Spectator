@@ -106,3 +106,7 @@ type DispatchWithInterval =
 type DownloadHttp =
     | DownloadHttp of Uri list * (Result<byte[], exn> list -> Event)
     interface Command
+
+type NotifyTransactionEnded = NotifyTransactionEnded
+    with
+        interface Command

@@ -189,3 +189,20 @@ module Router =
         t.eventGenerators
         |> List.map (fun eventGen -> eventGen dispatch)
         |> Async.loopAll
+
+module RouterUtils =
+    type DispatchWithTimeoutCallback =
+        | DispatchWithTimeoutCallback of Guid
+        interface Event
+
+    let handleEvent appId handleTimerEvent handleDownloadEvent state (e: Event) : Command list =
+        match e with
+        | :? Initialize -> handleTimerEvent state
+        | :? DispatchWithTimeoutCallback as DispatchWithTimeoutCallback id when id = appId -> handleTimerEvent state
+        | e ->
+            handleDownloadEvent state e
+            |> List.map (fun (cmd: Command) ->
+                match cmd with
+                | :? NotifyTransactionEnded ->
+                    DispatchWithTimeout(TimeSpan.FromMinutes 1, DispatchWithTimeoutCallback appId)
+                | cmd -> cmd)

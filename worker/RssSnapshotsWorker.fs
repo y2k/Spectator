@@ -29,44 +29,38 @@ let private fixSnapshotFields (sub: Subscription) snap =
         subscriptionId = sub.id
         id = TypedId.wrap <| Guid.NewGuid() }
 
-type RssSnapshotsUpdate = RssSnapshotsUpdate
-    with
-        interface Event
-
-type private DownloadComplete =
+type DownloadComplete =
     | DownloadComplete of Uri list * Result<byte[], exn> list
     interface Event
 
-let handleEvent (state: State) (e: Event) : Command list =
-    match e with
-    | :? RssSnapshotsUpdate ->
-        state.subscriptions
-        |> List.map (fun s -> s.uri)
-        |> fun uris -> [ DownloadHttp(uris, (fun r -> DownloadComplete(uris, r))) ]
-    | :? DownloadComplete as DownloadComplete (uris, responses) ->
-        let lastUpdated (sub: Subscription) =
-            state.lastUpdated
-            |> Map.tryFind sub.id
-            |> Option.defaultValue DateTime.UnixEpoch
+let handleTimerEvent state : Command list =
+    state.subscriptions
+    |> List.map (fun s -> s.uri)
+    |> fun uris -> [ DownloadHttp(uris, (fun r -> DownloadComplete(uris, r))) ]
 
-        let isNew (sub: Subscription) =
-            state.lastUpdated |> Map.tryFind sub.id |> Option.isSome
+let handleDownloadEvent state (DownloadComplete (uris, responses)) =
+    let lastUpdated (sub: Subscription) =
+        state.lastUpdated
+        |> Map.tryFind sub.id
+        |> Option.defaultValue DateTime.UnixEpoch
 
-        let responses =
-            Seq.zip uris responses
-            |> Seq.choose (fun (k, v) ->
-                match v with
-                | Ok d -> Some(string k, d)
-                | Error _ -> None)
-            |> Map.ofSeq
+    let isNew (sub: Subscription) =
+        state.lastUpdated |> Map.tryFind sub.id |> Option.isSome
 
-        state.subscriptions
-        |> List.choose (fun sub -> Map.tryFind (string sub.uri) responses |> Option.map (fun data -> sub, data))
-        |> List.collect (fun (sub, data) ->
-            RssParser.Parser.getNodes (Text.Encoding.UTF8.GetString data)
-            |> List.filter (fun x -> x.created > lastUpdated sub)
-            |> List.map (fixSnapshotFields sub)
-            |> List.sortBy (fun x -> x.created)
-            |> List.map (fun snap -> SnapshotCreated(isNew sub, snap) :> Command))
-        |> List.append [ DispatchWithTimeout(TimeSpan.FromMinutes 1, RssSnapshotsUpdate) ]
-    | _ -> []
+    let responses =
+        Seq.zip uris responses
+        |> Seq.choose (fun (k, v) ->
+            match v with
+            | Ok d -> Some(string k, d)
+            | Error _ -> None)
+        |> Map.ofSeq
+
+    state.subscriptions
+    |> List.choose (fun sub -> Map.tryFind (string sub.uri) responses |> Option.map (fun data -> sub, data))
+    |> List.collect (fun (sub, data) ->
+        RssParser.Parser.getNodes (Text.Encoding.UTF8.GetString data)
+        |> List.filter (fun x -> x.created > lastUpdated sub)
+        |> List.map (fixSnapshotFields sub)
+        |> List.sortBy (fun x -> x.created)
+        |> List.map (fun snap -> SnapshotCreated(isNew sub, snap) :> Command))
+    |> List.append [ NotifyTransactionEnded ]
