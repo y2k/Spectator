@@ -55,7 +55,8 @@ let mkDownloadString stage (url: Uri) =
     |> Ok
     |> async.Return
 
-let private mkApplication (output: string Channel) (input: string Channel) db (downloadString: _ ref) (time: TimeSpan) =
+let private mkApplication (output: string Channel) (input: string Channel) db (downloadString: _ ref) =
+    let time = TimeSpan.FromSeconds 2
     let persCache = Persistent.make db
 
     Application.runApplication persCache
@@ -116,7 +117,7 @@ let startApplication () : TestState =
           downloadString = ref (mkDownloadString 0)
           dbPath = IO.Path.GetTempFileName() }
 
-    mkApplication state.output state.input state.dbPath state.downloadString (TimeSpan.FromSeconds 2.0)
+    mkApplication state.output state.input state.dbPath state.downloadString
     |> Async.Start
 
     state
@@ -128,7 +129,7 @@ let resetApplication (oldState: TestState) : TestState =
           downloadString = ref (mkDownloadString 0)
           dbPath = oldState.dbPath }
 
-    mkApplication state.output state.input state.dbPath state.downloadString (TimeSpan.FromSeconds 2.0)
+    mkApplication state.output state.input state.dbPath state.downloadString
     |> Async.Start
 
     state
