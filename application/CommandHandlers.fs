@@ -98,6 +98,14 @@ module Router =
     let addEventGenerator eventGen (t: t) : t =
         { t with eventGenerators = eventGen :: t.eventGenerators }
 
+    let makeCommandDispatch (t: t) =
+        let handleCommand dispatch cmd =
+            t.commandHandlers
+            |> List.rev
+            |> List.iter (fun commandHandler -> commandHandler dispatch cmd)
+
+        handleCommand ignore
+
     let start startEvent (t: t) : unit Async =
         let handleEvent e =
             t.eventHandlers |> List.rev |> List.collect (fun eventHandler -> eventHandler e)
@@ -127,13 +135,6 @@ module TelegramEventAdapter =
             while true do
                 let! (user: string, msg: string) = readFromTelegram
                 dispatch (TelegramMessageReceived(user, msg))
-        }
-
-module InitializeGenerator =
-    let start (dispatch: Event -> unit) =
-        async {
-            do! Async.Sleep 1_000
-            dispatch Initialize
         }
 
 module SheduleGenerator =

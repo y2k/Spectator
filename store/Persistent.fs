@@ -53,10 +53,6 @@ let make connectionString : t =
       db = DatabaseAdapter.make connectionString
       restored = false }
 
-type RestoreStateEvent =
-    | RestoreStateEvent of t
-    interface Event
-
 type private MarkRestoreComplete =
     | MarkRestoreComplete
     interface Command
@@ -78,21 +74,14 @@ let main (t: t) =
                 | Delete (col, id) -> DatabaseAdapter.delete t.db col id
     }
 
-let handleEvent (e: Event) : Command list =
-    match e with
-    | :? RestoreStateEvent as RestoreStateEvent t ->
-        async {
-            let result = ResizeArray()
+let restoreCommand t dispatch =
+    async {
+        for name in Domain.collections do
+            do!
+                DatabaseAdapter.queryAll t.db name (fun doc ->
+                    let cmd = Domain.restore name doc
+                    dispatch cmd
+                    async.Return())
 
-            for name in Domain.collections do
-                do!
-                    DatabaseAdapter.queryAll t.db name (fun doc ->
-                        let cmd = Domain.restore name doc
-                        result.Add cmd
-                        async.Return())
-
-            result.Add MarkRestoreComplete
-            return Seq.toList result
-        }
-        |> Async.RunSynchronously
-    | _ -> []
+        dispatch MarkRestoreComplete
+    }

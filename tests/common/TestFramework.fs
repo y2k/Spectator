@@ -59,7 +59,7 @@ let private mkApplication (output: string Channel) (input: string Channel) db (d
     let time = TimeSpan.FromSeconds 2
     let persCache = Persistent.make db
 
-    Application.runApplication persCache
+    Application.attachDomain persCache
     |> Router.addCommand (Https.handleCommand (fun url -> downloadString.Value url))
     |> Router.addCommand_ (
         TelegramEventAdapter.handleCommand (fun userId message ->
@@ -89,7 +89,7 @@ let private mkApplication (output: string Channel) (input: string Channel) db (d
             }
             |> Async.Start
         | _ -> ())
-    |> Router.start (Persistent.RestoreStateEvent persCache)
+    |> Application.runApplicaiton persCache
 
 type TestState =
     private
