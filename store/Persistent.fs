@@ -39,29 +39,17 @@ type State =
     { queue: MongoCmd list }
     static member Empty = { queue = [] }
 
-let private update state e =
-    { state with queue = (Domain.update e) @ state.queue }
-
 type t =
     private
         { chan: MongoCmd AsyncChannel.t
-          db: DatabaseAdapter.t
-          mutable restored: bool }
+          db: DatabaseAdapter.t }
 
 let make connectionString : t =
     { chan = AsyncChannel.make ()
-      db = DatabaseAdapter.make connectionString
-      restored = false }
-
-type private MarkRestoreComplete =
-    | MarkRestoreComplete
-    interface Command
+      db = DatabaseAdapter.make connectionString }
 
 let handleCommand (t: t) (cmd: Command) =
-    match cmd with
-    | :? MarkRestoreComplete -> t.restored <- true
-    | _ when t.restored -> Domain.update cmd |> List.iter (AsyncChannel.write t.chan)
-    | _ -> ()
+    Domain.update cmd |> List.iter (AsyncChannel.write t.chan)
 
 let main (t: t) =
     async {
@@ -74,7 +62,7 @@ let main (t: t) =
                 | Delete (col, id) -> DatabaseAdapter.delete t.db col id
     }
 
-let restoreCommand t dispatch =
+let restoreCommands t dispatch =
     async {
         for name in Domain.collections do
             do!
@@ -82,6 +70,4 @@ let restoreCommand t dispatch =
                     let cmd = Domain.restore name doc
                     dispatch cmd
                     async.Return())
-
-        dispatch MarkRestoreComplete
     }

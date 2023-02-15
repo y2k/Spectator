@@ -59,7 +59,7 @@ let private mkApplication (output: string Channel) (input: string Channel) db (d
     let time = TimeSpan.FromSeconds 2
     let persCache = Persistent.make db
 
-    Application.attachDomain persCache
+    Application.attachDomain ()
     |> Router.addCommand (Https.handleCommand (fun url -> downloadString.Value url))
     |> Router.addCommand_ (
         TelegramEventAdapter.handleCommand (fun userId message ->
@@ -101,8 +101,16 @@ type TestState =
 let executeCommand (state: TestState) cmd expected =
     assertBot true state.input state.output cmd expected |> Async.RunSynchronously
 
+let executeCommand_ cmd expected (state: TestState) =
+    executeCommand state cmd expected
+    state
+
 let executeCommandOnce (state: TestState) cmd expected =
     assertBot false state.input state.output cmd expected |> Async.RunSynchronously
+
+let executeCommandOnce_ cmd expected (state: TestState) =
+    executeCommandOnce state cmd expected
+    state
 
 let waitForMessage (state: TestState) expected =
     assertBot false state.input state.output "" expected |> Async.RunSynchronously

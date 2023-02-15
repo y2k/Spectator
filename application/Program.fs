@@ -8,11 +8,9 @@ module Persistent = Store.Persistent
 module RssSubscriptionsWorker = Worker.RssSubscriptionsWorker
 module RssSnapshotsWorker = Worker.RssSnapshotsWorker
 
-let attachDomain persCache =
+let attachDomain () =
     Router.init
-    |> Router.addCommand_ (Persistent.handleCommand persCache)
     |> Router.addEvent (Router.makeHandleEvent_ Notifications.initialize)
-    |> Router.addEventGenerator (fun _ -> Persistent.main persCache)
     |> Router.addStatefull (Router.makeHandleEvent Bot.App.handleEvent) Bot.App.handleStateCmd
     |> Router.addStatefull (Router.makeHandleEvent Notifications.handleEvent) Notifications.handleStateCmd
     |> Router.addStatefull_
@@ -30,8 +28,13 @@ let attachDomain persCache =
 
 let runApplicaiton persCache router =
     async {
-        do! Persistent.restoreCommand persCache (Router.makeCommandDispatch router)
-        router |> Router.start Initialize |> Async.RunSynchronously
+        do! Persistent.restoreCommands persCache (Router.makeCommandDispatch router)
+
+        do!
+            router
+            |> Router.addCommand_ (Persistent.handleCommand persCache)
+            |> Router.addEventGenerator (fun _ -> Persistent.main persCache)
+            |> Router.start Initialize
     }
 
 [<EntryPoint>]
@@ -44,20 +47,19 @@ let main _ =
     let healthState = HealthCheck.init ()
     let persCache = Persistent.make (IO.Path.Combine(filesDir, "spectator.db"))
 
-    let router =
-        attachDomain persCache
-        |> Router.addCommand (Https.handleCommand Https.download)
-        |> Router.addCommand SheduleGenerator.dispatchWithInterval
-        |> Router.addCommand SheduleGenerator.dispatchWithTimeout
-        |> Router.addCommand_ (HealthCheck.handleCmd healthState)
-        |> Router.addCommand_ (TelegramEventAdapter.handleCommand (Telegram.sendToTelegramSingle telegramToken))
-        |> Router.addCommand_ Logger.logCommand
-        |> Router.addEvent (Router.makeHandleEvent_ HealthCheck.handleEvent)
-        |> Router.addEvent Logger.logEvent
-        |> Router.addEventGenerator (HealthCheck.main healthState)
-        |> Router.addEventGenerator (TelegramEventAdapter.generateEvents (Telegram.readMessage telegramToken))
-        |> Router.addEventGenerator (Web.start)
-
-    router |> runApplicaiton persCache |> Async.RunSynchronously
+    attachDomain ()
+    |> Router.addCommand (Https.handleCommand Https.download)
+    |> Router.addCommand SheduleGenerator.dispatchWithInterval
+    |> Router.addCommand SheduleGenerator.dispatchWithTimeout
+    |> Router.addCommand_ (HealthCheck.handleCmd healthState)
+    |> Router.addCommand_ (TelegramEventAdapter.handleCommand (Telegram.sendToTelegramSingle telegramToken))
+    |> Router.addCommand_ Logger.logCommand
+    |> Router.addEvent (Router.makeHandleEvent_ HealthCheck.handleEvent)
+    |> Router.addEvent Logger.logEvent
+    |> Router.addEventGenerator (HealthCheck.main healthState)
+    |> Router.addEventGenerator (TelegramEventAdapter.generateEvents (Telegram.readMessage telegramToken))
+    |> Router.addEventGenerator (Web.start)
+    |> runApplicaiton persCache
+    |> Async.RunSynchronously
 
     0
