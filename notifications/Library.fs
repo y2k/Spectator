@@ -1,6 +1,5 @@
 module Spectator.Notifications
 
-open System
 open Spectator.Core
 
 type State =
@@ -29,14 +28,13 @@ let handleStateCmd (state: State) (cmd: Command) =
         { state with users = state.users |> Map.filter (fun k _ -> not <| List.contains k subId) }
     | _ -> state
 
-type UpdateNotification = UpdateNotification
-    with
-        interface Event
+// type UpdateNotification = UpdateNotification
+//     with
+//         interface Event
 
-let initialize (_: Initialize) : Command list =
-    [ DispatchWithInterval(TimeSpan.FromMinutes 1, UpdateNotification) ]
-
-let handleEvent (state: State) (_: UpdateNotification) : Command list =
+let handleEvent (state: State) (_: Initialize) : Command list =
+    // [ DispatchWithInterval(TimeSpan.FromMinutes 1, UpdateNotification) ]
+    // let handleEvent (state: State) (_: UpdateNotification) : Command list =
     let formatSnapshot snap =
         match snap.uri.ToString() with
         | Regex "https://t.me/.+" [] -> sprintf "%O" snap.uri

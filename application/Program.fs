@@ -10,21 +10,30 @@ module RssSnapshotsWorker = Worker.RssSnapshotsWorker
 
 let attachDomain () =
     Router.init
-    |> Router.addEvent (Router.makeHandleEvent_ Notifications.initialize)
-    |> Router.addStatefull (Router.makeHandleEvent Bot.App.handleEvent) Bot.App.handleStateCmd
-    |> Router.addStatefull (Router.makeHandleEvent Notifications.handleEvent) Notifications.handleStateCmd
-    |> Router.addStatefull_
-        (RouterUtils.handleEvent
-            (Guid.NewGuid())
-            RssSnapshotsWorker.handleTimerEvent
-            (Router.makeHandleEvent RssSnapshotsWorker.handleDownloadEvent))
-        RssSnapshotsWorker.handleStateCmd
-    |> Router.addStatefull_
-        (RouterUtils.handleEvent
-            (Guid.NewGuid())
-            RssSubscriptionsWorker.handleTimerEvent
-            (Router.makeHandleEvent RssSubscriptionsWorker.handleDownloadEvent))
-        RssSubscriptionsWorker.handleStateCmd
+    |> fun router ->
+        let state = AsyncRouter.make Bot.App.State.empty
+
+        router
+        |> Router.addEvent (AsyncRouter.decorateEventHandler state (Router.makeHandleEvent Bot.App.handleEvent))
+        |> Router.addCommand (AsyncRouter.decorateCommandHandler state Bot.App.handleStateCmd)
+    |> fun router ->
+        let state = AsyncRouter.make Notifications.State.empty
+
+        router
+        |> Router.addEvent (AsyncRouter.decorateEventHandler state (Router.makeHandleEvent Notifications.handleEvent))
+        |> Router.addCommand (AsyncRouter.decorateCommandHandler state Notifications.handleStateCmd)
+    |> fun router ->
+        let state = AsyncRouter.make RssSnapshotsWorker.State.empty
+
+        router
+        |> Router.addEvent (AsyncRouter.decorateEventHandler state RssSnapshotsWorker.handleEvent)
+        |> Router.addCommand (AsyncRouter.decorateCommandHandler_ state RssSnapshotsWorker.handleStateCmd)
+    |> fun router ->
+        let state = AsyncRouter.make RssSubscriptionsWorker.State.empty
+
+        router
+        |> Router.addEvent (AsyncRouter.decorateEventHandler state RssSubscriptionsWorker.handleEvent)
+        |> Router.addCommand (AsyncRouter.decorateCommandHandler_ state RssSubscriptionsWorker.handleStateCmd)
 
 let runApplicaiton persCache router =
     async {
@@ -49,15 +58,21 @@ let main _ =
 
     attachDomain ()
     |> Router.addCommand (Https.handleCommand Https.download)
-    |> Router.addCommand SheduleGenerator.dispatchWithInterval
-    |> Router.addCommand SheduleGenerator.dispatchWithTimeout
-    |> Router.addCommand_ (HealthCheck.handleCmd healthState)
-    |> Router.addCommand_ (TelegramEventAdapter.handleCommand (Telegram.sendToTelegramSingle telegramToken))
-    |> Router.addCommand_ Logger.logCommand
-    |> Router.addEvent (Router.makeHandleEvent_ HealthCheck.handleEvent)
-    |> Router.addEvent Logger.logEvent
-    |> Router.addEventGenerator (HealthCheck.main healthState)
-    |> Router.addEventGenerator (TelegramEventAdapter.generateEvents (Telegram.readMessage telegramToken))
+    // |> Router.addCommand SheduleGenerator.dispatchWithInterval
+    // |> Router.addCommand SheduleGenerator.dispatchWithTimeout
+    |> fun router ->
+        router
+        |> Router.addCommand_ Logger.logCommand
+        |> Router.addEvent Logger.logEvent
+    |> fun router ->
+        router
+        |> Router.addEvent (Router.makeHandleEvent_ HealthCheck.handleEvent)
+        |> Router.addCommand_ (HealthCheck.handleCmd healthState)
+        |> Router.addEventGenerator (HealthCheck.main healthState)
+    |> fun router ->
+        router
+        |> Router.addCommand_ (TelegramEventAdapter.handleCommand (Telegram.sendToTelegramSingle telegramToken))
+        |> Router.addEventGenerator (TelegramEventAdapter.generateEvents (Telegram.readMessage telegramToken))
     |> Router.addEventGenerator (Web.start)
     |> runApplicaiton persCache
     |> Async.RunSynchronously

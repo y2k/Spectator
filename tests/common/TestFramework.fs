@@ -73,22 +73,28 @@ let private mkApplication (output: string Channel) (input: string Channel) db (d
             }
         )
     )
-    |> Router.addCommand (fun dispatch cmd ->
-        match cmd with
-        | :? DispatchWithTimeout as DispatchWithTimeout (_, e) ->
-            async {
+    // |> Router.addCommand (fun dispatch cmd ->
+    //     match cmd with
+    //     | :? DispatchWithTimeout as DispatchWithTimeout (_, e) ->
+    //         async {
+    //             do! Async.Sleep time
+    //             dispatch e
+    //         }
+    //         |> Async.Start
+    //     | :? DispatchWithInterval as DispatchWithInterval (_, e) ->
+    //         async {
+    //             while true do
+    //                 do! Async.Sleep time
+    //                 dispatch e
+    //         }
+    //         |> Async.Start
+    //     | _ -> ())
+    |> Router.addEventGenerator (fun d ->
+        async {
+            while true do
                 do! Async.Sleep time
-                dispatch e
-            }
-            |> Async.Start
-        | :? DispatchWithInterval as DispatchWithInterval (_, e) ->
-            async {
-                while true do
-                    do! Async.Sleep time
-                    dispatch e
-            }
-            |> Async.Start
-        | _ -> ())
+                d Initialize
+        })
     |> Application.runApplicaiton persCache
 
 type TestState =

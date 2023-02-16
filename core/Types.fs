@@ -95,13 +95,13 @@ type Initialize = Initialize
     with
         interface Event
 
-type DispatchWithTimeout =
-    | DispatchWithTimeout of TimeSpan * Event
-    interface Command
+// type DispatchWithTimeout =
+//     | DispatchWithTimeout of TimeSpan * Event
+//     interface Command
 
-type DispatchWithInterval =
-    | DispatchWithInterval of TimeSpan * Event
-    interface Command
+// type DispatchWithInterval =
+//     | DispatchWithInterval of TimeSpan * Event
+//     interface Command
 
 type DownloadHttp =
     | DownloadHttp of Uri list * (Result<byte[], exn> list -> Event)

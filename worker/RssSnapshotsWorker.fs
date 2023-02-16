@@ -33,12 +33,12 @@ type DownloadComplete =
     | DownloadComplete of Uri list * Result<byte[], exn> list
     interface Event
 
-let handleTimerEvent state : Command list =
+let private handleTimerEvent state : Command list =
     state.subscriptions
     |> List.map (fun s -> s.uri)
     |> fun uris -> [ DownloadHttp(uris, (fun r -> DownloadComplete(uris, r))) ]
 
-let handleDownloadEvent state (DownloadComplete (uris, responses)) =
+let private handleDownloadEvent state (DownloadComplete (uris, responses)) =
     let lastUpdated (sub: Subscription) =
         state.lastUpdated
         |> Map.tryFind sub.id
@@ -64,3 +64,9 @@ let handleDownloadEvent state (DownloadComplete (uris, responses)) =
         |> List.sortBy (fun x -> x.created)
         |> List.map (fun snap -> SnapshotCreated(isNew sub, snap) :> Command))
     |> List.append [ NotifyTransactionEnded ]
+
+let handleEvent state (e: Event) : Command list =
+    match e with
+    | :? Initialize -> handleTimerEvent state
+    | :? DownloadComplete as e -> handleDownloadEvent state e
+    | _ -> []

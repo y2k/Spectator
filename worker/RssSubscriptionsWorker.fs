@@ -31,12 +31,12 @@ let private mkSubscription (newSub: NewSubscription) (p: PluginId) : Subscriptio
       uri = newSub.uri
       filter = newSub.filter }
 
-let handleTimerEvent state : Command list =
+let private handleTimerEvent state : Command list =
     state.newSubscriptions
     |> List.map (fun ns -> ns.uri)
     |> fun uris -> [ DownloadHttp(uris, (fun data -> DownloadCompleted(uris, data))) ]
 
-let handleDownloadEvent state (DownloadCompleted (uris, results)) =
+let private handleDownloadEvent state (DownloadCompleted (uris, results)) =
     let responses =
         Seq.zip uris results
         |> Seq.choose (fun (k, v) ->
@@ -59,3 +59,9 @@ let handleDownloadEvent state (DownloadCompleted (uris, results)) =
             None)
     |> List.concat
     |> List.append [ NotifyTransactionEnded ]
+
+let handleEvent state (e: Event) : Command list =
+    match e with
+    | :? Initialize -> handleTimerEvent state
+    | :? DownloadCompleted as e -> handleDownloadEvent state e
+    | _ -> []
