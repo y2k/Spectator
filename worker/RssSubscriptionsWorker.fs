@@ -65,3 +65,17 @@ let handleEvent state (e: Event) : Command list =
     | :? Initialize -> handleTimerEvent state
     | :? DownloadCompleted as e -> handleDownloadEvent state e
     | _ -> []
+
+// === === === === === === === ===
+
+type EventLock = StartEventLock | EndEventLock
+    with interface Command
+
+type LockState = LockState of bool
+
+let decorateWithLock (f: Event -> Command list) (LockState locked) (e: Event) : Command list =
+    if locked then []
+    else
+        let cmds = f e
+        // List.partition
+        failwith "???"
