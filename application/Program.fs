@@ -14,13 +14,15 @@ let attachDomain () =
         let state = AsyncRouter.make Bot.App.State.empty
 
         router
-        |> Router.addEvent (AsyncRouter.decorateEventHandler state (Router.makeHandleEvent Bot.App.handleEvent))
+        |> Router.addEvent (AsyncRouter.decorateEventHandler state (RouterUtils.makeHandleEvent Bot.App.handleEvent))
         |> Router.addCommand (AsyncRouter.makeCommandHandler state Bot.App.handleStateCmd)
     |> fun router ->
         let state = AsyncRouter.make Notifications.State.empty
 
         router
-        |> Router.addEvent (AsyncRouter.decorateEventHandler state (Router.makeHandleEvent Notifications.handleEvent))
+        |> Router.addEvent (
+            AsyncRouter.decorateEventHandler state (RouterUtils.makeHandleEvent Notifications.handleEvent)
+        )
         |> Router.addCommand (AsyncRouter.makeCommandHandler state Notifications.handleStateCmd)
     |> fun router ->
         let state = AsyncRouter.make RssSnapshotsWorker.State.empty
@@ -62,15 +64,13 @@ let main _ =
 
     attachDomain ()
     |> Router.addCommand (Https.handleCommand Https.download)
-    // |> Router.addCommand SheduleGenerator.dispatchWithInterval
-    // |> Router.addCommand SheduleGenerator.dispatchWithTimeout
     |> fun router ->
         router
         |> Router.addCommand_ Logger.logCommand
         |> Router.addEvent Logger.logEvent
     |> fun router ->
         router
-        |> Router.addEvent (Router.makeHandleEvent_ HealthCheck.handleEvent)
+        |> Router.addEvent (RouterUtils.makeHandleEvent_ HealthCheck.handleEvent)
         |> Router.addCommand_ (HealthCheck.handleCmd healthState)
         |> Router.addEventGenerator (HealthCheck.main healthState)
     |> fun router ->

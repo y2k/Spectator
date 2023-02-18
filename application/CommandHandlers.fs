@@ -40,17 +40,6 @@ module StoreAtom =
         stateHolder.state <- update stateHolder.state cmd
 
 module Router =
-    let makeHandleEvent (f: 'State -> 'e -> _) =
-        fun (state: 'State) (e: Event) ->
-            match e with
-            | :? 'e as e2 -> f state e2
-            | _ -> []
-
-    let makeHandleEvent_ handleEvent' (e: Event) : Command list =
-        match e with
-        | :? _ as x -> handleEvent' x
-        | _ -> []
-
     type t =
         { eventHandlers: (Async<Event -> Command list>) list
           commandHandlers: ((Event -> unit) -> Command -> unit) list
@@ -60,36 +49,6 @@ module Router =
         { eventHandlers = []
           commandHandlers = []
           eventGenerators = [] }
-
-    // [<Obsolete>]
-    // let inline addStatefull handleEvent handleStateCmd (t: t) : t =
-    //     let botState = StoreAtom.make ()
-
-    //     let eh e =
-    //         (StoreAtom.addStateCofx botState handleEvent) e
-
-    //     let ch1 _ cmd = StoreAtom.handleCommand botState cmd
-
-    //     let ch2 _ cmd =
-    //         StoreAtom.handleCommandFun botState handleStateCmd cmd
-
-    //     { t with
-    //         eventHandlers = async.Return eh :: t.eventHandlers
-    //         commandHandlers = ch1 :: ch2 :: t.commandHandlers }
-
-    // [<Obsolete>]
-    // let inline addStatefull_ handleEvent handleStateCmd (t: t) : t =
-    //     let botState = StoreAtom.make ()
-
-    //     let eh e =
-    //         (StoreAtom.addStateCofx botState handleEvent) e
-
-    //     let ch2 _ cmd =
-    //         StoreAtom.handleCommandFun botState handleStateCmd cmd
-
-    //     { t with
-    //         eventHandlers = async.Return eh :: t.eventHandlers
-    //         commandHandlers = ch2 :: t.commandHandlers }
 
     let addEvent eventHandler (t: t) : t =
         { t with eventHandlers = async.Return eventHandler :: t.eventHandlers }
@@ -166,7 +125,6 @@ module EventLocker =
 module AsyncRouter =
     type t<'a when 'a: not struct> = private { state: 'a Atom.IAtom }
     let make empty = { state = Atom.atom empty }
-    // let decorateEventHandler { state = botState } handleEvent = fun e -> handleEvent botState.Value e
 
     let decorateEventHandler { state = botState } handleEvent : Event -> Command list =
         fun (e: Event) ->
@@ -178,34 +136,20 @@ module AsyncRouter =
                     None
                 | _ -> Some cmd)
 
-    // let decorateCommandHandler' { state = botState } handleStateCmd =
-    //     let ch1 _ (cmd: Command) =
-    //         match cmd with
-    //         | :? 'state as newState -> botState.update (fun _ -> newState)
-    //         | _ -> ()
-
-    //     let ch2 _ (cmd: Command) =
-    //         botState.update (fun x -> handleStateCmd x cmd)
-
-    //     fun d cmd -> ch1 :: ch2 :: [] |> List.iter (fun f -> f d cmd)
-
-    // let decorateCommandHandler { state = botState } handleStateCmd =
-    //     let ch1 _ (cmd: Command) =
-    //         match cmd with
-    //         | :? 'state as newState -> botState.update (fun _ -> newState)
-    //         | _ -> ()
-
-    //     let ch2 _ (cmd: Command) =
-    //         botState.update (fun x -> handleStateCmd x cmd)
-
-    //     fun d cmd -> ch1 :: ch2 :: [] |> List.iter (fun f -> f d cmd)
-
     let makeCommandHandler { state = botState } handleStateCmd =
-        let ch2 _ (cmd: Command) =
-            botState.update (fun x -> handleStateCmd x cmd)
+        fun _ (cmd: Command) -> botState.update (fun x -> handleStateCmd x cmd)
 
-        // fun d cmd -> ch2 :: [] |> List.iter (fun f -> f d cmd)
-        ch2
+module RouterUtils =
+    let makeHandleEvent (f: 'State -> 'e -> _) =
+        fun (state: 'State) (e: Event) ->
+            match e with
+            | :? 'e as e2 -> f state e2
+            | _ -> []
+
+    let makeHandleEvent_ handleEvent' (e: Event) : Command list =
+        match e with
+        | :? _ as x -> handleEvent' x
+        | _ -> []
 
 module TelegramEventAdapter =
     let handleCommand sendToTelegram (cmd: Command) =
@@ -220,28 +164,6 @@ module TelegramEventAdapter =
                 let! (user: string, msg: string) = readFromTelegram
                 dispatch (TelegramMessageReceived(user, msg))
         }
-
-// module SheduleGenerator =
-//     let dispatchWithTimeout (dispatch: Event -> unit) (cmd: Command) =
-//         match cmd with
-//         | :? DispatchWithTimeout as DispatchWithTimeout (t, e) ->
-//             async {
-//                 do! Async.Sleep t
-//                 dispatch e
-//             }
-//             |> Async.Start
-//         | _ -> ()
-
-//     let dispatchWithInterval (dispatch: Event -> unit) (cmd: Command) =
-//         match cmd with
-//         | :? DispatchWithInterval as DispatchWithInterval (t, e) ->
-//             async {
-//                 while true do
-//                     do! Async.Sleep t
-//                     dispatch e
-//             }
-//             |> Async.Start
-//         | _ -> ()
 
 module Https =
     open System.Net.Http
@@ -274,21 +196,3 @@ module Https =
             }
             |> Async.Start
         | _ -> ()
-
-// [<Obsolete>]
-// module RouterUtils =
-//     type DispatchWithTimeoutCallback =
-//         | DispatchWithTimeoutCallback of Guid
-//         interface Event
-
-//     let handleEvent appId handleTimerEvent handleDownloadEvent state (e: Event) : Command list =
-//         match e with
-//         | :? Initialize -> handleTimerEvent state
-//         | :? DispatchWithTimeoutCallback as DispatchWithTimeoutCallback id when id = appId -> handleTimerEvent state
-//         | e ->
-//             handleDownloadEvent state e
-//             |> List.map (fun (cmd: Command) ->
-//                 match cmd with
-//                 | :? NotifyTransactionEnded ->
-//                     DispatchWithTimeout(TimeSpan.FromMinutes 1, DispatchWithTimeoutCallback appId)
-//                 | cmd -> cmd)
