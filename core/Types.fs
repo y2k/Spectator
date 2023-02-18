@@ -107,6 +107,6 @@ type DownloadHttp =
     | DownloadHttp of Uri list * (Result<byte[], exn> list -> Event)
     interface Command
 
-type NotifyTransactionEnded = NotifyTransactionEnded
+type InitializeCompleted = InitializeCompleted
     with
         interface Command

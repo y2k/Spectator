@@ -7,6 +7,7 @@ module RssParser = RssParser.Parser
 
 type State =
     { newSubscriptions: NewSubscription list }
+    interface Command
     static member empty = { newSubscriptions = [] }
 
 let handleStateCmd (state: State) (cmd: Command) =
@@ -58,24 +59,10 @@ let private handleDownloadEvent state (DownloadCompleted (uris, results)) =
         else
             None)
     |> List.concat
-    |> List.append [ NotifyTransactionEnded ]
+    |> List.append [ InitializeCompleted ]
 
 let handleEvent state (e: Event) : Command list =
     match e with
     | :? Initialize -> handleTimerEvent state
     | :? DownloadCompleted as e -> handleDownloadEvent state e
     | _ -> []
-
-// === === === === === === === ===
-
-type EventLock = StartEventLock | EndEventLock
-    with interface Command
-
-type LockState = LockState of bool
-
-let decorateWithLock (f: Event -> Command list) (LockState locked) (e: Event) : Command list =
-    if locked then []
-    else
-        let cmds = f e
-        // List.partition
-        failwith "???"

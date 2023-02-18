@@ -131,7 +131,7 @@ module Router =
         |> List.map (fun eventGen -> eventGen dispatch)
         |> Async.loopAll
 
-module Apative =
+module Aplicative =
     let pure_ f = async { return f }
 
     let apply ff fa =
@@ -141,32 +141,71 @@ module Apative =
             return f a
         }
 
+module EventLocker =
+    let decorateWithLock (f: Event -> Command list) : Event -> Command list =
+        let locked = Atom.atom (ref false)
+
+        fun e ->
+            if locked.Value.Value then
+                match e with
+                | :? Initialize -> []
+                | e ->
+                    f e
+                    |> List.choose (function
+                        | :? InitializeCompleted ->
+                            locked.update (fun _ -> ref false)
+                            None
+                        | cmd -> Some cmd)
+            else
+                match e with
+                | :? Initialize -> locked.update (fun _ -> ref true)
+                | _ -> ()
+
+                f e
+
 module AsyncRouter =
     type t<'a when 'a: not struct> = private { state: 'a Atom.IAtom }
     let make empty = { state = Atom.atom empty }
-    let decorateEventHandler { state = botState } handleEvent = fun e -> handleEvent botState.Value e
+    // let decorateEventHandler { state = botState } handleEvent = fun e -> handleEvent botState.Value e
 
-    let decorateCommandHandler { state = botState } handleStateCmd =
-        let ch1 _ (cmd: Command) =
-            match cmd with
-            | :? 'state as newState -> botState.update (fun _ -> newState)
-            | _ -> ()
+    let decorateEventHandler { state = botState } handleEvent : Event -> Command list =
+        fun (e: Event) ->
+            handleEvent botState.Value e
+            |> List.choose (fun (cmd: Command) ->
+                match cmd with
+                | :? 'state as newState ->
+                    botState.update (fun _ -> newState)
+                    None
+                | _ -> Some cmd)
 
+    // let decorateCommandHandler' { state = botState } handleStateCmd =
+    //     let ch1 _ (cmd: Command) =
+    //         match cmd with
+    //         | :? 'state as newState -> botState.update (fun _ -> newState)
+    //         | _ -> ()
+
+    //     let ch2 _ (cmd: Command) =
+    //         botState.update (fun x -> handleStateCmd x cmd)
+
+    //     fun d cmd -> ch1 :: ch2 :: [] |> List.iter (fun f -> f d cmd)
+
+    // let decorateCommandHandler { state = botState } handleStateCmd =
+    //     let ch1 _ (cmd: Command) =
+    //         match cmd with
+    //         | :? 'state as newState -> botState.update (fun _ -> newState)
+    //         | _ -> ()
+
+    //     let ch2 _ (cmd: Command) =
+    //         botState.update (fun x -> handleStateCmd x cmd)
+
+    //     fun d cmd -> ch1 :: ch2 :: [] |> List.iter (fun f -> f d cmd)
+
+    let makeCommandHandler { state = botState } handleStateCmd =
         let ch2 _ (cmd: Command) =
             botState.update (fun x -> handleStateCmd x cmd)
 
-        fun d cmd -> ch1 :: ch2 :: [] |> List.iter (fun f -> f d cmd)
-
-    let decorateCommandHandler_ { state = botState } handleStateCmd =
-        // let ch1 _ (cmd: Command) =
-        //     match cmd with
-        //     | :? 'state as newState -> botState.update (fun _ -> newState)
-        //     | _ -> ()
-
-        let ch2 _ (cmd: Command) =
-            botState.update (fun x -> handleStateCmd x cmd)
-
-        fun d cmd -> ch2 :: [] |> List.iter (fun f -> f d cmd)
+        // fun d cmd -> ch2 :: [] |> List.iter (fun f -> f d cmd)
+        ch2
 
 module TelegramEventAdapter =
     let handleCommand sendToTelegram (cmd: Command) =

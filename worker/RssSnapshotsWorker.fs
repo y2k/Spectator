@@ -6,6 +6,8 @@ open Spectator.Core
 type State =
     { subscriptions: Subscription list
       lastUpdated: Map<Subscription TypedId, DateTime> }
+    interface Command
+
     static member empty =
         { subscriptions = []
           lastUpdated = Map.empty }
@@ -63,7 +65,7 @@ let private handleDownloadEvent state (DownloadComplete (uris, responses)) =
         |> List.map (fixSnapshotFields sub)
         |> List.sortBy (fun x -> x.created)
         |> List.map (fun snap -> SnapshotCreated(isNew sub, snap) :> Command))
-    |> List.append [ NotifyTransactionEnded ]
+    |> List.append [ InitializeCompleted ]
 
 let handleEvent state (e: Event) : Command list =
     match e with
