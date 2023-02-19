@@ -15,20 +15,30 @@ let attachDomain () =
         let state = AsyncRouter.make Bot.App.State.empty
 
         router
-        |> Router.addEvent (AsyncRouter.decorateEventHandler state (RouterUtils.toCommon2 Bot.App.handleEvent))
+        |> Router.addEvent (
+            Bot.App.handleEvent
+            |> RouterUtils.toCommon2
+            |> AsyncRouter.decorateEventHandler state
+        )
         |> Router.addCommand (AsyncRouter.makeCommandHandler state Bot.App.handleStateCmd)
     |> fun router ->
         let state = AsyncRouter.make Notifications.State.empty
 
         router
-        |> Router.addEvent (AsyncRouter.decorateEventHandler state (RouterUtils.toCommon2 Notifications.handleEvent))
+        |> Router.addEvent (
+            Notifications.handleEvent
+            |> RouterUtils.toCommon2
+            |> AsyncRouter.decorateEventHandler state
+        )
         |> Router.addCommand (AsyncRouter.makeCommandHandler state Notifications.handleStateCmd)
     |> fun router ->
         let state = AsyncRouter.make RssSnapshotsWorker.State.empty
 
         router
         |> Router.addEvent (
-            EventLocker.decorateWithLock (AsyncRouter.decorateEventHandler state RssSnapshotsWorker.handleEvent)
+            RssSnapshotsWorker.handleEvent
+            |> AsyncRouter.decorateEventHandler state
+            |> EventLocker.decorateWithLock
         )
         |> Router.addCommand (AsyncRouter.makeCommandHandler state RssSnapshotsWorker.handleStateCmd)
     |> fun router ->
@@ -36,7 +46,9 @@ let attachDomain () =
 
         router
         |> Router.addEvent (
-            EventLocker.decorateWithLock (AsyncRouter.decorateEventHandler state RssSubscriptionsWorker.handleEvent)
+            RssSubscriptionsWorker.handleEvent
+            |> AsyncRouter.decorateEventHandler state
+            |> EventLocker.decorateWithLock
         )
         |> Router.addCommand (AsyncRouter.makeCommandHandler state RssSubscriptionsWorker.handleStateCmd)
 
@@ -76,7 +88,7 @@ let main _ =
         router
         |> Router.addCommand_ (TelegramEventAdapter.handleCommand (Telegram.sendToTelegramSingle telegramToken))
         |> Router.addEventGenerator (TelegramEventAdapter.generateEvents (Telegram.readMessage telegramToken))
-    |> Router.addEventGenerator (Web.start)
+    |> Router.addEventGenerator Web.start
     |> runApplicaiton persCache
     |> Async.RunSynchronously
 
