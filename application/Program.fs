@@ -14,15 +14,13 @@ let attachDomain () =
         let state = AsyncRouter.make Bot.App.State.empty
 
         router
-        |> Router.addEvent (AsyncRouter.decorateEventHandler state (RouterUtils.makeHandleEvent Bot.App.handleEvent))
+        |> Router.addEvent (AsyncRouter.decorateEventHandler state (RouterUtils.toCommon2 Bot.App.handleEvent))
         |> Router.addCommand (AsyncRouter.makeCommandHandler state Bot.App.handleStateCmd)
     |> fun router ->
         let state = AsyncRouter.make Notifications.State.empty
 
         router
-        |> Router.addEvent (
-            AsyncRouter.decorateEventHandler state (RouterUtils.makeHandleEvent Notifications.handleEvent)
-        )
+        |> Router.addEvent (AsyncRouter.decorateEventHandler state (RouterUtils.toCommon2 Notifications.handleEvent))
         |> Router.addCommand (AsyncRouter.makeCommandHandler state Notifications.handleStateCmd)
     |> fun router ->
         let state = AsyncRouter.make RssSnapshotsWorker.State.empty
@@ -70,7 +68,7 @@ let main _ =
         |> Router.addEvent Logger.logEvent
     |> fun router ->
         router
-        |> Router.addEvent (RouterUtils.makeHandleEvent_ HealthCheck.handleEvent)
+        |> Router.addEvent (RouterUtils.toCommon HealthCheck.handleEvent)
         |> Router.addCommand_ (HealthCheck.handleCmd healthState)
         |> Router.addEventGenerator (HealthCheck.main healthState)
     |> fun router ->

@@ -140,13 +140,12 @@ module AsyncRouter =
         fun _ (cmd: Command) -> botState.update (fun x -> handleStateCmd x cmd)
 
 module RouterUtils =
-    let makeHandleEvent (f: 'State -> 'e -> _) =
-        fun (state: 'State) (e: Event) ->
-            match e with
-            | :? 'e as e2 -> f state e2
-            | _ -> []
+    let toCommon2 f (arg1: _) (e: Event) =
+        match e with
+        | :? 'e as e2 -> f arg1 e2
+        | _ -> []
 
-    let makeHandleEvent_ handleEvent' (e: Event) : Command list =
+    let toCommon handleEvent' (e: Event) : Command list =
         match e with
         | :? _ as x -> handleEvent' x
         | _ -> []
