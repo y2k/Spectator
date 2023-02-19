@@ -16,8 +16,4 @@
     <ProjectReference Include="..\core\core.fsproj" />
   </ItemGroup>
 
-  <PropertyGroup>
-    <NoWarn>NU1701</NoWarn>
-  </PropertyGroup>
-
 </Project>

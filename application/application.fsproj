@@ -19,14 +19,11 @@
     <ProjectReference Include="..\store\store.fsproj" />
     <ProjectReference Include="..\telegram\telegram.fsproj" />
     <ProjectReference Include="..\web\web.fsproj" />
+    <ProjectReference Include="..\prelude\Atom\Atom.fsproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Legivel" Version="0.3.1" />
   </ItemGroup>
-
-  <PropertyGroup>
-    <NoWarn>NU1701</NoWarn>
-  </PropertyGroup>
 
 </Project>
