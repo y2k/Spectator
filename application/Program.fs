@@ -3,6 +3,7 @@ module Spectator.Application
 open System
 open Spectator
 open Spectator.Core
+open Y2k.EventBus
 
 module Persistent = Store.Persistent
 module RssSubscriptionsWorker = Worker.RssSubscriptionsWorker

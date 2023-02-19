@@ -2,6 +2,7 @@ module Spectator.Worker.RssSnapshotsWorker
 
 open System
 open Spectator.Core
+open Y2k.EventBus
 
 type State =
     { subscriptions: Subscription list

@@ -1,6 +1,6 @@
 module Spectator.Logger
 
-open Spectator.Core
+open Y2k.EventBus
 
 let logEvent (event: Event) =
     printfn "== [EVENT] %s ==\n%A\n" (event.GetType().FullName) event

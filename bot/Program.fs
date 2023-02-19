@@ -2,6 +2,7 @@ module Spectator.Bot.App
 
 open System
 open Spectator.Core
+open Y2k.EventBus
 
 module Parser =
     type Cmd =

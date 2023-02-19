@@ -3,7 +3,7 @@ module Spectator.Web
 open Suave
 open Suave.Filters
 open Suave.Operators
-open Spectator.Core
+open Y2k.EventBus
 
 type WebRequest =
     | WebRequest of byte[]

@@ -2,6 +2,7 @@ module Spectator.Store.Persistent
 
 open Spectator.Core
 open LiteDB
+open Y2k.EventBus
 
 type MongoCmd =
     private

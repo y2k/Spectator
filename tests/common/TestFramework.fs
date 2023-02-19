@@ -6,6 +6,7 @@ open Swensen.Unquote
 open Spectator
 open Spectator.Core
 open Spectator.Store
+open Y2k.EventBus
 
 let rec private flaky count f =
     async {

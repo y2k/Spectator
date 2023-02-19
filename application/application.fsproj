@@ -20,6 +20,7 @@
     <ProjectReference Include="..\telegram\telegram.fsproj" />
     <ProjectReference Include="..\web\web.fsproj" />
     <ProjectReference Include="..\prelude\Atom\Atom.fsproj" />
+    <ProjectReference Include="..\prelude\event-bus\event-bus.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

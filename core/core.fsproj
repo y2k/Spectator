@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\prelude\Core\Prelude.fsproj" />
+    <ProjectReference Include="..\prelude\event-bus-api\event-bus-api.fsproj" />
   </ItemGroup>
 
 </Project>

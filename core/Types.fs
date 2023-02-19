@@ -1,6 +1,7 @@
 namespace Spectator.Core
 
 open System
+open Y2k.EventBus
 
 type UserId = string
 type PluginId = Guid
@@ -55,14 +56,6 @@ type Snapshot =
           title = ""
           uri = null }
 
-type Event =
-    interface
-    end
-
-type Command =
-    interface
-    end
-
 type NewSubscriptionCreated =
     | NewSubscriptionCreated of NewSubscription
     interface Command
@@ -91,22 +84,6 @@ type SendTelegramMessage =
     | SendTelegramMessage of user: string * message: string
     interface Command
 
-type Initialize = Initialize
-    with
-        interface Event
-
-// type DispatchWithTimeout =
-//     | DispatchWithTimeout of TimeSpan * Event
-//     interface Command
-
-// type DispatchWithInterval =
-//     | DispatchWithInterval of TimeSpan * Event
-//     interface Command
-
 type DownloadHttp =
     | DownloadHttp of Uri list * (Result<byte[], exn> list -> Event)
     interface Command
-
-type InitializeCompleted = InitializeCompleted
-    with
-        interface Command

@@ -2,6 +2,7 @@ module Spectator.HealthCheck
 
 open System
 open Spectator.Core
+open Y2k.EventBus
 
 type HealthCheckRequested =
     | HealthCheckRequested of Guid
