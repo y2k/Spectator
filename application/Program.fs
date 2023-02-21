@@ -12,45 +12,45 @@ module RssSnapshotsWorker = Worker.RssSnapshotsWorker
 let attachDomain () =
     Router.init
     |> fun router ->
-        let state = AsyncRouter.make Bot.App.State.empty
+        let state = StateRouter.make Bot.App.State.empty
 
         router
         |> Router.addEvent (
             Bot.App.handleEvent
             |> RouterUtils.toCommon2
-            |> AsyncRouter.decorateEventHandler state
+            |> StateRouter.decorateEventHandler state
         )
-        |> Router.addCommand (AsyncRouter.makeCommandHandler state Bot.App.handleStateCmd)
+        |> Router.addCommand (StateRouter.makeCommandHandler state Bot.App.handleStateCmd)
     |> fun router ->
-        let state = AsyncRouter.make Notifications.State.empty
+        let state = StateRouter.make Notifications.State.empty
 
         router
         |> Router.addEvent (
             Notifications.handleEvent
             |> RouterUtils.toCommon2
-            |> AsyncRouter.decorateEventHandler state
+            |> StateRouter.decorateEventHandler state
         )
-        |> Router.addCommand (AsyncRouter.makeCommandHandler state Notifications.handleStateCmd)
+        |> Router.addCommand (StateRouter.makeCommandHandler state Notifications.handleStateCmd)
     |> fun router ->
-        let state = AsyncRouter.make RssSnapshotsWorker.State.empty
+        let state = StateRouter.make RssSnapshotsWorker.State.empty
 
         router
         |> Router.addEvent (
             RssSnapshotsWorker.handleEvent
-            |> AsyncRouter.decorateEventHandler state
+            |> StateRouter.decorateEventHandler state
             |> EventLocker.decorateWithLock
         )
-        |> Router.addCommand (AsyncRouter.makeCommandHandler state RssSnapshotsWorker.handleStateCmd)
+        |> Router.addCommand (StateRouter.makeCommandHandler state RssSnapshotsWorker.handleStateCmd)
     |> fun router ->
-        let state = AsyncRouter.make RssSubscriptionsWorker.State.empty
+        let state = StateRouter.make RssSubscriptionsWorker.State.empty
 
         router
         |> Router.addEvent (
             RssSubscriptionsWorker.handleEvent
-            |> AsyncRouter.decorateEventHandler state
+            |> StateRouter.decorateEventHandler state
             |> EventLocker.decorateWithLock
         )
-        |> Router.addCommand (AsyncRouter.makeCommandHandler state RssSubscriptionsWorker.handleStateCmd)
+        |> Router.addCommand (StateRouter.makeCommandHandler state RssSubscriptionsWorker.handleStateCmd)
 
 let runApplicaiton persCache router =
     async {
