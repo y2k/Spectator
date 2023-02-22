@@ -31,7 +31,7 @@ let handleStateCmd (state: State) (cmd: Command) =
 
 let handleEvent (state: State) (_: Initialize) : Command list =
     let formatSnapshot snap =
-        match snap.uri.ToString() with
+        match string snap.uri with
         | Regex "https://t.me/.+" [] -> sprintf "%O" snap.uri
         | _ -> sprintf "%s\n\n<a href=\"%O\">[ OPEN ]</a>" snap.title snap.uri
 
@@ -42,7 +42,6 @@ let handleEvent (state: State) (_: Initialize) : Command list =
 
     let messages =
         if state.initialized then state.queue else []
-        |> List.map (fun (u, s) -> u, formatSnapshot s)
+        |> Seq.map (fun (u, s) -> SendTelegramMessage(u, formatSnapshot s) :> Command)
 
-    [ yield newState
-      yield! Seq.map (fun x -> SendTelegramMessage x :> Command) messages ]
+    [ newState; yield! messages ]
