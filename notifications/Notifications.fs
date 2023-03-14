@@ -23,7 +23,6 @@ let handleStateCmd (state: State) (cmd: Command) =
             | None -> state
         else
             state
-    | :? SnapshotCreated as SnapshotCreated (false, _) -> state
     | :? SubscriptionCreated as SubscriptionCreated sub -> { state with users = Map.add sub.id sub.userId state.users }
     | :? SubscriptionRemoved as SubscriptionRemoved (subId, _) ->
         { state with users = state.users |> Map.filter (fun k _ -> not <| List.contains k subId) }
