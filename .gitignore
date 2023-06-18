@@ -13,9 +13,8 @@ obj/
 
 __data/
 
-*.fsx
+playground/local/
 
 .fake
 
 .env
-playground/
