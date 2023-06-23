@@ -1,56 +1,71 @@
 #r "nuget: SodiumFRP.FSharp, 5.0.6"
 
+open System
 open Sodium.Frp
 
-module Core =
-    type Msg =
-        interface
-        end
+module Effects =
+    type Effect = Effect of (unit -> unit) list
 
-    type Cmd =
-        interface
-        end
+    let send x stream =
+        Effect [ fun _ -> Transaction.post (fun _ -> StreamSink.send x stream) ]
 
-module Domain =
-    open Core
+    let updateState s (state: _ Behavior) =
+        let state = state :?> _ BehaviorSink
+        Effect [ fun () -> Transaction.post (fun _ -> BehaviorSink.send s state) ]
 
-    type State1 = State1
-    type State2 = State2
-    let handle (msg: Msg) (state1: State1) (state2: State2) : Cmd list = []
+    let multi (_effects: Effect list) : Effect =
+        Effect(_effects |> List.collect (fun (Effect xs) -> xs))
 
 module TelegramApi =
-    open Core
+    let sendToTelegramRequested = StreamSink.create<string * string> ()
+    let sTelegramBot = StreamSink.create<string * string> ()
+    let downloadRequested = StreamSink.create<string * StreamSink<byte[]>> ()
 
-    type TelegramEvent =
-        { user: string
-          message: string }
+open Effects
+open TelegramApi
 
-        interface Msg
+let () =
+    let downloadCompleted = StreamSink.create<byte[]> ()
+    let bState = BehaviorSink.create {| isBusy = false; user = "" |} :> _ Behavior
 
-    let events: TelegramEvent Stream = StreamSink.create ()
+    let result =
+        [ downloadCompleted
+          |> Stream.snapshotB bState (fun e state ->
+              multi
+                  [ updateState {| state with isBusy = false |} bState
+                    send (state.user, $"Size = {Seq.length e}") sendToTelegramRequested ])
+          sTelegramBot
+          |> Stream.snapshotB bState (fun (user, text) state ->
+              if not state.isBusy then
+                  multi
+                      [ updateState
+                            {| state with
+                                isBusy = true
+                                user = user |}
+                            bState
+                        send (text, downloadCompleted) downloadRequested
+                        send (user, "Url added to work") sendToTelegramRequested ]
+              else
+                  send (user, "Download in progress") sendToTelegramRequested) ]
+        |> Stream.mergeAll (fun x _ -> x)
 
-let c = CellSink.create 0
-CellSink.send
-Cell.listen
-Cell.listenWeak
-Cell.sample
+    (* MAIN *)
 
-let b = BehaviorSink.create 0
-BehaviorSink.send
-Behavior.sample
+    use _ =
+        downloadRequested
+        |> Stream.listen (fun (url, cb) ->
+            printfn "[DOWNLOAD] url = %s" url
+            Transaction.post (fun _ -> StreamSink.send (Text.Encoding.UTF8.GetBytes url) cb))
 
-StreamSink.create
-StreamSink.send
-Stream.listen
-Stream.listenWeak
-Stream.listenOnce
-Stream.listenOnceAsync
-// Stream.sample - NO
+    use _ =
+        sendToTelegramRequested
+        |> Stream.listen (fun (user, message) -> printfn "[OUTPUT]: [%s] %s" user message)
 
-let s1 = BehaviorSink.create Domain.State1
-let s2 = BehaviorSink.create Domain.State2
+    use _ = result |> Stream.listen (fun (Effect fxs) -> List.iter (fun f -> f ()) fxs)
 
-// let _a = Behavior.lift2 Domain.handle (s1, s2)
+    let sendToTelegram message =
+        printfn "[INPUT] %s" message
+        StreamSink.send ("admin", message) sTelegramBot
+        printfn "STATE: %A" (Behavior.sample bState)
 
-let _a = Stream.snapshot2B s1 s2 Domain.handle TelegramApi.events
-Stream.snapshotAndTakeB
+    sendToTelegram "https://g.com/index.html"
