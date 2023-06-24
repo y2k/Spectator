@@ -1,8 +1,42 @@
 #r "nuget: SodiumFRP.FSharp, 5.0.6"
-#r "nuget: FsHtml, 0.2.0"
+// #r "nuget: FsHtml, 0.2.0"
 
 open System
 open Sodium.Frp
+
+module FsHtml =
+    type Element =
+        | Element of string * (string * obj) list * Element list
+        | TextElement of string
+
+    let div attrs children = Element("div", attrs, children)
+    let input attrs children = Element("input", attrs, children)
+    let span attrs children = Element("span", attrs, children)
+    let attr (k: string) (v: obj) = k, v
+    let str text = TextElement text
+
+    let rec toString =
+        function
+        | TextElement x -> x
+        | (Element(name, attrs, children)) ->
+            let textAttrs =
+                attrs
+                |> List.choose (fun (k, v) ->
+                    match v with
+                    | :? String as s -> Some(sprintf "%s=\"%s\"" k s)
+                    | _ -> None)
+                |> function
+                    | [] -> ""
+                    | xs -> xs |> List.reduce (sprintf "%s %s")
+
+            let textChildren =
+                children
+                |> List.map toString
+                |> function
+                    | [] -> ""
+                    | xs -> xs |> List.reduce (sprintf "%s %s")
+
+            sprintf "<%s %s>%s</%s>" name textAttrs textChildren name
 
 module Effects =
     type Effect = Effect of (unit -> unit) list
@@ -25,63 +59,74 @@ module TelegramApi =
     let sendToTelegramRequested = StreamSink.create<string * string> ()
     let sTelegramBot = StreamSink.create<string * string> ()
     let downloadRequested = StreamSink.create<string * StreamSink<byte[]>> ()
-    let uiUpdated = StreamSink.create<string> ()
+    let uiUpdated = StreamSink.create<FsHtml.Element> ()
 
 open Effects
 open TelegramApi
 
-let _ignore () =
-    let downloadCompleted = StreamSink.create<byte[]> ()
-    let bState = BehaviorSink.create {| isBusy = false; user = "" |} :> _ Behavior
+module Sample1 =
+    let _ignore () =
+        let downloadCompleted = StreamSink.create<byte[]> ()
+        let bState = BehaviorSink.create {| isBusy = false; user = "" |} :> _ Behavior
 
-    let result =
-        [ downloadCompleted
-          |> Stream.snapshotB bState (fun e state ->
-              multi
-                  [ updateState {| state with isBusy = false |} bState
-                    send (state.user, $"Size = {Seq.length e}") sendToTelegramRequested ])
-          sTelegramBot
-          |> Stream.snapshotB bState (fun (user, text) state ->
-              if not state.isBusy then
+        let result =
+            [ downloadCompleted
+              |> Stream.snapshotB bState (fun e state ->
                   multi
-                      [ updateState
-                            {| state with
-                                isBusy = true
-                                user = user |}
-                            bState
-                        send (text, downloadCompleted) downloadRequested
-                        send (user, "Url added to work") sendToTelegramRequested ]
-              else
-                  send (user, "Download in progress") sendToTelegramRequested) ]
-        |> Stream.mergeAll (fun x _ -> x)
+                      [ updateState {| state with isBusy = false |} bState
+                        send (state.user, $"Size = {Seq.length e}") sendToTelegramRequested ])
+              sTelegramBot
+              |> Stream.snapshotB bState (fun (user, text) state ->
+                  if not state.isBusy then
+                      multi
+                          [ updateState
+                                {| state with
+                                    isBusy = true
+                                    user = user |}
+                                bState
+                            send (text, downloadCompleted) downloadRequested
+                            send (user, "Url added to work") sendToTelegramRequested ]
+                  else
+                      send (user, "Download in progress") sendToTelegramRequested) ]
+            |> Stream.mergeAll (fun x _ -> x)
 
-    (* MAIN *)
+        (* MAIN *)
 
-    use _ =
-        downloadRequested
-        |> Stream.listen (fun (url, cb) ->
-            printfn "[DOWNLOAD] url = %s" url
-            Transaction.post (fun _ -> StreamSink.send (Text.Encoding.UTF8.GetBytes url) cb))
+        use _ =
+            downloadRequested
+            |> Stream.listen (fun (url, cb) ->
+                printfn "[DOWNLOAD] url = %s" url
+                Transaction.post (fun _ -> StreamSink.send (Text.Encoding.UTF8.GetBytes url) cb))
 
-    use _ =
-        sendToTelegramRequested
-        |> Stream.listen (fun (user, message) -> printfn "[OUTPUT]: [%s] %s" user message)
+        use _ =
+            sendToTelegramRequested
+            |> Stream.listen (fun (user, message) -> printfn "[OUTPUT]: [%s] %s" user message)
 
-    use _ = result |> Stream.listen (fun (Effect fxs) -> List.iter (fun f -> f ()) fxs)
+        use _ = result |> Stream.listen (fun (Effect fxs) -> List.iter (fun f -> f ()) fxs)
 
-    let sendToTelegram message =
-        printfn "[INPUT] %s" message
-        StreamSink.send ("admin", message) sTelegramBot
-        printfn "STATE: %A" (Behavior.sample bState)
+        let sendToTelegram message =
+            printfn "[INPUT] %s" message
+            StreamSink.send ("admin", message) sTelegramBot
+            printfn "STATE: %A" (Behavior.sample bState)
 
-    sendToTelegram "https://g.com/index.html"
+        sendToTelegram "https://g.com/index.html"
 
 open FsHtml
 
+type WeatherState =
+    { text: string
+      temps: string list
+      textChanged: string StreamSink
+      getWeatherClicked: unit StreamSink }
+
+type AppState =
+    { left: WeatherState
+      right: WeatherState }
+
 (* Weather App *)
 let () =
-    let textChanged = StreamSink.create ()
-    let getWeatherClicked = StreamSink.create ()
+    // let textChanged = StreamSink.create ()
+    // let getWeatherClicked = StreamSink.create ()
     let downloadCompleted = StreamSink.create ()
 
     // let bText = CellSink.create ""
@@ -103,8 +148,6 @@ let () =
 
     //       ]
     //     |> Stream.mergeAll (fun x _ -> x)
-
-    let bState = CellSink.create {| text = ""; temps = [] |}
 
     // let result =
     //     [ textChanged
@@ -130,44 +173,75 @@ let () =
     //       ]
     //     |> Stream.mergeAll (fun x _ -> x)
 
-    let view (state: {| text: string; temps: string list |}) =
-        let rg = Text.RegularExpressions.Regex ">[\\s\r\n]+<"
-
+    let view (state: WeatherState) =
         div
             []
-            [ input [ "value" %= state.text ] []
+            [ input [ attr "value" state.text ] []
               div [] (List.map (fun temp -> span [] [ str temp ]) state.temps) ]
-        |> toString
-        |> fun s -> rg.Replace(s, "><").Replace("\n", "")
 
-    let withUpdateUI update eventStream =
-        eventStream
-        |> Stream.snapshot bState (fun eventArg state ->
-            let newState, effs = (update state eventArg)
+    // let bState =
+    //     CellSink.create
+    //         { text = ""
+    //           temps = []
+    //           textChanged = StreamSink.create ()
+    //           getWeatherClicked = StreamSink.create ()
+    //            }
 
-            multi
-                [ yield updateC newState bState
-                  yield send (view newState) uiUpdated
-                  yield! effs ])
+    // let withUpdateUI state update eventStream =
+    //     eventStream
+    //     |> Stream.map  (fun eventArg  ->
+    //         let newState, effs = (update state eventArg)
 
-    let result =
-        [ textChanged
-          |> withUpdateUI (fun state newText -> {| state with text = newText |}, [])
+    //         multi
+    //             [ yield updateC newState state
+    //               yield send (view newState) uiUpdated
+    //               yield! effs ])
 
-          getWeatherClicked
-          |> withUpdateUI (fun state _ ->
-              {| state with text = "" |},
-              [ send ($"https://weaher.api/?city={state.text}", downloadCompleted) downloadRequested ])
+    let weatherEffects (state: WeatherState) =
+        [
 
-          downloadCompleted
-          |> withUpdateUI (fun state resp ->
-              let temp = Text.Encoding.UTF8.GetString resp
+          state.textChanged
+          |> Stream.map (fun newText ->
+              // let newState, effs = (update state eventArg)
+              // let newState, effs = (fun state newText -> { state with text = newText }, [])
+              let newState = { state with text = newText }
 
-              {| state with
-                  temps = state.temps @ [ temp ] |},
-              [])
+              multi
+                  [ send (view newState) uiUpdated
+                    // updateC newState state
+                    ])
+
+          //   state.textChanged
+          //   |> withUpdateUI (fun state newText -> { state with text = newText }, [])
+
+          //   state.getWeatherClicked
+          //   |> withUpdateUI (fun state _ ->
+          //       { state with text = "" },
+          //       [ send ($"https://weaher.api/?city={state.text}", downloadCompleted) downloadRequested ])
+
+          //   downloadCompleted
+          //   |> withUpdateUI (fun state resp ->
+          //       let temp = Text.Encoding.UTF8.GetString resp
+
+          //       { state with
+          //           temps = state.temps @ [ temp ] },
+          //       [])
 
           ]
+        |> Stream.mergeAll (fun x _ -> x)
+
+    (* Parent *)
+
+    let bParentState =
+        CellSink.create
+            {| left = (Cell.sample bState)
+               right = (Cell.sample bState) |}
+
+    let viewParent (state: {| left: _; right: _ |}) =
+        div [] [ view state.left; view state.right ]
+
+    let parentEffects (state: AppState) =
+        [ weatherEffects state.left; weatherEffects state.right ]
         |> Stream.mergeAll (fun x _ -> x)
 
     (* Main *)
@@ -178,8 +252,27 @@ let () =
             let city = url.Substring(6 + url.IndexOf "?city=")
             Transaction.post (fun _ -> StreamSink.send (Text.Encoding.UTF8.GetBytes $"{city}, 25C") cb))
 
-    let ui = uiUpdated |> Stream.accum "" (fun ui _ -> ui)
-    use _ = result |> Stream.listen (fun (Effect fs) -> List.iter (fun f -> f ()) fs)
+    let ui =
+        let rg = Text.RegularExpressions.Regex ">[\\s\r\n]+<"
+
+        uiUpdated
+        |> Stream.accum "" (fun ui _ -> ui |> toString |> (fun s -> rg.Replace(s, "><").Replace("\n", "")))
+
+    let appState =
+        { left =
+            { text = ""
+              temps = []
+              textChanged = StreamSink.create ()
+              getWeatherClicked = StreamSink.create () }
+          right =
+            { text = ""
+              temps = []
+              textChanged = StreamSink.create ()
+              getWeatherClicked = StreamSink.create () } }
+
+    use _ =
+        parentEffects appState
+        |> Stream.listen (fun (Effect fs) -> List.iter (fun f -> f ()) fs)
 
     let assert_ expected =
         let ui = Cell.sample ui
@@ -187,14 +280,16 @@ let () =
         if ui <> expected then
             failwithf "[ASSET] actual = '%s'" ui
 
-    StreamSink.send "Helsinki" textChanged
-    assert_ """<div><input value="Helsinki"></input><div></div></div>"""
+    assert_ """"""
 
-    StreamSink.send () getWeatherClicked
-    assert_ """<div><input value=""></input><div><span>Helsinki, 25C</span></div></div>"""
+// StreamSink.send "Helsinki" textChanged
+// assert_ """<div><input value="Helsinki"></input><div></div></div>"""
 
-    StreamSink.send "Oslo" textChanged
-    assert_ """<div><input value="Oslo"></input><div><span>Helsinki, 25C</span></div></div>"""
+// StreamSink.send () getWeatherClicked
+// assert_ """<div><input value=""></input><div><span>Helsinki, 25C</span></div></div>"""
 
-    StreamSink.send () getWeatherClicked
-    assert_ """<div><input value=""></input><div><span>Helsinki, 25C</span><span>Oslo, 25C</span></div></div>"""
+// StreamSink.send "Oslo" textChanged
+// assert_ """<div><input value="Oslo"></input><div><span>Helsinki, 25C</span></div></div>"""
+
+// StreamSink.send () getWeatherClicked
+// assert_ """<div><input value=""></input><div><span>Helsinki, 25C</span><span>Oslo, 25C</span></div></div>"""
