@@ -12,6 +12,7 @@ module FsHtml =
     let div attrs children = Element("div", attrs, children)
     let input attrs children = Element("input", attrs, children)
     let span attrs children = Element("span", attrs, children)
+    let button attrs children = Element("button", attrs, children)
     let attr (k: string) (v: obj) = k, v
     let str text = TextElement text
 
@@ -38,6 +39,8 @@ module FsHtml =
 
             sprintf "<%s %s>%s</%s>" name textAttrs textChildren name
 
+let inline always a _ = a
+
 module Effects =
     type Effect = Effect of (unit -> unit) list
 
@@ -58,6 +61,7 @@ module Effects =
 module TelegramApi =
     let sendToTelegramRequested = StreamSink.create<string * string> ()
     let sTelegramBot = StreamSink.create<string * string> ()
+    let stringDownloadRequested = StreamSink.create<string * StreamSink<string>> ()
     let downloadRequested = StreamSink.create<string * StreamSink<byte[]>> ()
     let uiUpdated = StreamSink.create<FsHtml.Element> ()
 
@@ -111,176 +115,183 @@ module Sample1 =
 
         sendToTelegram "https://g.com/index.html"
 
-open FsHtml
+module WeatherAppSample =
+    open FsHtml
 
-type WeatherState =
-    { text: string
-      temps: string list
-      textChanged: string StreamSink
-      getWeatherClicked: unit StreamSink }
+    type WeatherState =
+        { text: string
+          temps: string list
+          textChanged: string StreamSink
+          getWeatherClicked: unit StreamSink }
 
-type AppState =
-    { left: WeatherState
-      right: WeatherState }
-
-(* Weather App *)
-let () =
-    // let textChanged = StreamSink.create ()
-    // let getWeatherClicked = StreamSink.create ()
-    let downloadCompleted = StreamSink.create ()
-
-    // let bText = CellSink.create ""
-    // let bTemperature = CellSink.create ""
-
-    // let result =
-    //     [ getWeatherClicked
-    //       |> Stream.snapshot bText (fun _ city ->
-    //           send ($"https://weaher.api/?city={city}", downloadCompleted) downloadRequested)
-
-    //       downloadCompleted
-    //       |> Stream.snapshot2 bText bTemperature (fun resp text _ ->
-    //           let temp = Text.Encoding.UTF8.GetString resp
-    //           multi [ updateC temp bTemperature; send $"{(text, temp)}" uiUpdated ])
-
-    //       textChanged
-    //       |> Stream.snapshot2 bText bTemperature (fun newText _ temp ->
-    //           multi [ updateC newText bText; send $"{(newText, temp)}" uiUpdated ])
-
-    //       ]
-    //     |> Stream.mergeAll (fun x _ -> x)
-
-    // let result =
-    //     [ textChanged
-    //       |> Stream.snapshot bState (fun newText state ->
-    //           multi
-    //               [ updateC {| state with text = newText |} bState
-    //                 send $"{(newText, state.temp)}" uiUpdated ])
-
-    //       getWeatherClicked
-    //       |> Stream.snapshot bState (fun _ state ->
-    //           multi
-    //               [ updateC {| state with temp = "..." |} bState
-    //                 send ($"https://weaher.api/?city={state.text}", downloadCompleted) downloadRequested ])
-
-    //       downloadCompleted
-    //       |> Stream.snapshot bState (fun resp state ->
-    //           let temp = Text.Encoding.UTF8.GetString resp
-
-    //           multi
-    //               [ updateC {| state with temp = temp |} bState
-    //                 send $"{(state.text, temp)}" uiUpdated ])
-
-    //       ]
-    //     |> Stream.mergeAll (fun x _ -> x)
-
-    let view (state: WeatherState) =
-        div
-            []
-            [ input [ attr "value" state.text ] []
-              div [] (List.map (fun temp -> span [] [ str temp ]) state.temps) ]
-
-    // let bState =
-    //     CellSink.create
-    //         { text = ""
-    //           temps = []
-    //           textChanged = StreamSink.create ()
-    //           getWeatherClicked = StreamSink.create ()
-    //            }
-
-    // let withUpdateUI state update eventStream =
-    //     eventStream
-    //     |> Stream.map  (fun eventArg  ->
-    //         let newState, effs = (update state eventArg)
-
-    //         multi
-    //             [ yield updateC newState state
-    //               yield send (view newState) uiUpdated
-    //               yield! effs ])
-
-    let weatherEffects (state: WeatherState) =
-        [
-
-          state.textChanged
-          |> Stream.map (fun newText ->
-              // let newState, effs = (update state eventArg)
-              // let newState, effs = (fun state newText -> { state with text = newText }, [])
-              let newState = { state with text = newText }
-
-              multi
-                  [ send (view newState) uiUpdated
-                    // updateC newState state
-                    ])
-
-          //   state.textChanged
-          //   |> withUpdateUI (fun state newText -> { state with text = newText }, [])
-
-          //   state.getWeatherClicked
-          //   |> withUpdateUI (fun state _ ->
-          //       { state with text = "" },
-          //       [ send ($"https://weaher.api/?city={state.text}", downloadCompleted) downloadRequested ])
-
-          //   downloadCompleted
-          //   |> withUpdateUI (fun state resp ->
-          //       let temp = Text.Encoding.UTF8.GetString resp
-
-          //       { state with
-          //           temps = state.temps @ [ temp ] },
-          //       [])
-
-          ]
-        |> Stream.mergeAll (fun x _ -> x)
-
-    (* Parent *)
-
-    let bParentState =
-        CellSink.create
-            {| left = (Cell.sample bState)
-               right = (Cell.sample bState) |}
-
-    let viewParent (state: {| left: _; right: _ |}) =
-        div [] [ view state.left; view state.right ]
-
-    let parentEffects (state: AppState) =
-        [ weatherEffects state.left; weatherEffects state.right ]
-        |> Stream.mergeAll (fun x _ -> x)
-
-    (* Main *)
-
-    use _ =
-        downloadRequested
-        |> Stream.listen (fun (url, cb) ->
-            let city = url.Substring(6 + url.IndexOf "?city=")
-            Transaction.post (fun _ -> StreamSink.send (Text.Encoding.UTF8.GetBytes $"{city}, 25C") cb))
-
-    let ui =
-        let rg = Text.RegularExpressions.Regex ">[\\s\r\n]+<"
-
-        uiUpdated
-        |> Stream.accum "" (fun ui _ -> ui |> toString |> (fun s -> rg.Replace(s, "><").Replace("\n", "")))
-
-    let appState =
-        { left =
+        static member empty() =
             { text = ""
               temps = []
               textChanged = StreamSink.create ()
               getWeatherClicked = StreamSink.create () }
-          right =
-            { text = ""
-              temps = []
-              textChanged = StreamSink.create ()
-              getWeatherClicked = StreamSink.create () } }
 
-    use _ =
-        parentEffects appState
-        |> Stream.listen (fun (Effect fs) -> List.iter (fun f -> f ()) fs)
+    type AppState =
+        { left: WeatherState
+          right: WeatherState }
 
-    let assert_ expected =
-        let ui = Cell.sample ui
+    (* Weather App *)
+    let _ignore () =
+        // let textChanged = StreamSink.create ()
+        // let getWeatherClicked = StreamSink.create ()
+        let downloadCompleted = StreamSink.create ()
 
-        if ui <> expected then
-            failwithf "[ASSET] actual = '%s'" ui
+        // let bText = CellSink.create ""
+        // let bTemperature = CellSink.create ""
 
-    assert_ """"""
+        // let result =
+        //     [ getWeatherClicked
+        //       |> Stream.snapshot bText (fun _ city ->
+        //           send ($"https://weaher.api/?city={city}", downloadCompleted) downloadRequested)
+
+        //       downloadCompleted
+        //       |> Stream.snapshot2 bText bTemperature (fun resp text _ ->
+        //           let temp = Text.Encoding.UTF8.GetString resp
+        //           multi [ updateC temp bTemperature; send $"{(text, temp)}" uiUpdated ])
+
+        //       textChanged
+        //       |> Stream.snapshot2 bText bTemperature (fun newText _ temp ->
+        //           multi [ updateC newText bText; send $"{(newText, temp)}" uiUpdated ])
+
+        //       ]
+        //     |> Stream.mergeAll (fun x _ -> x)
+
+        // let result =
+        //     [ textChanged
+        //       |> Stream.snapshot bState (fun newText state ->
+        //           multi
+        //               [ updateC {| state with text = newText |} bState
+        //                 send $"{(newText, state.temp)}" uiUpdated ])
+
+        //       getWeatherClicked
+        //       |> Stream.snapshot bState (fun _ state ->
+        //           multi
+        //               [ updateC {| state with temp = "..." |} bState
+        //                 send ($"https://weaher.api/?city={state.text}", downloadCompleted) downloadRequested ])
+
+        //       downloadCompleted
+        //       |> Stream.snapshot bState (fun resp state ->
+        //           let temp = Text.Encoding.UTF8.GetString resp
+
+        //           multi
+        //               [ updateC {| state with temp = temp |} bState
+        //                 send $"{(state.text, temp)}" uiUpdated ])
+
+        //       ]
+        //     |> Stream.mergeAll (fun x _ -> x)
+
+        let view (state: WeatherState) =
+            div
+                []
+                [ input [ attr "value" state.text ] []
+                  div [] (List.map (fun temp -> span [] [ str temp ]) state.temps) ]
+
+        // let bState =
+        //     CellSink.create
+        //         { text = ""
+        //           temps = []
+        //           textChanged = StreamSink.create ()
+        //           getWeatherClicked = StreamSink.create ()
+        //            }
+
+        // let withUpdateUI state update eventStream =
+        //     eventStream
+        //     |> Stream.map  (fun eventArg  ->
+        //         let newState, effs = (update state eventArg)
+
+        //         multi
+        //             [ yield updateC newState state
+        //               yield send (view newState) uiUpdated
+        //               yield! effs ])
+
+        let weatherEffects (state: WeatherState) =
+            [
+
+              state.textChanged
+              |> Stream.map (fun newText ->
+                  // let newState, effs = (update state eventArg)
+                  // let newState, effs = (fun state newText -> { state with text = newText }, [])
+                  let newState = { state with text = newText }
+
+                  multi
+                      [ send (view newState) uiUpdated
+                        // updateC newState state
+                        ])
+
+              //   state.textChanged
+              //   |> withUpdateUI (fun state newText -> { state with text = newText }, [])
+
+              //   state.getWeatherClicked
+              //   |> withUpdateUI (fun state _ ->
+              //       { state with text = "" },
+              //       [ send ($"https://weaher.api/?city={state.text}", downloadCompleted) downloadRequested ])
+
+              //   downloadCompleted
+              //   |> withUpdateUI (fun state resp ->
+              //       let temp = Text.Encoding.UTF8.GetString resp
+
+              //       { state with
+              //           temps = state.temps @ [ temp ] },
+              //       [])
+
+              ]
+            |> Stream.mergeAll (fun x _ -> x)
+
+        (* Parent *)
+
+        let bParentState =
+            CellSink.create
+                { left = WeatherState.empty ()
+                  right = WeatherState.empty () }
+
+        let viewParent (state: {| left: _; right: _ |}) =
+            div [] [ view state.left; view state.right ]
+
+        let parentEffects (state: AppState) =
+            [ weatherEffects state.left; weatherEffects state.right ]
+            |> Stream.mergeAll (fun x _ -> x)
+
+        (* Main *)
+
+        use _ =
+            downloadRequested
+            |> Stream.listen (fun (url, cb) ->
+                let city = url.Substring(6 + url.IndexOf "?city=")
+                Transaction.post (fun _ -> StreamSink.send (Text.Encoding.UTF8.GetBytes $"{city}, 25C") cb))
+
+        let ui =
+            let rg = Text.RegularExpressions.Regex ">[\\s\r\n]+<"
+
+            uiUpdated
+            |> Stream.accum "" (fun ui _ -> ui |> toString |> (fun s -> rg.Replace(s, "><").Replace("\n", "")))
+
+        let appState =
+            { left =
+                { text = ""
+                  temps = []
+                  textChanged = StreamSink.create ()
+                  getWeatherClicked = StreamSink.create () }
+              right =
+                { text = ""
+                  temps = []
+                  textChanged = StreamSink.create ()
+                  getWeatherClicked = StreamSink.create () } }
+
+        use _ =
+            parentEffects appState
+            |> Stream.listen (fun (Effect fs) -> List.iter (fun f -> f ()) fs)
+
+        let assert_ expected =
+            let ui = Cell.sample ui
+
+            if ui <> expected then
+                failwithf "[ASSET] actual = '%s'" ui
+
+        assert_ """"""
 
 // StreamSink.send "Helsinki" textChanged
 // assert_ """<div><input value="Helsinki"></input><div></div></div>"""
@@ -293,3 +304,67 @@ let () =
 
 // StreamSink.send () getWeatherClicked
 // assert_ """<div><input value=""></input><div><span>Helsinki, 25C</span><span>Oslo, 25C</span></div></div>"""
+
+module Sample2 =
+    open FsHtml
+
+    let makeCounter () =
+        let minusClicked = StreamSink.create<unit> ()
+        let plusClicked = StreamSink.create<unit> ()
+
+        [ minusClicked |> Stream.map (fun _ state -> state - 1)
+          plusClicked |> Stream.map (fun _ state -> state + 1) ]
+        |> Stream.mergeAll always
+        |> Stream.accum 0 (fun f state -> f state)
+        |> Cell.map (fun state ->
+            div
+                []
+                [ button [ "click", minusClicked ] [ str "+" ]
+                  span [] [ str (string state) ]
+                  button [ "click", plusClicked ] [ str "+" ] ])
+
+    let makeWeather () =
+        let textChanged = StreamSink.create<string> ()
+        let getWeatherClicked = StreamSink.create<unit> ()
+        let downloadCompleted = StreamSink.create<string> ()
+
+        let sText =
+            textChanged
+            |> Stream.map (fun newText _ -> newText)
+            |> Stream.accum "" (fun f state -> f state)
+
+        let sWeather =
+            [ getWeatherClicked |> Stream.map (fun _ _ -> "...")
+              downloadCompleted |> Stream.map (fun t _ -> t) ]
+            |> Stream.mergeAll always
+            |> Stream.accum "" (fun f state -> f state)
+
+        let _e =
+            getWeatherClicked
+            |> Stream.map (fun _ () ->
+                Transaction.post (fun _ -> StreamSink.send ("", downloadCompleted) stringDownloadRequested))
+
+        Cell.lift2 (fun a b -> a, b) (sText, sWeather)
+        |> Cell.map (fun (text, temp) ->
+            div
+                []
+                [ input [ "text", text; "changed", textChanged ] []
+                  span [] [ str temp ]
+                  button [ "click", getWeatherClicked ] [ str "Download" ] ])
+
+    let makeRow () =
+        Cell.lift2 (fun a b -> div [] [ a; b ]) (makeCounter (), makeWeather ())
+
+    let makeColumn () =
+        Cell.lift2 (fun a b -> div [] [ a; b ]) (makeRow (), makeRow ())
+
+    let () =
+        let tabs = makeColumn ()
+
+        printfn "LOG: %A" (Cell.sample tabs)
+
+// StreamSink.send () (Cell.sample tabs).top.left.plusClicked
+// printfn "LOG: %A" (Cell.sample tabs)
+
+// StreamSink.send () (Cell.sample tabs).top.left.plusClicked
+// printfn "LOG: %A" (Cell.sample tabs)
