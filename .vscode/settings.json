@@ -1,10 +1,21 @@
 {
     "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/CVS": true,
+        "**/.DS_Store": true,
+        "**/Thumbs.db": true,
+        "_build/": true,
+        "*/bin/": true,
+        "*/obj/": true,
+        ".gitmodules": true,
+        ".gitignore": true,
         "**/bin": true,
         "**/obj": true,
         ".*": true,
         "LICENSE": true,
         "nuget.config": true,
-        "*.sln": true,
+        "*.sln": true
     }
 }

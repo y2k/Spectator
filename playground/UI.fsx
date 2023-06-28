@@ -37,6 +37,15 @@ module FsHtml =
 
             sprintf "<%s %s>%s</%s>" name textAttrs textChildren name
 
+type ViewCountModel = { count: int }
+
+type ViewCountMsg =
+    | IntClicked
+    | DecClicked
+
+type RootViewModel = { children: ViewCountModel list }
+type RootViewMsg = ChildViewCount of ViewCountMsg * int
+
 open FsHtml
 
 let viewCount (count: int) (onInc: unit -> unit) (onDec: unit -> unit) =
