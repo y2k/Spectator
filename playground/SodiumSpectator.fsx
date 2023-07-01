@@ -64,6 +64,13 @@ module WorkerDomain =
                              data: byte array |}>
             ()
 
+    type State = { subs: obj list }
+
+    let state =
+        GlobalEvents.subscriptionCreated
+        |> Stream.map (fun sub state -> { state with subs = sub :: state.subs })
+        |> Stream.accum { subs = [] } (fun f x -> f x)
+
     let _main =
         [ downloadCompleted
           |> Stream.map (fun r ->
