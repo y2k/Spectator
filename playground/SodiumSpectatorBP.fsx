@@ -1,5 +1,7 @@
 #r "nuget: SodiumFRP.FSharp, 5.0.6"
 
+open System
+
 module Utils =
     open Sodium.Frp
 
@@ -55,7 +57,11 @@ module TelegramBot =
     let _listenTelegramMessages (state: State) (TelegramMessageReceived(user, message)) : obj list =
         match message.Split ' ' with
         | [| "/add"; url |] ->
-            let ns: NewSubscription = FIXME url user
+            let ns =
+                { id = Guid.NewGuid().ToString()
+                  user = user
+                  url = url }
+
             [ TelegramMessageSended(user, "Url added"); NewSubscriptionCreated ns ]
         | [| "/ls" |] ->
             let message =
@@ -90,12 +96,9 @@ module SubWorker =
         else
             []
 
-    let _listenNewSubscriptions (state: State) e : obj list =
+    let _listenNewSubscriptions e : obj list =
         match e with
-        | NewSubscriptionCreated e ->
-            [ DownloadEffect(e.url, (fun data -> DownloadComplete(e.id, data)))
-              { state with
-                  newSubs = state.newSubs |> Set.add e.id } ]
+        | NewSubscriptionCreated e -> [ DownloadEffect(e.url, (fun data -> DownloadComplete(e.id, data))) ]
         | _ -> []
 
 module SnapshotWorker =
@@ -149,13 +152,14 @@ module Application =
         let snapCreatedEvent = StreamSink.create<SnapshotCreated> ()
         let subChangedEvent = StreamSink.create<SubscriptionChanged> ()
         let telegramMessageReceived = StreamSink.create<TelegramMessageReceived> ()
+        let timeEvent = StreamSink.create<unit> ()
 
         let _a =
             let state =
                 subChangedEvent |> accum SnapshotWorker._listenSubscriptionCreated { subs = [] }
 
             let _a =
-                FIXME ""
+                timeEvent
                 |> snapshot state (fun state _ -> SnapshotWorker._listerTimerTicked state)
 
             let downloadComplete = StreamSink.create<SnapshotWorker.DownloadComplete> ()
@@ -167,7 +171,9 @@ module Application =
                 subChangedEvent
                 |> accum SubWorker._listenSubscriptionChanged { newSubs = Set.empty }
 
-            let _a = subChangedEvent |> snapshot state SubWorker._listenNewSubscriptions
+            let _a =
+                subChangedEvent
+                |> snapshot state (fun _ e -> SubWorker._listenNewSubscriptions e)
 
             let downloadComplete = StreamSink.create<SubWorker.DownloadComplete> ()
 
@@ -190,4 +196,30 @@ module Application =
 
         let _effects = merge (merge _a _b) (merge _c _d)
 
-        ()
+        let mutable fxCount = 0
+        let mutable eCount = 0
+
+        let send e s =
+            eCount <- eCount + 1
+            printfn "LOG:EVENT:[%i]: %O" eCount e
+            StreamSink.send e s
+
+        _effects
+        |> Stream.listen (fun fxs ->
+            fxCount <- fxCount + 1
+
+            fxs
+            |> List.iter (fun fx ->
+                printfn "LOG:FX:[%i]: (%s) %O" fxCount (fx.GetType().Name) fx
+
+                match fx with
+                | :? SubscriptionChanged as fx -> Transaction.post (fun _ -> send fx subChangedEvent)
+                | :? DownloadEffect as DownloadEffect(_, cb) ->
+                    let re = cb [||]
+                    Transaction.post (fun _ -> send re (FIXME re))
+                | _ -> ()))
+        |> ignore
+
+        send (TelegramMessageReceived("y2k", "/ls")) telegramMessageReceived
+        send (TelegramMessageReceived("y2k", "/add https://g.com/")) telegramMessageReceived
+        send (TelegramMessageReceived("y2k", "/ls")) telegramMessageReceived
