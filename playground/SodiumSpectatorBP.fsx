@@ -5,12 +5,6 @@ open System
 module Utils =
     open Sodium.Frp
 
-    let inline accum f empty e =
-        e |> Stream.accum empty (fun a b -> f b a)
-
-    let inline snapshot cell f stream =
-        stream |> Stream.snapshot cell (fun a b -> f b a)
-
     let inline merge a b = Stream.merge (fun x _ -> x) (a, b)
 
     [<CompilerMessage("Incomplete hole", 130)>]
@@ -19,12 +13,16 @@ module Utils =
 open Utils
 
 module Types =
-    type Snapshot = { url: string; subId: string }
+    type Snapshot =
+        { url: string
+          subId: string
+          data: byte array }
 
     type Subscription =
         { id: string
           user: string
-          url: string }
+          url: string
+          data: byte array }
 
     type NewSubscription =
         { id: string
@@ -35,23 +33,38 @@ module Types =
         | NewSubscriptionCreated of NewSubscription
         | NewSubscriptionRemoved of string
         | SubscriptionCreated of Subscription
-        | SubscriptionRemoved of string
+        | SubscriptionRemoved of user: string * id: string
 
     type SnapshotCreated = SnapshotCreated of Snapshot
 
-    type DownloadEffect = DownloadEffect of url: string * (byte array -> obj)
+    type DownloadRequested = DownloadRequested of url: string * (byte array -> obj)
     type TelegramMessageReceived = TelegramMessageReceived of user: string * message: string
     type TelegramMessageSended = TelegramMessageSended of user: string * message: string
+    type TimeTicked = TimeTicked
+    type EventDispatched = EventDispatched of event: obj
 
 open Types
 
 module TelegramBot =
-    type State = { subs: Map<string, string list> }
+    type State =
+        { userSubs: Map<string, {| id: string; url: string |} list> }
 
     let _listenSubscriptionChanged (state: State) =
         function
-        | SubscriptionCreated e -> { state with subs = FIXME e state.subs }
-        | SubscriptionRemoved e -> { state with subs = FIXME e state.subs }
+        | SubscriptionCreated e ->
+            { state with
+                userSubs =
+                    state.userSubs
+                    |> Map.tryFind e.user
+                    |> Option.defaultValue []
+                    |> fun urls -> Map.add e.user ({| id = e.id; url = e.url |} :: urls) state.userSubs }
+        | SubscriptionRemoved(user, sid) ->
+            { state with
+                userSubs =
+                    state.userSubs
+                    |> Map.tryFind user
+                    |> Option.defaultValue []
+                    |> fun subs -> Map.add user (subs |> List.filter (fun u -> u.id <> sid)) state.userSubs }
         | _ -> state
 
     let _listenTelegramMessages (state: State) (TelegramMessageReceived(user, message)) : obj list =
@@ -62,12 +75,14 @@ module TelegramBot =
                   user = user
                   url = url }
 
-            [ TelegramMessageSended(user, "Url added"); NewSubscriptionCreated ns ]
+            [ TelegramMessageSended(user, "Url added")
+              EventDispatched(NewSubscriptionCreated ns) ]
         | [| "/ls" |] ->
             let message =
-                state.subs
+                state.userSubs
                 |> Map.tryFind user
                 |> Option.defaultValue []
+                |> List.map (fun x -> x.url)
                 |> List.fold (sprintf "%s\n- %s") "Your subs: "
 
             [ TelegramMessageSended(user, message) ]
@@ -75,7 +90,7 @@ module TelegramBot =
 
 module SubWorker =
     type State = { newSubs: string Set }
-    type DownloadComplete = DownloadComplete of string * byte array
+    type DownloadComplete = DownloadComplete of newSubId: string * user: string * url: string * byte array
 
     let _listenSubscriptionChanged (state: State) =
         function
@@ -87,139 +102,174 @@ module SubWorker =
                 newSubs = Set.remove id state.newSubs }
         | _ -> state
 
-    let _listenDownloadCompleted (state: State) (DownloadComplete(newSubId, data)) : obj list =
+    let _listenDownloadCompleted (state: State) (DownloadComplete(newSubId, user, url, data)) : obj list =
         let newSubIsExist = state.newSubs |> Set.contains newSubId
-        let sub: Subscription = FIXME data
 
         if newSubIsExist then
-            [ NewSubscriptionRemoved newSubId; SubscriptionCreated sub ]
+            let sub: Subscription =
+                { id = newSubId
+                  user = user
+                  url = url
+                  data = data }
+
+            [ EventDispatched(NewSubscriptionRemoved newSubId)
+              EventDispatched(SubscriptionCreated sub) ]
         else
             []
 
     let _listenNewSubscriptions e : obj list =
         match e with
-        | NewSubscriptionCreated e -> [ DownloadEffect(e.url, (fun data -> DownloadComplete(e.id, data))) ]
+        | NewSubscriptionCreated e ->
+            [ DownloadRequested(e.url, (fun data -> DownloadComplete(e.id, e.user, e.url, data))) ]
         | _ -> []
 
 module SnapshotWorker =
     type State = { subs: Subscription list }
-    type DownloadComplete = DownloadComplete of data: byte array * subId: string
+    type DownloadComplete = DownloadComplete of data: byte array * subId: string * url: string
 
     let _listenSubscriptionCreated (state: State) =
         function
         | SubscriptionCreated e -> { state with subs = e :: state.subs }
-        | SubscriptionRemoved subId ->
+        | SubscriptionRemoved(_, subId) ->
             { state with
                 subs = state.subs |> List.filter (fun x -> x.id <> subId) }
         | _ -> state
 
-    let _listenDownloadCompleted (state: State) (DownloadComplete(data, subId)) : obj list =
+    let _listenDownloadCompleted (state: State) (DownloadComplete(data, subId, url)) : obj list =
         let subExists = state.subs |> List.exists (fun x -> x.id = subId)
 
         if subExists then
-            let snap: Snapshot = FIXME data
-            [ SnapshotCreated snap ]
+            let snap: Snapshot =
+                { url = url
+                  subId = subId
+                  data = data }
+
+            [ EventDispatched(SnapshotCreated snap) ]
         else
             []
 
     let _listerTimerTicked (state: State) : obj list =
-        let subs: Subscription list = FIXME state.subs
+        let subs: Subscription list = state.subs
 
         subs
-        |> List.map (fun sub -> DownloadEffect(sub.url, (fun data -> DownloadComplete(data, sub.id))))
+        |> List.map (fun sub -> DownloadRequested(sub.url, (fun data -> DownloadComplete(data, sub.id, sub.url))))
 
 module Notifications =
-    type State = { subscriptions: Map<string, string> }
+    type State =
+        { subscriptions: Map<string, {| user: string |}> }
 
     let _listenSubscriptionChanged (state: State) =
         function
         | SubscriptionCreated e ->
             { state with
-                subscriptions = state.subscriptions |> Map.add e.id e.user }
-        | SubscriptionRemoved e ->
+                subscriptions = state.subscriptions |> Map.add e.id {| user = e.user |} }
+        | SubscriptionRemoved(_, id) ->
             { state with
-                subscriptions = state.subscriptions |> Map.remove e }
+                subscriptions = state.subscriptions |> Map.remove id }
         | _ -> state
 
     let _listenSnapshotCreated (state: State) (SnapshotCreated e) : obj list =
-        let user = state.subscriptions |> Map.find e.subId
-        [ TelegramMessageSended(user, $"Snapshot created: {e.url}") ]
+        let x = state.subscriptions |> Map.find e.subId
+        [ TelegramMessageSended(x.user, $"Snapshot created: {e.url}") ]
 
 module Application =
     open Sodium.Frp
 
+    type Meta =
+        { level: int
+          id: Guid }
+
+        static member empty() = { level = 0; id = Guid.NewGuid() }
+
     let () =
-        let snapCreatedEvent = StreamSink.create<SnapshotCreated> ()
-        let subChangedEvent = StreamSink.create<SubscriptionChanged> ()
-        let telegramMessageReceived = StreamSink.create<TelegramMessageReceived> ()
-        let timeEvent = StreamSink.create<unit> ()
+        let snapCreatedEvent = StreamSink.create<Meta * SnapshotCreated> ()
+        let subChangedEvent = StreamSink.create<Meta * SubscriptionChanged> ()
+        let telegramMessageReceived = StreamSink.create<Meta * TelegramMessageReceived> ()
+        let timeEvent = StreamSink.create<Meta * TimeTicked> ()
+
+        let snapDownloadComplete =
+            StreamSink.create<Meta * SnapshotWorker.DownloadComplete> ()
+
+        let subDownloadComplete = StreamSink.create<Meta * SubWorker.DownloadComplete> ()
+
+        let inline accum f empty e =
+            e |> Stream.accum empty (fun (_, a) b -> f b a)
+
+        let inline snapshot cell f stream =
+            stream |> Stream.snapshot cell (fun (meta, a) b -> meta, f b a)
 
         let _a =
             let state =
-                subChangedEvent |> accum SnapshotWorker._listenSubscriptionCreated { subs = [] }
+                accum SnapshotWorker._listenSubscriptionCreated { subs = [] } subChangedEvent
 
-            let _a =
-                timeEvent
-                |> snapshot state (fun state _ -> SnapshotWorker._listerTimerTicked state)
-
-            let downloadComplete = StreamSink.create<SnapshotWorker.DownloadComplete> ()
-            let _b = downloadComplete |> snapshot state SnapshotWorker._listenDownloadCompleted
-            merge _a _b
+            merge
+                (snapshot state (fun state _ -> SnapshotWorker._listerTimerTicked state) timeEvent)
+                (snapshot state SnapshotWorker._listenDownloadCompleted snapDownloadComplete)
 
         let _b =
             let state =
-                subChangedEvent
-                |> accum SubWorker._listenSubscriptionChanged { newSubs = Set.empty }
+                accum SubWorker._listenSubscriptionChanged { newSubs = Set.empty } subChangedEvent
 
-            let _a =
-                subChangedEvent
-                |> snapshot state (fun _ e -> SubWorker._listenNewSubscriptions e)
-
-            let downloadComplete = StreamSink.create<SubWorker.DownloadComplete> ()
-
-            let _b = downloadComplete |> snapshot state SubWorker._listenDownloadCompleted
-            merge _a _b
+            merge
+                (snapshot state (fun _ e -> SubWorker._listenNewSubscriptions e) subChangedEvent)
+                (snapshot state SubWorker._listenDownloadCompleted subDownloadComplete)
 
         let _c =
             let state =
-                subChangedEvent
-                |> accum TelegramBot._listenSubscriptionChanged { subs = Map.empty }
+                accum TelegramBot._listenSubscriptionChanged { userSubs = Map.empty } subChangedEvent
 
-            telegramMessageReceived |> snapshot state TelegramBot._listenTelegramMessages
+            snapshot state TelegramBot._listenTelegramMessages telegramMessageReceived
 
         let _d =
             let state =
-                subChangedEvent
-                |> accum Notifications._listenSubscriptionChanged { subscriptions = Map.empty }
+                accum Notifications._listenSubscriptionChanged { subscriptions = Map.empty } subChangedEvent
 
-            snapCreatedEvent |> snapshot state Notifications._listenSnapshotCreated
+            snapshot state Notifications._listenSnapshotCreated snapCreatedEvent
 
-        let _effects = merge (merge _a _b) (merge _c _d)
+        (* APPLICATION *)
 
-        let mutable fxCount = 0
-        let mutable eCount = 0
+        let log meta type' e =
+            printfn "%s[%s] %O" (String.replicate meta.level "  ") type' e
 
-        let send e s =
-            eCount <- eCount + 1
-            printfn "LOG:EVENT:[%i]: %O" eCount e
-            StreamSink.send e s
+        let send meta e s =
+            log meta "EVENT" e
+            StreamSink.send (meta, e) s
 
-        _effects
-        |> Stream.listen (fun fxs ->
-            fxCount <- fxCount + 1
+        merge (merge _a _b) (merge _c _d)
+        |> Stream.listen (fun (meta, fxs) ->
+            let meta = { meta with level = meta.level + 1 }
 
             fxs
             |> List.iter (fun fx ->
-                printfn "LOG:FX:[%i]: (%s) %O" fxCount (fx.GetType().Name) fx
+                log meta "FX" fx
 
                 match fx with
-                | :? SubscriptionChanged as fx -> Transaction.post (fun _ -> send fx subChangedEvent)
-                | :? DownloadEffect as DownloadEffect(_, cb) ->
-                    let re = cb [||]
-                    Transaction.post (fun _ -> send re (FIXME re))
-                | _ -> ()))
+                | :? EventDispatched as (EventDispatched ed) ->
+                    match ed with
+                    | :? SnapshotCreated as sc ->
+                        Transaction.post (fun _ ->
+                            let meta = { meta with level = meta.level + 1 }
+                            send meta sc snapCreatedEvent)
+                    | :? SubscriptionChanged as fx ->
+                        Transaction.post (fun _ ->
+                            let meta = { meta with level = meta.level + 1 }
+                            send meta fx subChangedEvent)
+                    | ed -> failwithf "Unknown event: %O" ed
+                | :? DownloadRequested as DownloadRequested(_, cb) ->
+                    Transaction.post (fun _ ->
+                        let meta = { meta with level = meta.level + 1 }
+
+                        match cb [||] with
+                        | :? SnapshotWorker.DownloadComplete as re -> send meta re snapDownloadComplete
+                        | :? SubWorker.DownloadComplete as re -> send meta re subDownloadComplete
+                        | re -> failwithf "Unknown callback %O" re)
+                | :? TelegramMessageSended -> ()
+                | fx -> failwithf "Unknown effect: %O" fx))
         |> ignore
 
-        send (TelegramMessageReceived("y2k", "/ls")) telegramMessageReceived
-        send (TelegramMessageReceived("y2k", "/add https://g.com/")) telegramMessageReceived
-        send (TelegramMessageReceived("y2k", "/ls")) telegramMessageReceived
+        printfn "================================================================\n"
+        send (Meta.empty ()) (TelegramMessageReceived("y2k", "/add https://g.com/")) telegramMessageReceived
+        printfn "\n================================================================\n"
+        send (Meta.empty ()) (TelegramMessageReceived("y2k", "/ls")) telegramMessageReceived
+        printfn "\n================================================================\n"
+        send (Meta.empty ()) TimeTicked timeEvent
