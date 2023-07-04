@@ -6,6 +6,7 @@ module Utils =
     open Sodium.Frp
 
     let inline merge a b = Stream.merge (fun x _ -> x) (a, b)
+    let inline mergeAll xs = xs |> List.reduce merge
 
     [<CompilerMessage("Incomplete hole", 130)>]
     let inline FIXME (x: _) = raise (exn $"Incomplete hole: {x}")
@@ -181,6 +182,12 @@ module Application =
 
         static member empty() = { level = 0; id = Guid.NewGuid() }
 
+    let inline accum f empty e =
+        e |> Stream.accum empty (fun (_, a) b -> f b a)
+
+    let inline snapshot cell f stream =
+        stream |> Stream.snapshot cell (fun (meta, a) b -> meta, f b a)
+
     let () =
         let snapCreatedEvent = StreamSink.create<Meta * SnapshotCreated> ()
         let subChangedEvent = StreamSink.create<Meta * SubscriptionChanged> ()
@@ -192,40 +199,6 @@ module Application =
 
         let subDownloadComplete = StreamSink.create<Meta * SubWorker.DownloadComplete> ()
 
-        let inline accum f empty e =
-            e |> Stream.accum empty (fun (_, a) b -> f b a)
-
-        let inline snapshot cell f stream =
-            stream |> Stream.snapshot cell (fun (meta, a) b -> meta, f b a)
-
-        let _a =
-            let state =
-                accum SnapshotWorker._listenSubscriptionCreated { subs = [] } subChangedEvent
-
-            merge
-                (snapshot state (fun state _ -> SnapshotWorker._listerTimerTicked state) timeEvent)
-                (snapshot state SnapshotWorker._listenDownloadCompleted snapDownloadComplete)
-
-        let _b =
-            let state =
-                accum SubWorker._listenSubscriptionChanged { newSubs = Set.empty } subChangedEvent
-
-            merge
-                (snapshot state (fun _ e -> SubWorker._listenNewSubscriptions e) subChangedEvent)
-                (snapshot state SubWorker._listenDownloadCompleted subDownloadComplete)
-
-        let _c =
-            let state =
-                accum TelegramBot._listenSubscriptionChanged { userSubs = Map.empty } subChangedEvent
-
-            snapshot state TelegramBot._listenTelegramMessages telegramMessageReceived
-
-        let _d =
-            let state =
-                accum Notifications._listenSubscriptionChanged { subscriptions = Map.empty } subChangedEvent
-
-            snapshot state Notifications._listenSnapshotCreated snapCreatedEvent
-
         (* APPLICATION *)
 
         let log meta type' e =
@@ -235,7 +208,28 @@ module Application =
             log meta "EVENT" e
             StreamSink.send (meta, e) s
 
-        merge (merge _a _b) (merge _c _d)
+        [ let state =
+              accum SnapshotWorker._listenSubscriptionCreated { subs = [] } subChangedEvent in
+
+          snapshot state (fun state _ -> SnapshotWorker._listerTimerTicked state) timeEvent
+          snapshot state SnapshotWorker._listenDownloadCompleted snapDownloadComplete
+
+          let state =
+              accum SubWorker._listenSubscriptionChanged { newSubs = Set.empty } subChangedEvent in
+
+          snapshot state (fun _ -> SubWorker._listenNewSubscriptions) subChangedEvent
+          snapshot state SubWorker._listenDownloadCompleted subDownloadComplete
+
+          let state =
+              accum TelegramBot._listenSubscriptionChanged { userSubs = Map.empty } subChangedEvent in
+
+          snapshot state TelegramBot._listenTelegramMessages telegramMessageReceived
+
+          let state =
+              accum Notifications._listenSubscriptionChanged { subscriptions = Map.empty } subChangedEvent in
+
+          snapshot state Notifications._listenSnapshotCreated snapCreatedEvent ]
+        |> mergeAll
         |> Stream.listen (fun (meta, fxs) ->
             let meta = { meta with level = meta.level + 1 }
 
