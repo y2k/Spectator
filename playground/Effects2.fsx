@@ -10,51 +10,52 @@ module Nitrogen =
         { name: string
           param: obj
           [<System.Text.Json.Serialization.JsonIgnore>]
-          key: obj }
+          action: unit -> unit }
 
-    type 'a EffectFactory = 'a -> Effect
     type 'a Signal = 'a Stream
+    type 'a SignalProducer = 'a StreamSink
     type 'a Store = 'a Cell
 
     module Effect =
-        open System.Collections.Generic
-        let private globalStore = Dictionary<obj, obj -> unit>()
-
         let empty: Effect =
             { param = null
-              key = null
+              action = ignore
               name = "empty" }
 
-        let attachHandler (a: 'a EffectFactory) (f: 'a -> unit) =
-            globalStore.Add(a, (fun x -> unbox x |> f))
+        type 'a EffectFactory =
+            private
+                { name: string
+                  mutable action: 'a -> unit }
 
-        let create<'a> name : 'a EffectFactory =
-            let mutable key: obj = null
+        let call (ef: 'a EffectFactory) (param: 'a) : Effect =
+            { name = ef.name
+              param = box param
+              action = fun _ -> ef.action param }
 
-            let r =
-                fun x ->
-                    { param = box x
-                      key = key
-                      name = name }
+        let attachHandler (ef: 'a EffectFactory) (f: 'a -> unit) = ef.action <- f
 
-            key <- r
-            r
+        let create<'a> (name: string) : 'a EffectFactory =
+            { name = name
+              action = fun _ -> failwithf "Effect handle not set for %s" name }
 
         let batch (xs: Effect list) : Effect =
             { param = box xs
-              key = null
+              action = fun _ -> xs |> List.iter (fun e -> e.action ())
               name = "batch" }
 
     module Signal =
-        let create<'a> () : 'a Signal = StreamSink.create<'a> ()
+        let create<'a> () : 'a SignalProducer = StreamSink.create<'a> ()
 
         let snapshot (s: 's Store) (f: 's -> 'a -> 'b) (si: 'a Signal) : 'b Signal =
             Stream.snapshot s (fun a b -> f b a) si
 
-        let send arg (signal: _ Stream) =
+        let send arg (signal: _ SignalProducer) =
             (signal :?> _ StreamSink) |> StreamSink.send arg
 
         let map f s = Stream.map f s
+
+        let merge xs =
+            Stream.mergeAll (failwithf "Merging of signal [%O] and [%O] not supported") xs
 
     module Store =
         let create (def: 'a) xs : 'a Store =
@@ -65,8 +66,10 @@ module Nitrogen =
 
 open Nitrogen
 
-type DownloadCallback = unit
-let createDownloadCallback (_f: byte array -> 'a) (_signal: 'a Signal) : DownloadCallback = ()
+type DownloadCallback = byte array -> unit
+
+let createDownloadCallback (_f: byte array -> 'a) (_signal: 'a SignalProducer) : DownloadCallback =
+    fun (data: byte array) -> _signal |> Signal.send (_f data)
 
 let DownloadFx = Effect.create<string * DownloadCallback> "download"
 let LogFx = Effect.create<string> "log"
@@ -94,39 +97,54 @@ module Domain =
           innerUpdateStore |> Signal.map (fun _ a -> a) ]
         |> Store.create { items = 0 }
 
-    let onTimerEvent: Effect Signal =
+    let private onTimerEvent: Effect Signal =
         GlobalEvents.TimerSignal
         |> Signal.snapshot store (fun _state _msg -> Effect.empty)
 
-    let private handleDownloadComplete = Signal.create<string * byte array> ()
+    let DownloadComplete = Signal.create<string * byte array> ()
 
-    let onNewBotMessageEvent: Effect Signal =
+    let private onHandleDownloadComplete: Effect Signal =
+        DownloadComplete
+        |> Signal.snapshot store (fun _state _msg -> Effect.call LogFx "Called onHandleDownloadComplete")
+
+    let private onNewBotMessageEvent: Effect Signal =
         TelegramApi.TelegramMessage
         |> Signal.snapshot store (fun state msg ->
             let url = $"https://google.com/?query={msg.message}"
 
             Effect.batch
-                [ LogFx $"LOG: {state} message from {msg.user}"
-                  DownloadFx(url, createDownloadCallback (fun data -> url, data) handleDownloadComplete) ])
+                [ Effect.call LogFx $"{state} message from {msg.user}"
+                  Effect.call DownloadFx (url, createDownloadCallback (fun data -> url, data) DownloadComplete) ])
+
+    let main =
+        [ onHandleDownloadComplete; onNewBotMessageEvent; onTimerEvent ] |> Signal.merge
 
 open System.Text.Json
 open Sodium.Frp
 
 let () =
     let actual =
-        [ Domain.onNewBotMessageEvent; Domain.onTimerEvent ]
-        |> Stream.mergeAll (failwithf "Merging of events [%O] and [%O] not supported")
-        |> Stream.accum Effect.empty (fun a _ -> a)
+        Domain.main
+        |> Stream.accum (ref [ Effect.empty ]) (fun a xs ->
+            xs.Value <- a :: xs.Value
+            xs)
 
-    Effect.attachHandler DownloadFx (printfn "LOG : Effect called %O")
+    Effect.attachHandler DownloadFx (fun (_url, _cb) -> printfn "[DownloadFx] called with = %O" _url)
+    // Effect.attachHandler LogFx (printfn "[LogFx] called with = %s")
+    Effect.attachHandler DownloadFx ignore
 
     let log () =
         let value = Cell.sample actual
         let opt = JsonSerializerOptions(WriteIndented = true)
-        printfn "======================\n%O" (JsonSerializer.Serialize(value, opt))
+        printfn "======================\n%O" (JsonSerializer.Serialize(value.Value, opt))
+        value.Value <- []
 
     TelegramApi.TelegramMessage |> Signal.send { user = "y2k"; message = "hello" }
     log ()
 
-    TelegramApi.TelegramMessage |> Signal.send { user = "admin"; message = "world" }
+    Domain.DownloadComplete |> StreamSink.send ("", [||])
+
     log ()
+
+// TelegramApi.TelegramMessage |> Signal.send { user = "admin"; message = "world" }
+// log ()
