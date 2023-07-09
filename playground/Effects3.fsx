@@ -1,143 +1,92 @@
 #r "nuget: SodiumFRP.FSharp, 5.0.6"
-#r "nuget: FSharp.SystemTextJson, 1.1.23"
 
-module Nitrogen =
-    open Sodium.Frp
+[<CompilerMessage("Incomplete hole", 130)>]
+let inline FIXME (x: _) = raise (exn $"Incomplete hole: {x}")
 
-    [<CompilerMessage("Incomplete hole", 130)>]
-    let inline FIXME (x: _) = raise (exn $"Incomplete hole: {x}")
+type World = unit
+type Effect = { param: obj; action: World -> unit }
 
-    type Effect =
-        { name: string
-          param: obj
-          [<System.Text.Json.Serialization.JsonIgnore>]
-          action: unit -> unit }
+let merge (fs: Effect list) : Effect =
+    { param = box fs
+      action = fun _ -> FIXME "" }
 
-    type 'a Signal = 'a Stream
-    type 'a SignalProducer = 'a StreamSink
-    type 'a Store = 'a Cell
-
-    module Effect =
-        type 'a EffectFactory =
-            private
-                { name: string
-                  mutable action: 'a -> unit }
-
-        let call (ef: 'a EffectFactory) (param: 'a) : Effect =
-            { name = ef.name
-              param = box param
-              action = fun _ -> ef.action param }
-
-        let attachHandler (ef: 'a EffectFactory) (f: 'a -> unit) = ef.action <- f
-
-        let create<'a> (name: string) : 'a EffectFactory =
-            { name = name
-              action = fun _ -> failwithf "Effect handle not set for %s" name }
-
-        let batch (xs: Effect list) : Effect =
-            { param = box xs
-              action = fun _ -> xs |> List.iter (fun e -> e.action ())
-              name = "batch" }
-
-    module Signal =
-        let create<'a> () : 'a SignalProducer = StreamSink.create<'a> ()
-
-        let snapshot (s: 's Store) (f: 's -> 'a -> 'b) (si: 'a Signal) : 'b Signal =
-            Stream.snapshot s (fun a b -> f b a) si
-
-        let send arg (signal: _ SignalProducer) =
-            (signal :?> _ StreamSink) |> StreamSink.send arg
-
-        let map f s = Stream.map f s
-
-        let merge xs =
-            Stream.mergeAll (failwithf "Merging of signal [%O] and [%O] not supported") xs
-
-    module Store =
-        let create (def: 'a) xs : 'a Store =
-            xs
-            |> Stream.mergeAll (failwithf "Merging of events [%O] and [%O] not supported")
-            |> Stream.accum def (<|)
-
-open Nitrogen
-
-type DownloadCallback = byte array -> unit
-
-let createDownloadCallback (_f: byte array -> 'a) (_signal: 'a SignalProducer) : DownloadCallback =
-    fun (data: byte array) -> _signal |> Signal.send (_f data)
-
-let DownloadFx = Effect.create<string * DownloadCallback> "download"
-let LogFx = Effect.create<string> "log"
-let DispatchFx = Effect.create<obj> "dispatch"
+let dispatch (msg: _) =
+    { param = box msg
+      action = fun _ -> FIXME "" }
 
 module TelegramApi =
-    type TelegramMessage = { user: string; message: string }
-    let TelegramMessage = Signal.create<TelegramMessage> ()
+    let sendMessage (user: string) (message: string) =
+        { param = box (user, message)
+          action = fun _ -> FIXME "" }
 
-module GlobalEvents =
-    type GlobalEvent =
-        | Event1 of obj
-        | Event2 of obj
+module Global =
+    type NewSubscriptionCreated = NewSubscriptionCreated of user: string * url: string
 
-    let TimerSignal = Signal.create<System.DateTime> ()
+module Bot =
+    open Global
 
-    let Bus = Signal.create<GlobalEvent> ()
+    type State = { subs: Map<string, string list> }
+    let emtpy = { subs = Map.empty }
 
-module Domain =
-    type private State = { items: int }
+    let handleState (NewSubscriptionCreated(user, url)) (state: State) : State =
+        { state with
+            subs =
+                state.subs
+                |> Map.tryFind user
+                |> Option.defaultValue []
+                |> fun xs -> url :: xs
+                |> fun xs -> Map.add user xs state.subs }
 
-    let private innerUpdateStore = Signal.create<unit> ()
+    let handle (state: State) (user, (message: string)) : Effect =
+        match message.Split ' ' with
+        | [| "/ls" |] ->
+            state.subs
+            |> Map.tryFind user
+            |> Option.defaultValue []
+            |> List.fold (fun s x -> $"{s}\n- {x}") "Your subs:"
+            |> TelegramApi.sendMessage user
+        | [| "/add"; url |] ->
+            merge
+                [ dispatch (NewSubscriptionCreated(user, url))
+                  TelegramApi.sendMessage user "Subscription created" ]
+        | _ -> TelegramApi.sendMessage user "[HELP message]"
 
-    let private store =
-        [ GlobalEvents.Bus |> Signal.map (fun _ a -> { a with items = a.items + 1 })
-          innerUpdateStore |> Signal.map (fun _ a -> a) ]
-        |> Store.create { items = 0 }
-
-    let private onTimerEvent: Effect Signal =
-        GlobalEvents.TimerSignal
-        |> Signal.snapshot store (fun _state _msg -> Effect.call LogFx $"onTimerEvent {_state} {_msg}")
-
-    let private _onHandleDownloadComplete _state _msg =
-        Effect.batch
-            [ Effect.call DispatchFx (GlobalEvents.Event1 "(Sub-Created)")
-              Effect.call LogFx $"Called onHandleDownloadComplete {_state} {_msg}" ]
-
-    let DownloadComplete = Signal.create<string * byte array> ()
-
-    let private _onNewBotMessageEvent state (msg: TelegramApi.TelegramMessage) =
-        let url = $"https://google.com/?query={msg.message}"
-
-        Effect.batch
-            [ Effect.call LogFx $"{state} message from {msg.user}"
-              Effect.call DownloadFx (url, createDownloadCallback (fun data -> url, data) DownloadComplete) ]
-
-    let main =
-        [ DownloadComplete |> Signal.snapshot store _onHandleDownloadComplete
-          TelegramApi.TelegramMessage |> Signal.snapshot store _onNewBotMessageEvent
-          onTimerEvent ]
-        |> Signal.merge
-
-open System.Text.Json
-open System.Text.Json.Serialization
 open Sodium.Frp
+open Global
+open System.Text.Json
 
 let () =
-    let actual =
-        Domain.main
-        |> Stream.accum (ref []) (fun a xs ->
-            xs.Value <- a :: xs.Value
-            xs)
+    let telegramMessageProducer = StreamSink.create ()
+
+    let newSubCreatedProducer: Global.NewSubscriptionCreated StreamSink =
+        StreamSink.create ()
+
+    let state =
+        [ newSubCreatedProducer |> Stream.map Bot.handleState ]
+        |> Stream.mergeAll (fun _ _ -> FIXME "")
+        |> Stream.accum Bot.emtpy (<|)
+
+    let clearLog = StreamSink.create ()
+
+    let effects =
+        [ telegramMessageProducer
+          |> Stream.snapshot state (fun e s -> Bot.handle s e)
+          |> Stream.map (fun x -> [ x ])
+          clearLog |> Stream.map (fun _ -> []) ]
+        |> Stream.mergeAll (fun _ _ -> FIXME "")
+        |> Stream.accum [] (fun x _ -> x)
 
     let log () =
-        let value = Cell.sample actual
-        let opt = JsonFSharpOptions.Default().ToJsonSerializerOptions()
-        opt.WriteIndented <- true
-        // let opt = JsonSerializerOptions(WriteIndented = true)
-        printfn "======================\n%O" (JsonSerializer.Serialize(value.Value, opt))
-        value.Value <- []
+        let opt = JsonSerializerOptions(WriteIndented = true)
+        printfn "================\n%O" (JsonSerializer.Serialize(Cell.sample effects, opt))
+        StreamSink.send () clearLog
 
-    TelegramApi.TelegramMessage |> Signal.send { user = "y2k"; message = "hello" }
+    StreamSink.send ("y2k", "/ls") telegramMessageProducer
     log ()
 
-    Domain.DownloadComplete |> StreamSink.send ("https://url", [||])
+    StreamSink.send ("y2k", "/add https://g.com/") telegramMessageProducer
+    log ()
+
+    StreamSink.send (NewSubscriptionCreated("y2k", "https://g.com/")) newSubCreatedProducer
+    StreamSink.send ("y2k", "/ls") telegramMessageProducer
     log ()
