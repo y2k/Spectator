@@ -1,4 +1,5 @@
 #r "nuget: SodiumFRP.FSharp, 5.0.6"
+#r "nuget: FSharp.SystemTextJson, 1.1.23"
 
 module Nitrogen =
     open Sodium.Frp
@@ -17,11 +18,6 @@ module Nitrogen =
     type 'a Store = 'a Cell
 
     module Effect =
-        let empty: Effect =
-            { param = null
-              action = ignore
-              name = "empty" }
-
         type 'a EffectFactory =
             private
                 { name: string
@@ -60,7 +56,6 @@ module Nitrogen =
     module Store =
         let create (def: 'a) xs : 'a Store =
             xs
-            // |> List.map (fun (e, f) -> e |> Stream.map (fun e s -> f s e))
             |> Stream.mergeAll (failwithf "Merging of events [%O] and [%O] not supported")
             |> Stream.accum def (<|)
 
@@ -73,6 +68,7 @@ let createDownloadCallback (_f: byte array -> 'a) (_signal: 'a SignalProducer) :
 
 let DownloadFx = Effect.create<string * DownloadCallback> "download"
 let LogFx = Effect.create<string> "log"
+let DispatchFx = Effect.create<obj> "dispatch"
 
 module TelegramApi =
     type TelegramMessage = { user: string; message: string }
@@ -99,52 +95,49 @@ module Domain =
 
     let private onTimerEvent: Effect Signal =
         GlobalEvents.TimerSignal
-        |> Signal.snapshot store (fun _state _msg -> Effect.empty)
+        |> Signal.snapshot store (fun _state _msg -> Effect.call LogFx $"onTimerEvent {_state} {_msg}")
+
+    let private _onHandleDownloadComplete _state _msg =
+        Effect.batch
+            [ Effect.call DispatchFx (GlobalEvents.Event1 "(Sub-Created)")
+              Effect.call LogFx $"Called onHandleDownloadComplete {_state} {_msg}" ]
 
     let DownloadComplete = Signal.create<string * byte array> ()
 
-    let private onHandleDownloadComplete: Effect Signal =
-        DownloadComplete
-        |> Signal.snapshot store (fun _state _msg -> Effect.call LogFx "Called onHandleDownloadComplete")
+    let private _onNewBotMessageEvent state (msg: TelegramApi.TelegramMessage) =
+        let url = $"https://google.com/?query={msg.message}"
 
-    let private onNewBotMessageEvent: Effect Signal =
-        TelegramApi.TelegramMessage
-        |> Signal.snapshot store (fun state msg ->
-            let url = $"https://google.com/?query={msg.message}"
-
-            Effect.batch
-                [ Effect.call LogFx $"{state} message from {msg.user}"
-                  Effect.call DownloadFx (url, createDownloadCallback (fun data -> url, data) DownloadComplete) ])
+        Effect.batch
+            [ Effect.call LogFx $"{state} message from {msg.user}"
+              Effect.call DownloadFx (url, createDownloadCallback (fun data -> url, data) DownloadComplete) ]
 
     let main =
-        [ onHandleDownloadComplete; onNewBotMessageEvent; onTimerEvent ] |> Signal.merge
+        [ DownloadComplete |> Signal.snapshot store _onHandleDownloadComplete
+          TelegramApi.TelegramMessage |> Signal.snapshot store _onNewBotMessageEvent
+          onTimerEvent ]
+        |> Signal.merge
 
 open System.Text.Json
+open System.Text.Json.Serialization
 open Sodium.Frp
 
 let () =
     let actual =
         Domain.main
-        |> Stream.accum (ref [ Effect.empty ]) (fun a xs ->
+        |> Stream.accum (ref []) (fun a xs ->
             xs.Value <- a :: xs.Value
             xs)
 
-    Effect.attachHandler DownloadFx (fun (_url, _cb) -> printfn "[DownloadFx] called with = %O" _url)
-    // Effect.attachHandler LogFx (printfn "[LogFx] called with = %s")
-    Effect.attachHandler DownloadFx ignore
-
     let log () =
         let value = Cell.sample actual
-        let opt = JsonSerializerOptions(WriteIndented = true)
+        let opt = JsonFSharpOptions.Default().ToJsonSerializerOptions()
+        opt.WriteIndented <- true
+        // let opt = JsonSerializerOptions(WriteIndented = true)
         printfn "======================\n%O" (JsonSerializer.Serialize(value.Value, opt))
         value.Value <- []
 
     TelegramApi.TelegramMessage |> Signal.send { user = "y2k"; message = "hello" }
     log ()
 
-    Domain.DownloadComplete |> StreamSink.send ("", [||])
-
+    Domain.DownloadComplete |> StreamSink.send ("https://url", [||])
     log ()
-
-// TelegramApi.TelegramMessage |> Signal.send { user = "admin"; message = "world" }
-// log ()
