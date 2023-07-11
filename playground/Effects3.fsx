@@ -86,18 +86,30 @@ let () =
         |> Stream.mergeAll (fun _ _ -> failwith "")
         |> Stream.accum [] (fun x _ -> x)
 
+    let mutable cmdLog = []
+
     let log () =
         let options = JsonSerializerOptions(WriteIndented = true)
         JsonFSharpOptions.Default().AddToJsonSerializerOptions(options)
         printfn "================\n%O" (JsonSerializer.Serialize(Cell.sample effects, options))
+        cmdLog <- Cell.sample effects :: cmdLog
         StreamSink.send () clearLog
 
-    StreamSink.send ("y2k", "/ls") telegramMessageProducer
-    log ()
+    let send msg target =
+        StreamSink.send msg target
+        log ()
 
-    StreamSink.send ("y2k", "/add https://g.com/") telegramMessageProducer
-    log ()
+    send ("y2k", "/ls") telegramMessageProducer
+    send ("y2k", "/add https://g.com/") telegramMessageProducer
+    send (NewSubscriptionCreated("y2k", "https://g.com/")) newSubCreatedProducer
+    send ("y2k", "/ls") telegramMessageProducer
 
-    StreamSink.send (NewSubscriptionCreated("y2k", "https://g.com/")) newSubCreatedProducer
-    StreamSink.send ("y2k", "/ls") telegramMessageProducer
-    log ()
+    let options = JsonSerializerOptions(WriteIndented = false)
+    JsonFSharpOptions.Default().AddToJsonSerializerOptions(options)
+    let actual = JsonSerializer.Serialize(cmdLog, options)
+
+    if
+        """[[{"name":"TelegramSendMessage","param":["y2k","Your subs:\n- https://g.com/"]}],[],[{"name":"Merge","param":[{"name":"Dispatch","param":{"Case":"NewSubscriptionCreated","Fields":["y2k","https://g.com/"]}},{"name":"TelegramSendMessage","param":["y2k","Subscription created"]}]}],[{"name":"TelegramSendMessage","param":["y2k","Your subs:"]}]]"""
+        <> actual
+    then
+        failwithf "%s" actual
