@@ -12,15 +12,17 @@ type Effect =
       [<System.Text.Json.Serialization.JsonIgnore>]
       action: World -> unit }
 
-let merge (fs: Effect list) : Effect =
+let merge (fs: obj list) : Effect =
     { param = box fs
       name = "Merge"
       action = fun _ -> FIXME "" }
 
-let dispatch (msg: _) =
-    { param = box msg
-      name = "Dispatch"
-      action = fun _ -> FIXME "" }
+// let dispatch (msg: _) =
+//     { param = box msg
+//       name = "Dispatch"
+//       action = fun _ -> FIXME "" }
+
+type Dispatch = Dispatch of param: obj
 
 module TelegramApi =
     let sendMessage (user: string) (message: string) =
@@ -46,7 +48,7 @@ module Bot =
                 |> fun xs -> url :: xs
                 |> fun xs -> Map.add user xs state.subs }
 
-    let handle (state: State) (user, (message: string)) : Effect =
+    let handle (state: State) (user, (message: string)) : obj =
         match message.Split ' ' with
         | [| "/ls" |] ->
             state.subs
@@ -54,9 +56,10 @@ module Bot =
             |> Option.defaultValue []
             |> List.fold (fun s x -> $"{s}\n- {x}") "Your subs:"
             |> TelegramApi.sendMessage user
+            |> box
         | [| "/add"; url |] ->
             merge
-                [ dispatch (NewSubscriptionCreated(user, url))
+                [ Dispatch(NewSubscriptionCreated(user, url))
                   TelegramApi.sendMessage user "Subscription created" ]
         | _ -> TelegramApi.sendMessage user "[HELP message]"
 
@@ -90,16 +93,36 @@ let () =
 
     let send msg target =
         StreamSink.send msg target
+        let effs = Cell.sample effects
+
+        let rec exec (effs: obj list) =
+            effs
+            |> List.iter (fun e ->
+                match e with
+                | :? Dispatch as Dispatch msg ->
+                    match msg with
+                    | :? NewSubscriptionCreated as x ->
+                        Transaction.post (fun _ -> StreamSink.send x newSubCreatedProducer)
+                    | _ -> FIXME ""
+                | :? Effect as e ->
+                    match e.name with
+                    | "Merge" ->
+                        let params: obj list = unbox e.param
+                        exec params
+                    | _ -> ()
+                | _ -> ())
+
+        exec effs
 
         let options = JsonSerializerOptions(WriteIndented = true)
         JsonFSharpOptions.Default().AddToJsonSerializerOptions(options)
-        printfn "================\n%O" (JsonSerializer.Serialize(Cell.sample effects, options))
-        cmdLog <- Cell.sample effects :: cmdLog
+        printfn "================\n%O" (JsonSerializer.Serialize(effs, options))
+        cmdLog <- effs :: cmdLog
         StreamSink.send () clearLog
 
     send ("y2k", "/ls") telegramMessageProducer
     send ("y2k", "/add https://g.com/") telegramMessageProducer
-    send (NewSubscriptionCreated("y2k", "https://g.com/")) newSubCreatedProducer
+    // send (NewSubscriptionCreated("y2k", "https://g.com/")) newSubCreatedProducer
     send ("y2k", "/ls") telegramMessageProducer
 
     let options = JsonSerializerOptions(WriteIndented = false)
