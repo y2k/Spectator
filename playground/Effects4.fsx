@@ -116,8 +116,9 @@ let () =
 
         let options = JsonSerializerOptions(WriteIndented = true)
         JsonFSharpOptions.Default().AddToJsonSerializerOptions(options)
-        printfn "================\n%O" (JsonSerializer.Serialize(effs, options))
-        cmdLog <- effs :: cmdLog
+        printfn "----------------\n%O" (JsonSerializer.Serialize(effs, options))
+
+        cmdLog <- cmdLog @ effs
         StreamSink.send () clearLog
 
     send ("y2k", "/ls") telegramMessageProducer
@@ -129,8 +130,5 @@ let () =
     JsonFSharpOptions.Default().AddToJsonSerializerOptions(options)
     let actual = JsonSerializer.Serialize(cmdLog, options)
 
-    if
-        """[[{"name":"TelegramSendMessage","param":["y2k","Your subs:\n- https://g.com/"]}],[],[{"name":"Merge","param":[{"name":"Dispatch","param":{"Case":"NewSubscriptionCreated","Fields":["y2k","https://g.com/"]}},{"name":"TelegramSendMessage","param":["y2k","Subscription created"]}]}],[{"name":"TelegramSendMessage","param":["y2k","Your subs:"]}]]"""
-        <> actual
-    then
-        failwithf "%s" actual
+    if """[{"name":"TelegramSendMessage","param":["y2k","Your subs:"]},{"name":"Merge","param":[{"Case":"NewSubscriptionCreated","Fields":["y2k","https://g.com/"]},{"name":"TelegramSendMessage","param":["y2k","Subscription created"]}]},{"name":"TelegramSendMessage","param":["y2k","Your subs:\n- https://g.com/"]}]""" <> actual then
+        failwithf "\n------------\n%s\n------------" actual

@@ -3,20 +3,24 @@
 open System
 open Sodium.Frp
 
-let c1 () =
-    let s = CellSink.create 0
+let () =
+    let s1 = StreamSink.create<int> ()
+    let s2 = StreamSink.create<int> ()
 
-    async {
-        while true do
-            do! Async.Sleep(Random.Shared.Next(1000, 2000))
-            CellSink.send (Random.Shared.Next(1000)) s
-    }
-    |> Async.Start
+    let s = Stream.mergeAll (fun _ _ -> failwith "???") [ s1; s2 ]
 
-    s |> Cell.map (sprintf "<button>%i/<button>")
+    s |> Stream.listen (printfn "%O") |> ignore
 
-let c2 = Cell.lift2 (sprintf "<div>%s%s</div>") (c1 (), c1 ())
+    StreamSink.send 1 s1
+    StreamSink.send 10 s2
 
-c2 |> Cell.listen (printfn "LOG: %A")
+let () =
+    let s0 = StreamSink.create<int> ()
 
-Console.ReadKey()
+    let s =
+        [ s0 |> Stream.map (fun x -> 10 * x); s0 |> Stream.map (fun x -> 100 * x) ]
+        |> Stream.mergeAll (failwithf "??? [%O + %O]")
+
+    s |> Stream.listen (printfn "%O") |> ignore
+
+    StreamSink.send 3 s0
