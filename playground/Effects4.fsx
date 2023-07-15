@@ -42,34 +42,38 @@ module Prelude =
 
 open Prelude
 
-type World = unit
-
 type Effect =
     { name: string
       param: obj
       [<System.Text.Json.Serialization.JsonIgnore>]
-      action: World -> unit }
+      action: unit -> unit }
 
-let merge (fs: obj list) : Effect =
-    { param = box fs
-      name = "Merge"
-      action = fun _ -> FIXME "" }
+let emptyFx =
+    { param = ()
+      name = "Empty"
+      action = ignore }
 
-type Dispatch = Dispatch of param: obj
+let merge (fs: Effect list) : Effect =
+    { param = fs
+      name = "Batch"
+      action = ignore }
 
-let asEffect (data: obj) : Effect =
-    { name = "asEffect"
-      param = data
+let dispatch (e: obj) : Effect =
+    { name = "Dispatch"
+      param = e
       action = ignore }
 
 module TelegramApi =
     let sendMessage (user: string) (message: string) =
-        { param = box (user, message)
+        { param = user, message
           name = "TelegramSendMessage"
-          action = fun _ -> FIXME "" }
+          action = ignore }
 
 module HttpApi =
-    type DownloadFx = DownloadFx of url: string * callback: (byte[] -> Effect)
+    let download (url: string) (callback: (byte[] -> Effect)) =
+        { param = url
+          name = "Download"
+          action = ignore }
 
 module Id =
     type t = private Id of string
@@ -84,8 +88,7 @@ module Global =
         | NewSubscriptionCreated of user: string * url: string * id: Id.t
         | NewSubscriptionRemoved of user: string * id: Id.t
         | SubscriptionCreated of user: string * url: string * provider: ProviderId
-
-    type NewSnapshotCreated = NewSnapshotCreated of user: string * url: string
+        | NewSnapshotCreated of user: string * url: string
 
 (* Logic *)
 
@@ -100,29 +103,29 @@ module Bot =
         { newSubs = Map.empty
           subs = Map.empty }
 
-    let private updateLocal state user fsubs fupdate f =
-        fsubs state
-        |> Map.tryFind user
-        |> Option.defaultValue []
-        |> fun xs -> f xs
-        |> fun xs -> Map.add user xs (fsubs state)
-        |> fupdate state
-
     let update e (state: State) : State =
+        let updateLocal user fsubs fupdate f =
+            fsubs state
+            |> Map.tryFind user
+            |> Option.defaultValue []
+            |> fun xs -> f xs
+            |> fun xs -> Map.add user xs (fsubs state)
+            |> fupdate state
+
         match e with
         | SubscriptionCreated(user, url, pId) ->
-            updateLocal state user (fun x -> x.subs) (fun s x -> { s with subs = x }) (fun xs -> (url, pId) :: xs)
+            updateLocal user (fun x -> x.subs) (fun s x -> { s with subs = x }) (fun xs -> (url, pId) :: xs)
         | NewSubscriptionCreated(user, url, id) ->
-            updateLocal state user (fun x -> x.newSubs) (fun s x -> { s with newSubs = x }) (fun xs -> (url, id) :: xs)
+            updateLocal user (fun x -> x.newSubs) (fun s x -> { s with newSubs = x }) (fun xs -> (url, id) :: xs)
         | NewSubscriptionRemoved(user, newId) ->
             updateLocal
-                state
                 user
                 (fun x -> x.newSubs)
                 (fun s x -> { s with newSubs = x })
                 (List.filter (fun (_, id) -> id <> newId))
+        | _ -> state
 
-    let handle (user, (message: string)) (state: State) : obj =
+    let handle (user, (message: string)) (state: State) : Effect =
         match message.Split ' ' with
         | [| "/ls" |] ->
             [ state.subs
@@ -136,16 +139,14 @@ module Bot =
             |> List.concat
             |> List.fold (fun s x -> $"{s}\n{x}") "Your subs:"
             |> TelegramApi.sendMessage user
-            |> box
         | [| "/add"; url |] ->
             merge
-                [ Dispatch(NewSubscriptionCreated(user, url, Id.create [ user; url ]))
+                [ dispatch (NewSubscriptionCreated(user, url, Id.create [ user; url ]))
                   TelegramApi.sendMessage user "Subscription created" ]
         | _ -> TelegramApi.sendMessage user "Unknown command. Enter /start to show help."
 
 module SubWorker =
     open Global
-    open HttpApi
 
     type State = private { newSubs: Id.t Set }
     let empty = { newSubs = Set.empty }
@@ -167,23 +168,25 @@ module SubWorker =
 
         let e1 =
             if isRss then
-                Dispatch(SubscriptionCreated(user, url, ProviderId.Rss)) |> asEffect
+                [ dispatch (SubscriptionCreated(user, url, ProviderId.Rss)) ]
             else
-                merge []
+                []
 
-        merge [ e1; Dispatch(NewSubscriptionRemoved(user, newSubId)) ]
+        merge (e1 @ [ dispatch (NewSubscriptionRemoved(user, newSubId)) ])
 
-    let handle e : obj =
+    let handle e : Effect =
         match e with
         | NewSubscriptionCreated(user, url, id) ->
-            DownloadFx(url, (fun data -> Dispatch(DownloadCompleted(id, user, url, data)) |> asEffect))
-        | _ -> merge []
+            HttpApi.download url (fun data -> dispatch (DownloadCompleted(id, user, url, data)))
+        | _ -> emptyFx
 
 module Notifications =
     open Global
 
-    let handle (NewSnapshotCreated(user, url)) =
-        TelegramApi.sendMessage user $"New Snapshot: {url}"
+    let handle e : Effect =
+        match e with
+        | NewSnapshotCreated(user, url) -> TelegramApi.sendMessage user $"New Snapshot: {url}"
+        | _ -> emptyFx
 
 open Sodium.Frp
 open Global
@@ -193,39 +196,38 @@ let () =
     let telegramMessageProducer = StreamSink.create ()
     let globalEventProducer = StreamSink.create ()
     let subWorkerDownloadCompletedProducer = StreamSink.create ()
-    let newSnapCreated = StreamSink.create ()
 
     let botState =
         [ globalEventProducer |> Stream.map Bot.update ]
-        |> Stream.mergeAll (failwithf "%O")
+        |> Stream.mergeAll (failwithf "(Bot) Can't merge: %O %O")
         |> Stream.accum Bot.empty (<|)
 
     let subState =
         [ globalEventProducer |> Stream.map SubWorker.update ]
-        |> Stream.mergeAll (failwithf "%O")
+        |> Stream.mergeAll (failwithf "(Sub) Can't merge: %O %O")
         |> Stream.accum SubWorker.empty (<|)
 
     let effects =
         [ telegramMessageProducer
           |> Stream.snapshot botState Bot.handle
-          |> Stream.map (fun x -> Some x)
+          |> Stream.map (fun x -> Some [ x ])
 
-          newSnapCreated
+          globalEventProducer
           |> Stream.map Notifications.handle
-          |> Stream.map (fun x -> Some x)
+          |> Stream.map (fun x -> Some [ x ])
 
           globalEventProducer
           |> Stream.snapshot botState (fun e _ -> SubWorker.handle e)
-          |> Stream.map (fun x -> Some x)
+          |> Stream.map (fun x -> Some [ x ])
           subWorkerDownloadCompletedProducer
           |> Stream.snapshot subState SubWorker.downloadCompleted
-          |> Stream.map (fun x -> Some x)
+          |> Stream.map (fun x -> Some [ x ])
 
           clearLog |> Stream.map (fun _ -> None) ]
-        |> Stream.mergeAll (failwithf "%O")
-        |> Stream.accum [] (fun e effs ->
-            match e with
-            | Some e -> effs @ [ e ]
+        |> Stream.mergeAll (Option.map2 (@))
+        |> Stream.accum [] (fun newEffs _ ->
+            match newEffs with
+            | Some e -> e
             | None -> [])
 
     (*  *)
@@ -233,29 +235,34 @@ let () =
     let mutable cmdLog = []
 
     let send msg target =
+        let mutable log = []
         StreamSink.send msg target
 
-        let rec exec (effs: obj list) =
+        let rec exec (effs: Effect list) =
             effs
+            |> List.collect (fun e ->
+                match e.name with
+                | "Batch" -> let effects: Effect list = unbox e.param in effects
+                | _ -> [ e ])
             |> List.iter (fun e ->
-                match e with
-                | :? Dispatch as Dispatch msg ->
-                    match msg with
-                    | :? GlobalEvent as x -> Transaction.post (fun _ -> StreamSink.send x globalEventProducer)
+                match e.name with
+                | "Dispatch" ->
+                    match e.param with
+                    | :? GlobalEvent as x ->
+                        Transaction.post (fun _ -> StreamSink.send x globalEventProducer)
+                        let fs = Cell.sample effects
+                        log <- log @ fs
+                        exec fs
                     | m -> failwithf "Unknown message %O" m
-                | :? Effect as e ->
-                    match e.name with
-                    | "Merge" ->
-                        let effects: obj list = unbox e.param
-                        exec effects
-                    | "TelegramSendMessage" -> ()
-                    | "asEffect" -> exec [ e.param ]
-                    | e -> failwithf "Unknown effect %O" e
+                | "TelegramSendMessage" -> ()
+                | "Download" -> ()
+                | "Empty" -> ()
                 | e -> failwithf "Unknown effect %O" e)
 
-        exec (Cell.sample effects)
-        cmdLog <- cmdLog @ Cell.sample effects
-        StreamSink.send () clearLog
+        let fs = Cell.sample effects
+        log <- log @ fs
+        exec fs
+        cmdLog <- cmdLog @ (log |> List.filter (fun e -> e.name <> "Empty"))
 
     (*  *)
 
@@ -269,10 +276,10 @@ let () =
 
     send ("y2k", "/ls") telegramMessageProducer
 
-    send (NewSnapshotCreated("y2k", "https://g.com/1")) newSnapCreated
+    send (NewSnapshotCreated("y2k", "https://g.com/1")) globalEventProducer
 
     (*  *)
 
     assertEffect
         cmdLog
-        """WwogIHsKICAgICJuYW1lIjogIlRlbGVncmFtU2VuZE1lc3NhZ2UiLAogICAgInBhcmFtIjogWwogICAgICAieTJrIiwKICAgICAgIllvdXIgc3ViczoiCiAgICBdCiAgfSwKICB7CiAgICAibmFtZSI6ICJNZXJnZSIsCiAgICAicGFyYW0iOiBbCiAgICAgIHsKICAgICAgICAiQ2FzZSI6ICJOZXdTdWJzY3JpcHRpb25DcmVhdGVkIiwKICAgICAgICAiRmllbGRzIjogWwogICAgICAgICAgInkyayIsCiAgICAgICAgICAiaHR0cHM6Ly9nLmNvbS8iLAogICAgICAgICAgInkyazpodHRwczovL2cuY29tLyIKICAgICAgICBdCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAibmFtZSI6ICJUZWxlZ3JhbVNlbmRNZXNzYWdlIiwKICAgICAgICAicGFyYW0iOiBbCiAgICAgICAgICAieTJrIiwKICAgICAgICAgICJTdWJzY3JpcHRpb24gY3JlYXRlZCIKICAgICAgICBdCiAgICAgIH0KICAgIF0KICB9LAogIHsKICAgICJDYXNlIjogIkRvd25sb2FkRngiLAogICAgIkZpZWxkcyI6IFsKICAgICAgImh0dHBzOi8vZy5jb20vIiwKICAgICAge30KICAgIF0KICB9LAogIHsKICAgICJuYW1lIjogIlRlbGVncmFtU2VuZE1lc3NhZ2UiLAogICAgInBhcmFtIjogWwogICAgICAieTJrIiwKICAgICAgIllvdXIgc3Viczpcbi1bSW4gUHJvZ3Jlc3NdIGh0dHBzOi8vZy5jb20vIgogICAgXQogIH0sCiAgewogICAgIm5hbWUiOiAiTWVyZ2UiLAogICAgInBhcmFtIjogWwogICAgICB7CiAgICAgICAgIm5hbWUiOiAiYXNFZmZlY3QiLAogICAgICAgICJwYXJhbSI6IHsKICAgICAgICAgICJDYXNlIjogIlN1YnNjcmlwdGlvbkNyZWF0ZWQiLAogICAgICAgICAgIkZpZWxkcyI6IFsKICAgICAgICAgICAgInkyayIsCiAgICAgICAgICAgICJodHRwczovL2cuY29tLyIsCiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAiQ2FzZSI6ICJSc3MiCiAgICAgICAgICAgIH0KICAgICAgICAgIF0KICAgICAgICB9CiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiQ2FzZSI6ICJOZXdTdWJzY3JpcHRpb25SZW1vdmVkIiwKICAgICAgICAiRmllbGRzIjogWwogICAgICAgICAgInkyayIsCiAgICAgICAgICAieTJrOmh0dHBzOi8vZy5jb20vIgogICAgICAgIF0KICAgICAgfQogICAgXQogIH0sCiAgewogICAgIm5hbWUiOiAiTWVyZ2UiLAogICAgInBhcmFtIjogW10KICB9LAogIHsKICAgICJuYW1lIjogIk1lcmdlIiwKICAgICJwYXJhbSI6IFtdCiAgfSwKICB7CiAgICAibmFtZSI6ICJUZWxlZ3JhbVNlbmRNZXNzYWdlIiwKICAgICJwYXJhbSI6IFsKICAgICAgInkyayIsCiAgICAgICJZb3VyIHN1YnM6XG4tW1Jzc10gaHR0cHM6Ly9nLmNvbS8iCiAgICBdCiAgfSwKICB7CiAgICAibmFtZSI6ICJUZWxlZ3JhbVNlbmRNZXNzYWdlIiwKICAgICJwYXJhbSI6IFsKICAgICAgInkyayIsCiAgICAgICJOZXcgU25hcHNob3Q6IGh0dHBzOi8vZy5jb20vMSIKICAgIF0KICB9Cl0="""
+        """WwogIHsKICAgICJuYW1lIjogIlRlbGVncmFtU2VuZE1lc3NhZ2UiLAogICAgInBhcmFtIjogWwogICAgICAieTJrIiwKICAgICAgIllvdXIgc3ViczoiCiAgICBdCiAgfSwKICB7CiAgICAibmFtZSI6ICJCYXRjaCIsCiAgICAicGFyYW0iOiBbCiAgICAgIHsKICAgICAgICAibmFtZSI6ICJEaXNwYXRjaCIsCiAgICAgICAgInBhcmFtIjogewogICAgICAgICAgIkNhc2UiOiAiTmV3U3Vic2NyaXB0aW9uQ3JlYXRlZCIsCiAgICAgICAgICAiRmllbGRzIjogWwogICAgICAgICAgICAieTJrIiwKICAgICAgICAgICAgImh0dHBzOi8vZy5jb20vIiwKICAgICAgICAgICAgInkyazpodHRwczovL2cuY29tLyIKICAgICAgICAgIF0KICAgICAgICB9CiAgICAgIH0sCiAgICAgIHsKICAgICAgICAibmFtZSI6ICJUZWxlZ3JhbVNlbmRNZXNzYWdlIiwKICAgICAgICAicGFyYW0iOiBbCiAgICAgICAgICAieTJrIiwKICAgICAgICAgICJTdWJzY3JpcHRpb24gY3JlYXRlZCIKICAgICAgICBdCiAgICAgIH0KICAgIF0KICB9LAogIHsKICAgICJuYW1lIjogIkRvd25sb2FkIiwKICAgICJwYXJhbSI6ICJodHRwczovL2cuY29tLyIKICB9LAogIHsKICAgICJuYW1lIjogIlRlbGVncmFtU2VuZE1lc3NhZ2UiLAogICAgInBhcmFtIjogWwogICAgICAieTJrIiwKICAgICAgIllvdXIgc3Viczpcbi1bSW4gUHJvZ3Jlc3NdIGh0dHBzOi8vZy5jb20vIgogICAgXQogIH0sCiAgewogICAgIm5hbWUiOiAiQmF0Y2giLAogICAgInBhcmFtIjogWwogICAgICB7CiAgICAgICAgIm5hbWUiOiAiRGlzcGF0Y2giLAogICAgICAgICJwYXJhbSI6IHsKICAgICAgICAgICJDYXNlIjogIlN1YnNjcmlwdGlvbkNyZWF0ZWQiLAogICAgICAgICAgIkZpZWxkcyI6IFsKICAgICAgICAgICAgInkyayIsCiAgICAgICAgICAgICJodHRwczovL2cuY29tLyIsCiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAiQ2FzZSI6ICJSc3MiCiAgICAgICAgICAgIH0KICAgICAgICAgIF0KICAgICAgICB9CiAgICAgIH0sCiAgICAgIHsKICAgICAgICAibmFtZSI6ICJEaXNwYXRjaCIsCiAgICAgICAgInBhcmFtIjogewogICAgICAgICAgIkNhc2UiOiAiTmV3U3Vic2NyaXB0aW9uUmVtb3ZlZCIsCiAgICAgICAgICAiRmllbGRzIjogWwogICAgICAgICAgICAieTJrIiwKICAgICAgICAgICAgInkyazpodHRwczovL2cuY29tLyIKICAgICAgICAgIF0KICAgICAgICB9CiAgICAgIH0KICAgIF0KICB9LAogIHsKICAgICJuYW1lIjogIlRlbGVncmFtU2VuZE1lc3NhZ2UiLAogICAgInBhcmFtIjogWwogICAgICAieTJrIiwKICAgICAgIllvdXIgc3Viczpcbi1bUnNzXSBodHRwczovL2cuY29tLyIKICAgIF0KICB9LAogIHsKICAgICJuYW1lIjogIlRlbGVncmFtU2VuZE1lc3NhZ2UiLAogICAgInBhcmFtIjogWwogICAgICAieTJrIiwKICAgICAgIk5ldyBTbmFwc2hvdDogaHR0cHM6Ly9nLmNvbS8xIgogICAgXQogIH0KXQ=="""
