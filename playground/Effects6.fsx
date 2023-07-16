@@ -1,6 +1,7 @@
 #r "nuget: SodiumFRP.FSharp, 5.0.6"
 #r "nuget: FSharp.SystemTextJson, 1.1.23"
 #r "nuget: DiffPlex, 1.7.1"
+#r "nuget: BrotliSharpLib, 0.3.3"
 
 module Prelude =
     open System
@@ -27,53 +28,69 @@ module Prelude =
 
             diffResult.Lines |> Seq.map printLine |> Seq.reduce (sprintf "%O\n%O")
 
-    let assertEffect cmdLog expectedEnc =
+    let assertEffect (cmdLog: _ list list) expectedEnc =
         let expected =
-            expectedEnc |> Convert.FromBase64String |> Text.Encoding.UTF8.GetString
+            expectedEnc
+            |> Convert.FromBase64String
+            |> fun bytes ->
+                if bytes.Length = 0 then
+                    bytes
+                else
+                    BrotliSharpLib.Brotli.DecompressBuffer(bytes, 0, bytes.Length)
+            |> Text.Encoding.UTF8.GetString
 
         let options = JsonSerializerOptions(WriteIndented = true)
-        JsonFSharpOptions.Default().AddToJsonSerializerOptions(options)
-        let actual = JsonSerializer.Serialize(cmdLog, options)
+        JsonFSharpOptions.FSharpLuLike().AddToJsonSerializerOptions(options)
+        let actual = JsonSerializer.Serialize(cmdLog |> List.map (List.map box), options)
 
         if expected <> actual then
             let diff = Differ.diff expected actual
-            let encoded = actual |> Text.Encoding.UTF8.GetBytes |> Convert.ToBase64String
+
+            let encoded =
+                actual
+                |> Text.Encoding.UTF8.GetBytes
+                |> fun bytes -> BrotliSharpLib.Brotli.CompressBuffer(bytes, 0, bytes.Length)
+                |> Convert.ToBase64String
+
             failwithf "\n------------\n%s\n------------\n%s\n------------" diff encoded
 
 open Prelude
 
-type Effect =
-    { name: string
-      param: obj
-      [<System.Text.Json.Serialization.JsonIgnore>]
-      action: unit -> unit }
+module Effects =
+    type Effect =
+        interface
+        end
 
-let emptyFx =
-    { param = ()
-      name = "Empty"
-      action = ignore }
+    type Effects = Effect list
 
-let batch (fs: Effect list) : Effect =
-    { param = fs
-      name = "Batch"
-      action = ignore }
+    let emptyFx: Effects = []
 
-let dispatch (e: obj) : Effect =
-    { name = "Dispatch"
-      param = e
-      action = ignore }
+    let batch (fs: Effects list) : Effects = List.concat fs
+
+open Effects
+
+type DispatchEffect =
+    | DispatchEffect of event: obj
+
+    interface Effect
+
+let dispatch (e: obj) : Effects = [ DispatchEffect e ]
 
 module TelegramApi =
-    let sendMessage (user: string) (message: string) : Effect =
-        { param = user, message
-          name = "TelegramSendMessage"
-          action = ignore }
+    type TelegramMesage =
+        | TelegramMesage of user: string * message: string
+
+        interface Effect
+
+    let sendMessage (user: string) (message: string) : Effects = [ TelegramMesage(user, message) ]
 
 module HttpApi =
-    let download (url: string) (callback: byte[] -> Effect) : Effect =
-        { param = url
-          name = "Download"
-          action = ignore }
+    type DownloadEffect =
+        | DownloadEffect of url: string * callback: (byte[] -> Effects)
+
+        interface Effect
+
+    let download (url: string) (callback: byte[] -> Effects) : Effects = [ DownloadEffect(url, callback) ]
 
 module Id =
     type t = private Id of string
@@ -125,7 +142,7 @@ module Bot =
                 (List.filter (fun (_, id) -> id <> newId))
         | _ -> state
 
-    let handle (user, (message: string)) (state: State) : Effect =
+    let handle (user, (message: string)) (state: State) : Effects =
         match message.Split ' ' with
         | [| "/ls" |] ->
             [ state.subs
@@ -163,7 +180,7 @@ module SubWorker =
 
     type DownloadCompleted = DownloadCompleted of id: Id.t * user: string * url: string * data: byte array
 
-    let downloadCompleted (DownloadCompleted(newSubId, user, url, (data: byte array))) (_: State) : Effect =
+    let downloadCompleted (DownloadCompleted(newSubId, user, url, (data: byte array))) (_: State) : Effects =
         let isRss: bool = true
 
         let e1 =
@@ -174,7 +191,7 @@ module SubWorker =
 
         batch (e1 @ [ dispatch (NewSubscriptionRemoved(user, newSubId)) ])
 
-    let handle e : Effect =
+    let handle e : Effects =
         match e with
         | NewSubscriptionCreated(user, url, id) ->
             HttpApi.download url (fun data -> dispatch (DownloadCompleted(id, user, url, data)))
@@ -183,7 +200,7 @@ module SubWorker =
 module Notifications =
     open Global
 
-    let handle e : Effect =
+    let handle e : Effects =
         match e with
         | NewSnapshotCreated(user, url) -> TelegramApi.sendMessage user $"New Snapshot: {url}"
         | _ -> emptyFx
@@ -207,20 +224,13 @@ let () =
         |> Stream.accum SubWorker.empty (<|)
 
     let effects =
-        [ telegramMessageProducer
-          |> Stream.snapshot botState Bot.handle
-          |> Stream.map List.singleton
+        [ telegramMessageProducer |> Stream.snapshot botState Bot.handle
 
-          globalEventProducer
-          |> Stream.map Notifications.handle
-          |> Stream.map List.singleton
+          globalEventProducer |> Stream.map Notifications.handle
 
-          globalEventProducer
-          |> Stream.snapshot botState (fun e _ -> SubWorker.handle e)
-          |> Stream.map List.singleton
+          globalEventProducer |> Stream.snapshot botState (fun e _ -> SubWorker.handle e)
           subWorkerDownloadCompletedProducer
-          |> Stream.snapshot subState SubWorker.downloadCompleted
-          |> Stream.map List.singleton ]
+          |> Stream.snapshot subState SubWorker.downloadCompleted ]
         |> Stream.mergeAll (@)
         |> Stream.accum [] (fun newEffs _ -> newEffs)
 
@@ -234,29 +244,24 @@ let () =
 
         let rec exec (effs: Effect list) =
             effs
-            |> List.collect (fun e ->
-                match e.name with
-                | "Batch" -> let effects: Effect list = unbox e.param in effects
-                | _ -> [ e ])
             |> List.iter (fun e ->
-                match e.name with
-                | "Dispatch" ->
-                    match e.param with
+                match e with
+                | :? DispatchEffect as (DispatchEffect e) ->
+                    match e with
                     | :? GlobalEvent as x ->
                         Transaction.post (fun _ -> StreamSink.send x globalEventProducer)
                         let fs = Cell.sample effects
                         log <- log @ fs
                         exec fs
                     | m -> failwithf "Unknown message %O" m
-                | "TelegramSendMessage" -> ()
-                | "Download" -> ()
-                | "Empty" -> ()
+                | :? TelegramApi.TelegramMesage -> ()
+                | :? HttpApi.DownloadEffect -> ()
                 | e -> failwithf "Unknown effect %O" e)
 
         let fs = Cell.sample effects
         log <- log @ fs
         exec fs
-        cmdLog <- cmdLog @ (log |> List.filter (fun e -> e.name <> "Empty"))
+        cmdLog <- cmdLog @ [ log ]
 
     (*  *)
 
@@ -276,4 +281,4 @@ let () =
 
     assertEffect
         cmdLog
-        """WwogIHsKICAgICJuYW1lIjogIlRlbGVncmFtU2VuZE1lc3NhZ2UiLAogICAgInBhcmFtIjogWwogICAgICAieTJrIiwKICAgICAgIllvdXIgc3ViczoiCiAgICBdCiAgfSwKICB7CiAgICAibmFtZSI6ICJCYXRjaCIsCiAgICAicGFyYW0iOiBbCiAgICAgIHsKICAgICAgICAibmFtZSI6ICJEaXNwYXRjaCIsCiAgICAgICAgInBhcmFtIjogewogICAgICAgICAgIkNhc2UiOiAiTmV3U3Vic2NyaXB0aW9uQ3JlYXRlZCIsCiAgICAgICAgICAiRmllbGRzIjogWwogICAgICAgICAgICAieTJrIiwKICAgICAgICAgICAgImh0dHBzOi8vZy5jb20vIiwKICAgICAgICAgICAgInkyazpodHRwczovL2cuY29tLyIKICAgICAgICAgIF0KICAgICAgICB9CiAgICAgIH0sCiAgICAgIHsKICAgICAgICAibmFtZSI6ICJUZWxlZ3JhbVNlbmRNZXNzYWdlIiwKICAgICAgICAicGFyYW0iOiBbCiAgICAgICAgICAieTJrIiwKICAgICAgICAgICJTdWJzY3JpcHRpb24gY3JlYXRlZCIKICAgICAgICBdCiAgICAgIH0KICAgIF0KICB9LAogIHsKICAgICJuYW1lIjogIkRvd25sb2FkIiwKICAgICJwYXJhbSI6ICJodHRwczovL2cuY29tLyIKICB9LAogIHsKICAgICJuYW1lIjogIlRlbGVncmFtU2VuZE1lc3NhZ2UiLAogICAgInBhcmFtIjogWwogICAgICAieTJrIiwKICAgICAgIllvdXIgc3Viczpcbi1bSW4gUHJvZ3Jlc3NdIGh0dHBzOi8vZy5jb20vIgogICAgXQogIH0sCiAgewogICAgIm5hbWUiOiAiQmF0Y2giLAogICAgInBhcmFtIjogWwogICAgICB7CiAgICAgICAgIm5hbWUiOiAiRGlzcGF0Y2giLAogICAgICAgICJwYXJhbSI6IHsKICAgICAgICAgICJDYXNlIjogIlN1YnNjcmlwdGlvbkNyZWF0ZWQiLAogICAgICAgICAgIkZpZWxkcyI6IFsKICAgICAgICAgICAgInkyayIsCiAgICAgICAgICAgICJodHRwczovL2cuY29tLyIsCiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAiQ2FzZSI6ICJSc3MiCiAgICAgICAgICAgIH0KICAgICAgICAgIF0KICAgICAgICB9CiAgICAgIH0sCiAgICAgIHsKICAgICAgICAibmFtZSI6ICJEaXNwYXRjaCIsCiAgICAgICAgInBhcmFtIjogewogICAgICAgICAgIkNhc2UiOiAiTmV3U3Vic2NyaXB0aW9uUmVtb3ZlZCIsCiAgICAgICAgICAiRmllbGRzIjogWwogICAgICAgICAgICAieTJrIiwKICAgICAgICAgICAgInkyazpodHRwczovL2cuY29tLyIKICAgICAgICAgIF0KICAgICAgICB9CiAgICAgIH0KICAgIF0KICB9LAogIHsKICAgICJuYW1lIjogIlRlbGVncmFtU2VuZE1lc3NhZ2UiLAogICAgInBhcmFtIjogWwogICAgICAieTJrIiwKICAgICAgIllvdXIgc3Viczpcbi1bUnNzXSBodHRwczovL2cuY29tLyIKICAgIF0KICB9LAogIHsKICAgICJuYW1lIjogIlRlbGVncmFtU2VuZE1lc3NhZ2UiLAogICAgInBhcmFtIjogWwogICAgICAieTJrIiwKICAgICAgIk5ldyBTbmFwc2hvdDogaHR0cHM6Ly9nLmNvbS8xIgogICAgXQogIH0KXQ=="""
+        """G4QEACwOzPN9QpNmqdeFOO7km3IrZg8ZcqRf6hG1VueUXWrkNODPEohbgUWnb7XI/P3N+/bBok26lcfmKAs7z8eY4IFZIBE+m9dma/rHFF1+Fjj4FQMkrKe6PfLZqs+8rWEAyH+EiubI75x3cWIAFBxNfUD6cxPoeZCQ4oddv+eajFxF1hSy64O8IdVrYUj21yeHRCpUlbThcQTkWVTrNc9PiYX5qCSDu2vADDjLU1ixJW/vKFQPcCxakMv90iuxmVSMPyR+F/88Ac1qwlLPnMULLfQAItnXR7Biq5bnIhQs+faLojSDrZEquQU="""
