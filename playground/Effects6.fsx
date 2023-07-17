@@ -225,9 +225,7 @@ let () =
 
     let effects =
         [ telegramMessageProducer |> Stream.snapshot botState Bot.handle
-
           globalEventProducer |> Stream.map Notifications.handle
-
           globalEventProducer |> Stream.snapshot botState (fun e _ -> SubWorker.handle e)
           subWorkerDownloadCompletedProducer
           |> Stream.snapshot subState SubWorker.downloadCompleted ]
