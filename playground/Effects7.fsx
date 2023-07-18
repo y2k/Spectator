@@ -28,7 +28,7 @@ module Prelude =
 
             diffResult.Lines |> Seq.map printLine |> Seq.reduce (sprintf "%O\n%O")
 
-    let assertEffect (cmdLog: _ list list) expectedEnc =
+    let assertEffect (cmdLog: _ list) expectedEnc =
         let expected =
             expectedEnc
             |> Convert.FromBase64String
@@ -41,7 +41,7 @@ module Prelude =
 
         let options = JsonSerializerOptions(WriteIndented = true)
         JsonFSharpOptions.FSharpLuLike().AddToJsonSerializerOptions(options)
-        let actual = JsonSerializer.Serialize(cmdLog |> List.map (List.map box), options)
+        let actual = JsonSerializer.Serialize(cmdLog |> List.map id, options)
 
         if expected <> actual then
             let diff = Differ.diff expected actual
@@ -56,41 +56,29 @@ module Prelude =
 
 open Prelude
 
-module Effects =
-    type Effect =
-        interface
-        end
+module Effect =
+    type World = private { world: obj }
+    type Effect = World -> unit
 
-    type Effects = Effect list
+    let unsafeRun f : unit = f { world = null }
 
-    let emptyFx: Effects = []
+    let inline createEmptyEffect name a : Effect =
+        raise (exn $"Effect '%s{name}' not implemented {a}")
 
-    let batch (fs: Effects list) : Effects = List.concat fs
+    let empty: Effect = fun _ -> ()
 
-open Effects
+    let batch (fs: Effect list) : Effect =
+        fun world -> fs |> List.iter (fun f -> f world)
 
-type DispatchEffect =
-    | DispatchEffect of event: obj
-
-    interface Effect
-
-let dispatch (e: obj) : Effects = [ DispatchEffect e ]
+let mutable dispatch = Effect.createEmptyEffect "dispatch"
 
 module TelegramApi =
-    type TelegramMesage =
-        | TelegramMesage of user: string * message: string
-
-        interface Effect
-
-    let sendMessage (user: string) (message: string) : Effects = [ TelegramMesage(user, message) ]
+    let mutable sendMessage =
+        fun (user: string) (message: string) -> Effect.createEmptyEffect "SendTelegramMessage" (user, message)
 
 module HttpApi =
-    type DownloadEffect =
-        | DownloadEffect of url: string * callback: (byte[] -> obj)
-
-        interface Effect
-
-    let download (url: string) (callback: byte[] -> obj) : Effects = [ DownloadEffect(url, callback) ]
+    let mutable download =
+        fun (url: string) (_callback: byte[] -> obj) -> Effect.createEmptyEffect "Download" url
 
 module Id =
     type t = private Id of string
@@ -142,7 +130,7 @@ module Bot =
                 (List.filter (fun (_, id) -> id <> newId))
         | _ -> state
 
-    let handle (user, (message: string)) (state: State) : Effects =
+    let handle (user, (message: string)) (state: State) =
         match message.Split ' ' with
         | [| "/ls" |] ->
             [ state.subs
@@ -157,7 +145,7 @@ module Bot =
             |> List.fold (fun s x -> $"{s}\n{x}") "Your subs:"
             |> TelegramApi.sendMessage user
         | [| "/add"; url |] ->
-            batch
+            Effect.batch
                 [ dispatch (NewSubscriptionCreated(user, url, Id.create [ user; url ]))
                   TelegramApi.sendMessage user "Subscription created" ]
         | _ -> TelegramApi.sendMessage user "Unknown command. Enter /start to show help."
@@ -180,33 +168,32 @@ module SubWorker =
 
     type DownloadCompleted = DownloadCompleted of id: Id.t * user: string * url: string * data: byte array
 
-    let downloadCompleted (DownloadCompleted(newSubId, user, url, (data: byte array))) (_: State) : Effects =
+    let downloadCompleted (DownloadCompleted(newSubId, user, url, (data: byte array))) (_: State) =
         let isRss: bool = true
 
         let e1 =
             if isRss then
-                [ dispatch (SubscriptionCreated(user, url, ProviderId.Rss)) ]
+                [ dispatch (SubscriptionCreated(user, url, Rss)) ]
             else
                 []
 
-        batch (e1 @ [ dispatch (NewSubscriptionRemoved(user, newSubId)) ])
+        Effect.batch (e1 @ [ dispatch (NewSubscriptionRemoved(user, newSubId)) ])
 
-    let handle e : Effects =
+    let handle e =
         match e with
         | NewSubscriptionCreated(user, url, id) ->
             HttpApi.download url (fun data -> DownloadCompleted(id, user, url, data))
-        | _ -> emptyFx
+        | _ -> Effect.empty
 
 module Notifications =
     open Global
 
-    let handle e : Effects =
+    let handle e =
         match e with
         | NewSnapshotCreated(user, url) -> TelegramApi.sendMessage user $"New Snapshot: {url}"
-        | _ -> emptyFx
+        | _ -> Effect.empty
 
 open Sodium.Frp
-open Global
 
 let () =
     let telegramMessageProducer = StreamSink.create ()
@@ -229,37 +216,40 @@ let () =
           globalEventProducer |> Stream.snapshot botState (fun e _ -> SubWorker.handle e)
           subWorkerDownloadCompletedProducer
           |> Stream.snapshot subState SubWorker.downloadCompleted ]
-        |> Stream.mergeAll (@)
-        |> Stream.accum [] (fun newEffs _ -> newEffs)
+        |> Stream.mergeAll (fun e1 e2 -> Effect.batch [ e1; e2 ])
+        |> Stream.accum Effect.empty (fun newEffs _ -> newEffs)
 
     (*  *)
 
     let mutable cmdLog = []
 
     let send msg target =
-        let mutable log = []
+        let mutable localLog: obj list = []
+
+        TelegramApi.sendMessage <-
+            fun user message _ ->
+                localLog <-
+                    localLog
+                    @ [ {| effect = "SendTelegramMessage"
+                           payload = {| user = user; message = message |} |} ]
+
+        HttpApi.download <-
+            fun url _ _ ->
+                localLog <-
+                    localLog
+                    @ [ {| effect = "Download"
+                           payload = {| url = url |} |} ]
+
+        dispatch <-
+            fun x _ ->
+                localLog <- localLog @ [ {| effect = "Dispatch"; payload = x |} ]
+                StreamSink.send x globalEventProducer
+                Effect.unsafeRun (Cell.sample effects)
+
         StreamSink.send msg target
+        Effect.unsafeRun (Cell.sample effects)
 
-        let rec exec (effs: Effect list) =
-            effs
-            |> List.iter (fun e ->
-                match e with
-                | :? DispatchEffect as (DispatchEffect e) ->
-                    match e with
-                    | :? GlobalEvent as x ->
-                        Transaction.post (fun _ -> StreamSink.send x globalEventProducer)
-                        let fs = Cell.sample effects
-                        log <- log @ fs
-                        exec fs
-                    | m -> failwithf "Unknown message %O" m
-                | :? TelegramApi.TelegramMesage -> ()
-                | :? HttpApi.DownloadEffect -> ()
-                | e -> failwithf "Unknown effect %O" e)
-
-        let fs = Cell.sample effects
-        log <- log @ fs
-        exec fs
-        cmdLog <- cmdLog @ [ log ]
+        cmdLog <- cmdLog @ [ localLog ]
 
     (*  *)
 
@@ -273,10 +263,8 @@ let () =
 
     send ("y2k", "/ls") telegramMessageProducer
 
-    send (NewSnapshotCreated("y2k", "https://g.com/1")) globalEventProducer
+    send (Global.NewSnapshotCreated("y2k", "https://g.com/1")) globalEventProducer
 
     (*  *)
 
-    assertEffect
-        cmdLog
-        """G4QEACwOzPN9QpNmqdeFOO7km3IrZg8ZcqRf6hG1VueUXWrkNODPEohbgUWnb7XI/P3N+/bBok26lcfmKAs7z8eY4IFZIBE+m9dma/rHFF1+Fjj4FQMkrKe6PfLZqs+8rWEAyH+EiubI75x3cWIAFBxNfUD6cxPoeZCQ4oddv+eajFxF1hSy64O8IdVrYUj21yeHRCpUlbThcQTkWVTrNc9PiYX5qCSDu2vADDjLU1ixJW/vKFQPcCxakMv90iuxmVSMPyR+F/88Ac1qwlLPnMULLfQAItnXR7Biq5bnIhQs+faLojSDrZEquQU="""
+    assertEffect cmdLog """"""
