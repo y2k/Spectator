@@ -3,6 +3,7 @@
 #r "nuget: DiffPlex, 1.7.1"
 #r "nuget: BrotliSharpLib, 0.3.3"
 
+[<AutoOpen>]
 module Prelude =
     open System
     open System.Text.Json
@@ -54,8 +55,6 @@ module Prelude =
 
             failwithf "\n------------\n%s\n------------\n%s\n------------" diff encoded
 
-open Prelude
-
 module Effect =
     type World = private { world: obj }
     type Effect = World -> unit
@@ -69,8 +68,6 @@ module Effect =
 
     let batch (fs: Effect list) : Effect =
         fun world -> fs |> List.iter (fun f -> f world)
-
-let mutable dispatch = Effect.createEmptyEffect "dispatch"
 
 module TelegramApi =
     let mutable sendMessage =
@@ -94,6 +91,8 @@ module Global =
         | NewSubscriptionRemoved of user: string * id: Id.t
         | SubscriptionCreated of user: string * url: string * provider: ProviderId
         | NewSnapshotCreated of user: string * url: string
+
+    let mutable dispatch = Effect.createEmptyEffect "dispatch"
 
 (* Logic *)
 
@@ -240,10 +239,10 @@ let () =
                     @ [ {| effect = "Download"
                            payload = {| url = url |} |} ]
 
-        dispatch <-
-            fun x _ ->
-                localLog <- localLog @ [ {| effect = "Dispatch"; payload = x |} ]
-                StreamSink.send x globalEventProducer
+        Global.dispatch <-
+            fun e _ ->
+                localLog <- localLog @ [ {| effect = "Dispatch"; payload = e |} ]
+                StreamSink.send e globalEventProducer
                 Effect.unsafeRun (Cell.sample effects)
 
         StreamSink.send msg target
@@ -267,4 +266,6 @@ let () =
 
     (*  *)
 
-    assertEffect cmdLog """"""
+    assertEffect
+        cmdLog
+        """G9IFAIzEOBbxRhPCQVDInMpe3hdlNfE2BwzJoqAzcE7A4XzEG0MVZmDbrOpZoCXgm93U7rMFHxJYuV6vv2WAuoEB38kEgfQ16vWU68x38+VlvOdTlqb6afzGrWhrC3RvbMFJTq/3ydWz00HI0RLr7W61yf/2ru5DZPjrawb1gfFSzp/9o4gxkbB2QFdgXXGy9i2q/DKc9evT73EMSmZOrPPsKgXkv6bv6VY8pFSG5P39stOI+zxn/JjWiBWZ1hGiO0utZXoHo5scXoN9pg9TC5LinOYf1bpeJazx04YYIQzm+KmxUJn8VUse4wPFAhHQPoxPP5/UhHEfTsW45fo="""
