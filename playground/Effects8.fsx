@@ -69,9 +69,13 @@ module Effect =
     let batch (fs: Effect list) : Effect =
         fun world -> fs |> List.iter (fun f -> f world)
 
+open Sodium.Frp
+
 module TelegramApi =
     let mutable sendMessage =
         fun (user: string) (message: string) -> Effect.createEmptyEffect "SendTelegramMessage" (user, message)
+
+    let telegramMessageProducer = StreamSink.create ()
 
 module HttpApi =
     let mutable download =
@@ -93,21 +97,18 @@ module Global =
         | NewSnapshotCreated of user: string * url: string
 
     let mutable dispatch = Effect.createEmptyEffect "dispatch"
+    let globalEventProducer = StreamSink.create ()
 
 (* Logic *)
 
 module Bot =
     open Global
 
-    type State =
+    type private State =
         { newSubs: Map<string, (string * Id.t) list>
           subs: Map<string, (string * ProviderId) list> }
 
-    let empty =
-        { newSubs = Map.empty
-          subs = Map.empty }
-
-    let update e (state: State) : State =
+    let private update e (state: State) : State =
         let updateLocal user fsubs fupdate f =
             fsubs state
             |> Map.tryFind user
@@ -129,7 +130,15 @@ module Bot =
                 (List.filter (fun (_, id) -> id <> newId))
         | _ -> state
 
-    let handle (user, (message: string)) (state: State) =
+    let private state =
+        [ globalEventProducer |> Stream.map update ]
+        |> Stream.mergeAll (failwithf "(Bot) Can't merge: %O %O")
+        |> Stream.accum
+            { newSubs = Map.empty
+              subs = Map.empty }
+            (<|)
+
+    let private onNewMessage (user, (message: string)) (state: State) =
         match message.Split ' ' with
         | [| "/ls" |] ->
             [ state.subs
@@ -149,75 +158,64 @@ module Bot =
                   TelegramApi.sendMessage user "Subscription created" ]
         | _ -> TelegramApi.sendMessage user "Unknown command. Enter /start to show help."
 
+    let effects =
+        TelegramApi.telegramMessageProducer |> Stream.snapshot state onNewMessage
+
 module SubWorker =
     open Global
 
-    type State = private { newSubs: Id.t Set }
-    let empty = { newSubs = Set.empty }
+    type private State = { newSubs: Id.t Set }
 
-    let update e (s: State) =
-        match e with
-        | NewSubscriptionCreated(_, _, id) ->
-            { s with
-                newSubs = s.newSubs |> Set.add id }
-        | NewSubscriptionRemoved(_, id) ->
-            { s with
-                newSubs = s.newSubs |> Set.remove id }
-        | _ -> s
+    let private state =
+        [ globalEventProducer
+          |> Stream.map (fun e s ->
+              match e with
+              | NewSubscriptionCreated(_, _, id) ->
+                  { s with
+                      newSubs = s.newSubs |> Set.add id }
+              | NewSubscriptionRemoved(_, id) ->
+                  { s with
+                      newSubs = s.newSubs |> Set.remove id }
+              | _ -> s) ]
+        |> Stream.mergeAll (failwithf "(Sub) Can't merge: %O %O")
+        |> Stream.accum { newSubs = Set.empty } (<|)
 
     type DownloadCompleted = DownloadCompleted of id: Id.t * user: string * url: string * data: byte array
 
-    let downloadCompleted (DownloadCompleted(newSubId, user, url, (data: byte array))) (_: State) =
-        let isRss: bool = true
+    let downloadCompleteProducer = StreamSink.create ()
 
-        let e1 =
-            if isRss then
-                [ dispatch (SubscriptionCreated(user, url, Rss)) ]
-            else
-                []
+    let effects =
+        [ globalEventProducer
+          |> Stream.map (function
+              | NewSubscriptionCreated(user, url, id) ->
+                  HttpApi.download url (fun data -> DownloadCompleted(id, user, url, data))
+              | _ -> Effect.empty)
 
-        Effect.batch (e1 @ [ dispatch (NewSubscriptionRemoved(user, newSubId)) ])
+          downloadCompleteProducer
+          |> Stream.snapshot state (fun (DownloadCompleted(newSubId, user, url, (data: byte array))) (_: State) ->
+              let isRss = (fun _ -> true) data
 
-    let handle e =
-        match e with
-        | NewSubscriptionCreated(user, url, id) ->
-            HttpApi.download url (fun data -> DownloadCompleted(id, user, url, data))
-        | _ -> Effect.empty
+              let e1 =
+                  if isRss then
+                      [ dispatch (SubscriptionCreated(user, url, Rss)) ]
+                  else
+                      []
+
+              Effect.batch (e1 @ [ dispatch (NewSubscriptionRemoved(user, newSubId)) ])) ]
+        |> Stream.mergeAll (failwithf "Can't merge: %O %O")
 
 module Notifications =
     open Global
 
-    let handle e =
-        match e with
-        | NewSnapshotCreated(user, url) -> TelegramApi.sendMessage user $"New Snapshot: {url}"
-        | _ -> Effect.empty
-
-open Sodium.Frp
+    let effects =
+        globalEventProducer
+        |> Stream.map (function
+            | NewSnapshotCreated(user, url) -> TelegramApi.sendMessage user $"New Snapshot: {url}"
+            | _ -> Effect.empty)
 
 let () =
-    let telegramMessageProducer = StreamSink.create ()
-    let globalEventProducer = StreamSink.create ()
-    let subWorkerDownloadCompletedProducer = StreamSink.create ()
-
-    let botState =
-        [ globalEventProducer |> Stream.map Bot.update ]
-        |> Stream.mergeAll (failwithf "(Bot) Can't merge: %O %O")
-        |> Stream.accum Bot.empty (<|)
-
-    let subState =
-        [ globalEventProducer |> Stream.map SubWorker.update ]
-        |> Stream.mergeAll (failwithf "(Sub) Can't merge: %O %O")
-        |> Stream.accum SubWorker.empty (<|)
-
     let effects =
-        [ telegramMessageProducer |> Stream.snapshot botState Bot.handle
-
-          globalEventProducer |> Stream.map Notifications.handle
-
-          globalEventProducer |> Stream.map SubWorker.handle
-
-          subWorkerDownloadCompletedProducer
-          |> Stream.snapshot subState SubWorker.downloadCompleted ]
+        [ Bot.effects; Notifications.effects; SubWorker.effects ]
         |> Stream.mergeAll (fun e1 e2 -> Effect.batch [ e1; e2 ])
         |> Stream.accum Effect.empty (fun newEffs _ -> newEffs)
 
@@ -245,7 +243,7 @@ let () =
         Global.dispatch <-
             fun e _ ->
                 localLog <- localLog @ [ {| effect = "Dispatch"; payload = e |} ]
-                StreamSink.send e globalEventProducer
+                StreamSink.send e Global.globalEventProducer
                 Effect.unsafeRun (Cell.sample effects)
 
         StreamSink.send msg target
@@ -255,17 +253,17 @@ let () =
 
     (*  *)
 
-    send ("y2k", "/ls") telegramMessageProducer
-    send ("y2k", "/add https://g.com/") telegramMessageProducer
-    send ("y2k", "/ls") telegramMessageProducer
+    send ("y2k", "/ls") TelegramApi.telegramMessageProducer
+    send ("y2k", "/add https://g.com/") TelegramApi.telegramMessageProducer
+    send ("y2k", "/ls") TelegramApi.telegramMessageProducer
 
     send
         (SubWorker.DownloadCompleted(Id.create [ "y2k"; "https://g.com/" ], "y2k", "https://g.com/", [||]))
-        subWorkerDownloadCompletedProducer
+        SubWorker.downloadCompleteProducer
 
-    send ("y2k", "/ls") telegramMessageProducer
+    send ("y2k", "/ls") TelegramApi.telegramMessageProducer
 
-    send (Global.NewSnapshotCreated("y2k", "https://g.com/1")) globalEventProducer
+    send (Global.NewSnapshotCreated("y2k", "https://g.com/1")) Global.globalEventProducer
 
     (*  *)
 
