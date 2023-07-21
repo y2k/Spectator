@@ -3,9 +3,10 @@
 #r "nuget: DiffPlex, 1.7.1"
 #r "nuget: BrotliSharpLib, 0.3.3"
 
+open System
+
 [<AutoOpen>]
 module Prelude =
-    open System
     open System.Text.Json
     open System.Text.Json.Serialization
 
@@ -69,6 +70,8 @@ module Effect =
     let batch (fs: Effect list) : Effect =
         fun world -> fs |> List.iter (fun f -> f world)
 
+    let join a b = batch [ a; b ]
+
 open Sodium.Frp
 
 module TelegramApi =
@@ -81,11 +84,16 @@ module HttpApi =
     let mutable download =
         fun (url: string) (_callback: byte[] -> obj) -> Effect.createEmptyEffect "Download" url
 
+    let mutable download2 =
+        fun (url: string) (_callback: byte[] -> Effect.Effect) -> Effect.createEmptyEffect "Download" url
+
 module Id =
     type t = private Id of string
 
     let create (xs: string list) : t =
         xs |> List.reduce (sprintf "%s:%s") |> Id
+
+let timerTicked = StreamSink.create<unit> ()
 
 module Global =
     type ProviderId = Rss
@@ -203,6 +211,47 @@ module SubWorker =
 
               Effect.batch (e1 @ [ dispatch (NewSubscriptionRemoved(user, newSubId)) ])) ]
         |> Stream.mergeAll (failwithf "Can't merge: %O %O")
+
+module SnapshotWorker =
+    type private State =
+        { subs: {| id: Guid; url: string |} list
+          pending: Guid Set }
+
+    let private downloadCompleted = StreamSink.create<Guid * string * byte array> ()
+    let private downloadStarted = StreamSink.create<Guid> ()
+
+    let private state =
+        [ downloadStarted
+          |> Stream.map (fun id state ->
+              { state with
+                  pending = Set.add id state.pending })
+          downloadCompleted
+          |> Stream.map (fun (id, _, _) state ->
+              let (downSubs, otherSubs) = state.subs |> List.partition (fun x -> x.id = id)
+
+              { state with
+                  subs = otherSubs @ downSubs
+                  pending = Set.remove id state.pending }) ]
+        |> Stream.mergeAll (>>)
+        |> Stream.accum
+            { subs = List.empty
+              pending = Set.empty }
+            (<|)
+
+    let effects =
+        [ timerTicked
+          |> Stream.snapshot state (fun () state ->
+              state.subs
+              |> List.take (3 - Seq.length state.pending)
+              |> List.collect (fun x ->
+                  [ HttpApi.download2 x.url (fun data _ -> StreamSink.send (x.id, x.url, data) downloadCompleted)
+                    fun _ -> StreamSink.send x.id downloadStarted ])
+              |> Effect.batch)
+          downloadCompleted
+          |> Stream.snapshot state (fun (_id, _url, _data) _state ->
+              FIXME ""
+              FIXME "") ]
+        |> Stream.mergeAll Effect.join
 
 module Notifications =
     open Global
