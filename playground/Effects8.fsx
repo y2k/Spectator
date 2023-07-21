@@ -72,7 +72,27 @@ module Effect =
 
     let join a b = batch [ a; b ]
 
+module Generator =
+    type t = private { seed: int }
+
+    let create () = { seed = Random.Shared.Next() }
+    let create1 seed = { seed = seed }
+
+    let next (generator: t) : (double * t) =
+        let r = Random(generator.seed)
+        r.NextDouble(), { seed = r.Next() }
+
 open Sodium.Frp
+
+module StreamSinkFx =
+    let mutable sendEventImpl =
+        fun (_: unit -> unit) -> Effect.createEmptyEffect "SendEvent" ()
+
+    let send (e: 'a) (target: 'a StreamSink) =
+        sendEventImpl (fun _ -> StreamSink.send e target)
+
+module CommonFx =
+    let timerTicked = StreamSink.create<unit> ()
 
 module TelegramApi =
     let mutable sendMessage =
@@ -85,7 +105,7 @@ module HttpApi =
         fun (url: string) (_callback: byte[] -> obj) -> Effect.createEmptyEffect "Download" url
 
     let mutable download2 =
-        fun (url: string) (_callback: byte[] -> Effect.Effect) -> Effect.createEmptyEffect "Download" url
+        fun (url: string) (_callback: byte[] -> Effect.Effect) -> Effect.createEmptyEffect "Download2" url
 
 module Id =
     type t = private Id of string
@@ -93,15 +113,13 @@ module Id =
     let create (xs: string list) : t =
         xs |> List.reduce (sprintf "%s:%s") |> Id
 
-let timerTicked = StreamSink.create<unit> ()
-
 module Global =
     type ProviderId = Rss
 
     type GlobalEvent =
         | NewSubscriptionCreated of user: string * url: string * id: Id.t
         | NewSubscriptionRemoved of user: string * id: Id.t
-        | SubscriptionCreated of user: string * url: string * provider: ProviderId
+        | SubscriptionCreated of id: Guid * user: string * url: string * provider: ProviderId
         | NewSnapshotCreated of user: string * url: string
 
     let mutable dispatch = Effect.createEmptyEffect "dispatch"
@@ -126,7 +144,7 @@ module Bot =
             |> fupdate state
 
         match e with
-        | SubscriptionCreated(user, url, pId) ->
+        | SubscriptionCreated(_, user, url, pId) ->
             updateLocal user (fun x -> x.subs) (fun s x -> { s with subs = x }) (fun xs -> (url, pId) :: xs)
         | NewSubscriptionCreated(user, url, id) ->
             updateLocal user (fun x -> x.newSubs) (fun s x -> { s with newSubs = x }) (fun xs -> (url, id) :: xs)
@@ -205,7 +223,7 @@ module SubWorker =
 
               let e1 =
                   if isRss then
-                      [ dispatch (SubscriptionCreated(user, url, Rss)) ]
+                      [ dispatch (SubscriptionCreated(Guid.NewGuid(), user, url, Rss)) ]
                   else
                       []
 
@@ -214,19 +232,29 @@ module SubWorker =
 
 module SnapshotWorker =
     type private State =
-        { subs: {| id: Guid; url: string |} list
+        { subs:
+            {| user: string
+               id: Guid
+               url: string |} list
           pending: Guid Set }
 
-    let private downloadCompleted = StreamSink.create<Guid * string * byte array> ()
+    let downloadCompleted = StreamSink.create<Guid * byte array> ()
     let private downloadStarted = StreamSink.create<Guid> ()
 
     let private state =
-        [ downloadStarted
+        [ Global.globalEventProducer
+          |> Stream.map (fun e state ->
+              match e with
+              | Global.SubscriptionCreated(id, user, url, _) ->
+                  { state with
+                      subs = {| user = user; id = id; url = url |} :: state.subs }
+              | _ -> state)
+          downloadStarted
           |> Stream.map (fun id state ->
               { state with
                   pending = Set.add id state.pending })
           downloadCompleted
-          |> Stream.map (fun (id, _, _) state ->
+          |> Stream.map (fun (id, _) state ->
               let (downSubs, otherSubs) = state.subs |> List.partition (fun x -> x.id = id)
 
               { state with
@@ -239,18 +267,20 @@ module SnapshotWorker =
             (<|)
 
     let effects =
-        [ timerTicked
+        [ CommonFx.timerTicked
           |> Stream.snapshot state (fun () state ->
               state.subs
-              |> List.take (3 - Seq.length state.pending)
+              |> List.take (min (List.length state.subs) (3 - Seq.length state.pending))
               |> List.collect (fun x ->
-                  [ HttpApi.download2 x.url (fun data _ -> StreamSink.send (x.id, x.url, data) downloadCompleted)
-                    fun _ -> StreamSink.send x.id downloadStarted ])
+                  [ HttpApi.download2 x.url (fun data -> StreamSinkFx.send (x.id, data) downloadCompleted)
+                    StreamSinkFx.send x.id downloadStarted ])
               |> Effect.batch)
           downloadCompleted
-          |> Stream.snapshot state (fun (_id, _url, _data) _state ->
-              FIXME ""
-              FIXME "") ]
+          |> Stream.snapshot state (fun (subId, _data) state ->
+              state.subs
+              |> List.tryFind (fun x -> x.id = subId)
+              |> Option.map (fun sub -> Global.dispatch (Global.NewSnapshotCreated(sub.user, sub.url)))
+              |> Option.defaultValue Effect.empty) ]
         |> Stream.mergeAll Effect.join
 
 module Notifications =
@@ -264,7 +294,10 @@ module Notifications =
 
 let () =
     let effects =
-        [ Bot.effects; Notifications.effects; SubWorker.effects ]
+        [ Bot.effects
+          Notifications.effects
+          SubWorker.effects
+          SnapshotWorker.effects ]
         |> Stream.mergeAll (fun e1 e2 -> Effect.batch [ e1; e2 ])
         |> Stream.accum Effect.empty (fun newEffs _ -> newEffs)
 
@@ -289,11 +322,20 @@ let () =
                     @ [ {| effect = "Download"
                            payload = {| url = url |} |} ]
 
+        HttpApi.download2 <-
+            fun url _ _ ->
+                localLog <-
+                    localLog
+                    @ [ {| effect = "Download"
+                           payload = {| url = url |} |} ]
+
         Global.dispatch <-
             fun e _ ->
                 localLog <- localLog @ [ {| effect = "Dispatch"; payload = e |} ]
                 StreamSink.send e Global.globalEventProducer
                 Effect.unsafeRun (Cell.sample effects)
+
+        StreamSinkFx.sendEventImpl <- fun _f _ -> ()
 
         StreamSink.send msg target
         Effect.unsafeRun (Cell.sample effects)
@@ -312,10 +354,12 @@ let () =
 
     send ("y2k", "/ls") TelegramApi.telegramMessageProducer
 
-    send (Global.NewSnapshotCreated("y2k", "https://g.com/1")) Global.globalEventProducer
+    send () CommonFx.timerTicked
+
+    send (Guid.Empty, [||]) SnapshotWorker.downloadCompleted
 
     (*  *)
 
     assertEffect
         cmdLog
-        """G9IFAIzEOBbxRhPCQVDInMpe3hdlNfE2BwzJoqAzcE7A4XzEG0MVZmDbrOpZoCXgm93U7rMFHxJYuV6vv2WAuoEB38kEgfQ16vWU68x38+VlvOdTlqb6afzGrWhrC3RvbMFJTq/3ydWz00HI0RLr7W61yf/2ru5DZPjrawb1gfFSzp/9o4gxkbB2QFdgXXGy9i2q/DKc9evT73EMSmZOrPPsKgXkv6bv6VY8pFSG5P39stOI+zxn/JjWiBWZ1hGiO0utZXoHo5scXoN9pg9TC5LinOYf1bpeJazx04YYIQzm+KmxUJn8VUse4wPFAhHQPoxPP5/UhHEfTsW45fo="""
+        """G9UFAJwHtm1jK0mvVCwJMfa53KIRwVKOtDn1J1p2sq1U2XVMs2qEF0SkWRR0uk7cDDDMI49hLZzDuyzb+zfoAuUXLVO7ZJngQwIr1+v1twxI6NxsEEgPpl5Pkbgcynr7j3xKoKm2/F/cMszapGejK0ZysJ/ZLtlphBypfi/Vwy59R1cPIl1u9wyqAuPFLe/+UcSYR0g7AG/ruJj5F1WuDmf2fvvOfTIKJ/oku1QFfc88HcVDUmVw3p/bAENc5T3NxzRDrIDkUwPRPaTWQsmEMqbPYO+kmDqRFKsuf5KMECpa4DmU5YkMPeMYNCsEHs1yPic5uhCZ/A+U+2PhvkNpPtHwMcXgNJ9M5xPWsqGgjpz5WVK0Nw=="""
