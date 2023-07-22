@@ -75,12 +75,18 @@ module Effect =
 module Generator =
     type t = private { seed: int }
 
-    let create () = { seed = Random.Shared.Next() }
-    let create1 seed = { seed = seed }
+    let empty = { seed = 0 }
 
-    let next (generator: t) : (double * t) =
+    let next (generator: t) : double * t =
         let r = Random(generator.seed)
         r.NextDouble(), { seed = r.Next() }
+
+    let nextGuid { seed = seed } : Guid * t =
+        let random = Random(seed)
+        let a = Array.init 4 (fun _ -> random.Next())
+        let b = Array.zeroCreate 16
+        Buffer.BlockCopy(a, 0, b, 0, b.Length)
+        Guid b, { seed = random.Next() }
 
 open Sodium.Frp
 
@@ -102,28 +108,22 @@ module TelegramApi =
 
 module HttpApi =
     let mutable download =
-        fun (url: string) (_callback: byte[] -> obj) -> Effect.createEmptyEffect "Download" url
-
-    let mutable download2 =
         fun (url: string) (_callback: byte[] -> Effect.Effect) -> Effect.createEmptyEffect "Download2" url
-
-module Id =
-    type t = private Id of string
-
-    let create (xs: string list) : t =
-        xs |> List.reduce (sprintf "%s:%s") |> Id
 
 module Global =
     type ProviderId = Rss
 
     type GlobalEvent =
-        | NewSubscriptionCreated of user: string * url: string * id: Id.t
-        | NewSubscriptionRemoved of user: string * id: Id.t
+        | NewSubscriptionCreated of user: string * url: string * id: Guid
+        | NewSubscriptionRemoved of user: string * id: Guid
         | SubscriptionCreated of id: Guid * user: string * url: string * provider: ProviderId
-        | NewSnapshotCreated of user: string * url: string
+        | NewSnapshotCreated of id: Guid * user: string * url: string
 
     let mutable dispatch = Effect.createEmptyEffect "dispatch"
     let globalEventProducer = StreamSink.create ()
+
+module RandomApi =
+    let randomProducer = CellSink.create Generator.empty
 
 (* Logic *)
 
@@ -131,7 +131,7 @@ module Bot =
     open Global
 
     type private State =
-        { newSubs: Map<string, (string * Id.t) list>
+        { newSubs: Map<string, (string * Guid) list>
           subs: Map<string, (string * ProviderId) list> }
 
     let private update e (state: State) : State =
@@ -164,7 +164,7 @@ module Bot =
               subs = Map.empty }
             (<|)
 
-    let private onNewMessage (user, (message: string)) (state: State) =
+    let private onNewMessage (user, (message: string)) r (state: State) =
         match message.Split ' ' with
         | [| "/ls" |] ->
             [ state.subs
@@ -180,17 +180,18 @@ module Bot =
             |> TelegramApi.sendMessage user
         | [| "/add"; url |] ->
             Effect.batch
-                [ dispatch (NewSubscriptionCreated(user, url, Id.create [ user; url ]))
+                [ dispatch (NewSubscriptionCreated(user, url, Generator.nextGuid r |> fst))
                   TelegramApi.sendMessage user "Subscription created" ]
         | _ -> TelegramApi.sendMessage user "Unknown command. Enter /start to show help."
 
     let effects =
-        TelegramApi.telegramMessageProducer |> Stream.snapshot state onNewMessage
+        TelegramApi.telegramMessageProducer
+        |> Stream.snapshot2 RandomApi.randomProducer state onNewMessage
 
 module SubWorker =
     open Global
 
-    type private State = { newSubs: Id.t Set }
+    type private State = { newSubs: Guid Set }
 
     let private state =
         [ globalEventProducer
@@ -206,7 +207,7 @@ module SubWorker =
         |> Stream.mergeAll (failwithf "(Sub) Can't merge: %O %O")
         |> Stream.accum { newSubs = Set.empty } (<|)
 
-    type DownloadCompleted = DownloadCompleted of id: Id.t * user: string * url: string * data: byte array
+    type DownloadCompleted = DownloadCompleted of id: Guid * user: string * url: string * data: byte array
 
     let downloadCompleteProducer = StreamSink.create ()
 
@@ -214,20 +215,24 @@ module SubWorker =
         [ globalEventProducer
           |> Stream.map (function
               | NewSubscriptionCreated(user, url, id) ->
-                  HttpApi.download url (fun data -> DownloadCompleted(id, user, url, data))
+                  HttpApi.download url (fun data ->
+                      StreamSinkFx.send (DownloadCompleted(id, user, url, data)) downloadCompleteProducer)
               | _ -> Effect.empty)
 
           downloadCompleteProducer
-          |> Stream.snapshot state (fun (DownloadCompleted(newSubId, user, url, (data: byte array))) (_: State) ->
-              let isRss = (fun _ -> true) data
+          |> Stream.snapshot2
+              RandomApi.randomProducer
+              state
+              (fun (DownloadCompleted(newSubId, user, url, (data: byte array))) r (_: State) ->
+                  let isRss = (fun _ -> true) data
 
-              let e1 =
-                  if isRss then
-                      [ dispatch (SubscriptionCreated(Guid.NewGuid(), user, url, Rss)) ]
-                  else
-                      []
+                  let e1 =
+                      if isRss then
+                          dispatch (SubscriptionCreated(Generator.nextGuid r |> fst, user, url, Rss))
+                      else
+                          Effect.empty
 
-              Effect.batch (e1 @ [ dispatch (NewSubscriptionRemoved(user, newSubId)) ])) ]
+                  Effect.join e1 (dispatch (NewSubscriptionRemoved(user, newSubId)))) ]
         |> Stream.mergeAll (failwithf "Can't merge: %O %O")
 
 module SnapshotWorker =
@@ -272,14 +277,15 @@ module SnapshotWorker =
               state.subs
               |> List.take (min (List.length state.subs) (3 - Seq.length state.pending))
               |> List.collect (fun x ->
-                  [ HttpApi.download2 x.url (fun data -> StreamSinkFx.send (x.id, data) downloadCompleted)
+                  [ HttpApi.download x.url (fun data -> StreamSinkFx.send (x.id, data) downloadCompleted)
                     StreamSinkFx.send x.id downloadStarted ])
               |> Effect.batch)
           downloadCompleted
-          |> Stream.snapshot state (fun (subId, _data) state ->
+          |> Stream.snapshot2 RandomApi.randomProducer state (fun (subId, _data) r state ->
               state.subs
               |> List.tryFind (fun x -> x.id = subId)
-              |> Option.map (fun sub -> Global.dispatch (Global.NewSnapshotCreated(sub.user, sub.url)))
+              |> Option.map (fun sub ->
+                  Global.dispatch (Global.NewSnapshotCreated(Generator.nextGuid r |> fst, sub.user, sub.url)))
               |> Option.defaultValue Effect.empty) ]
         |> Stream.mergeAll Effect.join
 
@@ -289,7 +295,7 @@ module Notifications =
     let effects =
         globalEventProducer
         |> Stream.map (function
-            | NewSnapshotCreated(user, url) -> TelegramApi.sendMessage user $"New Snapshot: {url}"
+            | NewSnapshotCreated(_, user, url) -> TelegramApi.sendMessage user $"New Snapshot: {url}"
             | _ -> Effect.empty)
 
 let () =
@@ -298,7 +304,7 @@ let () =
           Notifications.effects
           SubWorker.effects
           SnapshotWorker.effects ]
-        |> Stream.mergeAll (fun e1 e2 -> Effect.batch [ e1; e2 ])
+        |> Stream.mergeAll Effect.join
         |> Stream.accum Effect.empty (fun newEffs _ -> newEffs)
 
     (*  *)
@@ -308,58 +314,62 @@ let () =
     let send msg target =
         let mutable localLog: obj list = []
 
-        TelegramApi.sendMessage <-
-            fun user message _ ->
-                localLog <-
-                    localLog
-                    @ [ {| effect = "SendTelegramMessage"
-                           payload = {| user = user; message = message |} |} ]
+        let _setEffects =
+            TelegramApi.sendMessage <-
+                fun user message _ ->
+                    localLog <-
+                        localLog
+                        @ [ {| effect = "SendTelegramMessage"
+                               payload = {| user = user; message = message |} |} ]
 
-        HttpApi.download <-
-            fun url _ _ ->
-                localLog <-
-                    localLog
-                    @ [ {| effect = "Download"
-                           payload = {| url = url |} |} ]
+            HttpApi.download <-
+                fun url _ _ ->
+                    localLog <-
+                        localLog
+                        @ [ {| effect = "Download"
+                               payload = {| url = url |} |} ]
 
-        HttpApi.download2 <-
-            fun url _ _ ->
-                localLog <-
-                    localLog
-                    @ [ {| effect = "Download"
-                           payload = {| url = url |} |} ]
+            HttpApi.download <-
+                fun url _ _ ->
+                    localLog <-
+                        localLog
+                        @ [ {| effect = "Download"
+                               payload = {| url = url |} |} ]
 
-        Global.dispatch <-
-            fun e _ ->
-                localLog <- localLog @ [ {| effect = "Dispatch"; payload = e |} ]
-                StreamSink.send e Global.globalEventProducer
-                Effect.unsafeRun (Cell.sample effects)
+            Global.dispatch <-
+                fun e _ ->
+                    localLog <- localLog @ [ {| effect = "Dispatch"; payload = e |} ]
+                    StreamSink.send e Global.globalEventProducer
+                    Effect.unsafeRun (Cell.sample effects)
 
-        StreamSinkFx.sendEventImpl <- fun _f _ -> ()
+            StreamSinkFx.sendEventImpl <- fun _f _ -> ()
+
+        RandomApi.randomProducer
+        |> CellSink.send (RandomApi.randomProducer |> Cell.sample |> Generator.next |> snd)
 
         StreamSink.send msg target
         Effect.unsafeRun (Cell.sample effects)
 
         cmdLog <- cmdLog @ [ localLog ]
 
-    (*  *)
+    (* Test *)
 
     send ("y2k", "/ls") TelegramApi.telegramMessageProducer
     send ("y2k", "/add https://g.com/") TelegramApi.telegramMessageProducer
     send ("y2k", "/ls") TelegramApi.telegramMessageProducer
 
     send
-        (SubWorker.DownloadCompleted(Id.create [ "y2k"; "https://g.com/" ], "y2k", "https://g.com/", [||]))
+        (SubWorker.DownloadCompleted(Guid.Parse "0f156e9c-7f59-1219-9165-7367b8185e1f", "y2k", "https://g.com/", [||]))
         SubWorker.downloadCompleteProducer
 
     send ("y2k", "/ls") TelegramApi.telegramMessageProducer
 
     send () CommonFx.timerTicked
 
-    send (Guid.Empty, [||]) SnapshotWorker.downloadCompleted
+    send (Guid.Parse "43438761-3309-0746-0257-c2238a0ab02e", [||]) SnapshotWorker.downloadCompleted
 
-    (*  *)
+    (* Assert *)
 
     assertEffect
         cmdLog
-        """G9UFAJwHtm1jK0mvVCwJMfa53KIRwVKOtDn1J1p2sq1U2XVMs2qEF0SkWRR0uk7cDDDMI49hLZzDuyzb+zfoAuUXLVO7ZJngQwIr1+v1twxI6NxsEEgPpl5Pkbgcynr7j3xKoKm2/F/cMszapGejK0ZysJ/ZLtlphBypfi/Vwy59R1cPIl1u9wyqAuPFLe/+UcSYR0g7AG/ruJj5F1WuDmf2fvvOfTIKJ/oku1QFfc88HcVDUmVw3p/bAENc5T3NxzRDrIDkUwPRPaTWQsmEMqbPYO+kmDqRFKsuf5KMECpa4DmU5YkMPeMYNCsEHs1yPic5uhCZ/A+U+2PhvkNpPtHwMcXgNJ9M5xPWsqGgjpz5WVK0Nw=="""
+        """Gx8HAIzDdGMvl6slHlRNEtji/IX+fEAjLeCszbVSNhOfEpxGdNztIf7z/J8LcOAj3RtDNUXSQGaziLookEM6sGM80T8722wMEnv1iJp16lmfsYInADbArzoACNJFi6OeAuP1ab19pHM8NaSrdUvfuDXUGlfq2rgQQfaeXzxLdpjiyANo8VsdUbT/7O2egcgu758VVATGTXf9OT6KnBMJ7wdNRNgaHEz8i6qwTWfK+e+IjbRuHTP5jY0klYwUpbPktfNFkMGu5QaNWma+9cInmldo3r8fJxRjkftUn8VEKBXIUmE+gWKXby80adyHr9dmjdRxyFd0/dEYbXTwTpLWIpLwxpFQ1lNWSockUiHUGuHqq8Pnk4rVlxY5ixhideVzUCr91ZBC1dc6qM9J65Ju77k8bP1YS+u0FolyiGvy61Umk0SmFIzXXsjlfM63AuQEKsG4lzLIBKXc4mj5GQ=="""
